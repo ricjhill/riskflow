@@ -9,13 +9,10 @@ fi
 
 cd "$CLAUDE_PROJECT_DIR" || exit 0
 
-# Ensure venv tools are used
-export PATH="$CLAUDE_PROJECT_DIR/.venv/bin:$PATH"
-
 # Auto-fix lint issues
-ruff check --fix "$FILE" 2>&1
+uv run ruff check --fix "$FILE" 2>&1
 
 # Auto-format
-ruff format "$FILE" 2>&1
+uv run ruff format "$FILE" 2>&1
 
 exit 0

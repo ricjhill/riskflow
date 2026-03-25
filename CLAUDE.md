@@ -3,10 +3,8 @@
 ## Project Context
 A DevOps-oriented tool to automate the mapping of messy reinsurance spreadsheets (Bordereaux) to a standardized schema using SLMs (Groq/Llama 3.1).
 
-## Language-Specific Instructions
-This project follows the **Python** conventions.
-- **Language File:** `agent.py.md` (Refer to this for TDD workflow, checkpointing, error handling, and `uv`/`pip` specifics)
-- **Primary Stack:** Python 3.12, FastAPI, Polars, Redis, Groq API
+## Stack
+Python 3.12, FastAPI, Polars, Redis, Groq API, `uv` for dependency management
 
 ---
 
@@ -14,19 +12,23 @@ This project follows the **Python** conventions.
 The codebase is strictly organized into three zones. Dependencies only point inward.
 
 ```
-entrypoint/          # main.py — wires FastAPI, Groq, and Polars together
-domain/
-  model/             # Reinsurance entities (Risk, Premium, Treaty)
-  service/           # Mapping logic, SLM prompt construction
-ports/               # Interfaces
-  input/             # IngestorInterface (how data enters the domain)
-  output/            # MapperInterface (SLM calls), RepoInterface (Redis)
-adapters/            # Implementations
-  http/              # FastAPI routes
-  slm/               # Groq API implementation
-  storage/           # Redis caching implementation
-  parsers/           # Polars-based Excel/CSV readers
-mocks/               # Generated mocks for ports
+src/
+  entrypoint/        # main.py — wires FastAPI, Groq, and Polars together
+  domain/
+    model/           # Reinsurance entities (Risk, Premium, Treaty)
+    service/         # Mapping logic, SLM prompt construction
+  ports/
+    input/           # IngestorInterface (how data enters the domain)
+    output/          # MapperInterface (SLM calls), RepoInterface (Redis)
+  adapters/
+    http/            # FastAPI routes
+    slm/             # Groq API implementation
+    storage/         # Redis caching implementation
+    parsers/         # Polars-based Excel/CSV readers
+  mocks/             # Generated mocks for ports
+tests/
+  unit/              # Domain and service tests — no I/O
+  integration/       # Adapter tests — marked with @pytest.mark.integration
 ```
 
 ---
@@ -45,7 +47,29 @@ mocks/               # Generated mocks for ports
 - Use `polars` for all data manipulation (do not use `pandas`).
 - Access Groq via the `openai` Python SDK (OpenAI-compatible).
 - Use `pydantic` for data validation and schema enforcement.
-- Do not modify `uv.lock` or `requirements.txt` manually.
+- Do not modify `uv.lock` manually.
+
+---
+
+## Python Conventions
+- Use `typing.Protocol` for port interfaces — not abstract base classes.
+- Logger: `structlog` only — no stdlib `logging` or `loguru`. Pass via dependency injection.
+- Define domain exceptions in `src/domain/model/errors.py`. Adapters map them to HTTP responses.
+- Never leak infrastructure exceptions into the domain layer.
+- Load environment variables only in `src/entrypoint/main.py` using `os.environ` (fail fast, no defaults).
+
+---
+
+## TDD Workflow
+- Baseline: `uv run pytest -x -v tests/unit/`
+- After green: `uv run mypy src/` then `uv run ruff check src/`
+- Commit after every green cycle.
+
+## Definition of Done
+- `uv run mypy src/`
+- `uv run pytest -x -v tests/unit/`
+- `uv run ruff check src/`
+- `uv run ruff format --check src/`
 
 ---
 
@@ -58,4 +82,4 @@ mocks/               # Generated mocks for ports
 ## Infrastructure (Docker Compose)
 - **API:** Runs on port `8000`.
 - **Redis:** Runs on port `6379`.
-- Environment variables (`GROQ_API_KEY`) are loaded only at `entrypoint/main.py`.
+- Environment variables (`GROQ_API_KEY`) are loaded only in `src/entrypoint/main.py`.
