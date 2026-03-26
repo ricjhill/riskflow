@@ -184,3 +184,67 @@ class TestErrorMapping:
         response = client.post("/upload")
 
         assert response.status_code == 422
+
+
+class TestFileValidation:
+    """Upload endpoint must reject invalid file types and oversized files."""
+
+    @pytest.mark.parametrize(
+        "filename",
+        ["report.pdf", "data.json", "image.png", "script.py", "doc.txt"],
+    )
+    def test_rejects_non_spreadsheet_files(self, filename: str) -> None:
+        service = AsyncMock()
+        app = _create_test_app(service)
+        client = TestClient(app)
+
+        response = client.post(
+            "/upload",
+            files={"file": (filename, io.BytesIO(b"some content"), "application/octet-stream")},
+        )
+
+        assert response.status_code == 400
+        assert "file type" in response.json()["detail"].lower()
+
+    @pytest.mark.parametrize("filename", ["data.csv", "data.xlsx", "data.xls"])
+    def test_accepts_spreadsheet_extensions(self, filename: str) -> None:
+        service = AsyncMock()
+        service.process_file.return_value = _make_mapping_result()
+        app = _create_test_app(service)
+        client = TestClient(app)
+
+        response = client.post(
+            "/upload",
+            files={"file": (filename, io.BytesIO(b"ID\n1\n"), "application/octet-stream")},
+        )
+
+        assert response.status_code == 200
+
+    def test_rejects_oversized_file(self) -> None:
+        service = AsyncMock()
+        app = _create_test_app(service)
+        client = TestClient(app)
+
+        # 11MB file — over the 10MB limit
+        big_content = b"x" * (11 * 1024 * 1024)
+        response = client.post(
+            "/upload",
+            files={"file": ("big.csv", io.BytesIO(big_content), "text/csv")},
+        )
+
+        assert response.status_code == 400
+        assert "size" in response.json()["detail"].lower()
+
+    def test_accepts_file_under_size_limit(self) -> None:
+        service = AsyncMock()
+        service.process_file.return_value = _make_mapping_result()
+        app = _create_test_app(service)
+        client = TestClient(app)
+
+        small_content = b"ID,Value\n1,a\n"
+        response = client.post(
+            "/upload",
+            files={"file": ("small.csv", io.BytesIO(small_content), "text/csv")},
+        )
+
+        assert response.status_code == 200

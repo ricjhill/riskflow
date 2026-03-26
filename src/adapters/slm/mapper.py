@@ -36,11 +36,11 @@ Rules:
 - confidence is a float between 0.0 and 1.0
 - Headers that don't map to any target field go in unmapped_headers"""
 
-DEFAULT_MODEL = "llama-3.1-70b-versatile"
+DEFAULT_MODEL = "llama-3.3-70b-versatile"
 
 
 class GroqMapper:
-    """MapperPort implementation that calls Groq's Llama 3.1 for header mapping."""
+    """MapperPort implementation that calls Groq's Llama 3.3 for header mapping."""
 
     def __init__(
         self,
