@@ -1,9 +1,17 @@
-"""Orchestrates spreadsheet mapping: ingest, cache, SLM map, validate."""
+"""Orchestrates spreadsheet mapping: ingest, cache, SLM map, validate rows."""
 
 import hashlib
 
+import polars as pl
+from pydantic import ValidationError
+
 from src.domain.model.errors import MappingConfidenceLowError
-from src.domain.model.schema import MappingResult
+from src.domain.model.schema import (
+    MappingResult,
+    ProcessingResult,
+    RiskRecord,
+    RowError,
+)
 from src.ports.input.ingestor import IngestorPort
 from src.ports.output.mapper import MapperPort
 from src.ports.output.repo import CachePort
@@ -19,7 +27,9 @@ class MappingService:
         2. Cache is checked using a deterministic key derived from headers
         3. On cache miss, the SLM mapper is called
         4. Confidence is validated against the threshold
-        5. Result is cached and returned
+        5. Result is cached
+        6. Full dataframe is read, columns renamed, rows validated as RiskRecords
+        7. ProcessingResult returned with valid records and errors
     """
 
     def __init__(
@@ -34,8 +44,8 @@ class MappingService:
         self._cache = cache
         self._confidence_threshold = confidence_threshold
 
-    async def process_file(self, file_path: str) -> MappingResult:
-        """Map a spreadsheet's headers to the target schema."""
+    async def process_file(self, file_path: str) -> ProcessingResult:
+        """Map a spreadsheet's headers and validate all rows."""
         headers = self._ingestor.get_headers(file_path)
         preview = self._ingestor.get_preview(file_path)
 
@@ -43,13 +53,49 @@ class MappingService:
 
         cached = self._cache.get_mapping(cache_key)
         if cached is not None:
-            return cached
+            mapping = cached
+        else:
+            mapping = await self._mapper.map_headers(headers, preview)
+            self._check_confidence(mapping)
+            self._cache.set_mapping(cache_key, mapping)
 
-        result = await self._mapper.map_headers(headers, preview)
-        self._check_confidence(result)
+        return self._validate_rows(file_path, mapping)
 
-        self._cache.set_mapping(cache_key, result)
-        return result
+    def _validate_rows(
+        self, file_path: str, mapping: MappingResult
+    ) -> ProcessingResult:
+        """Read full dataframe, rename columns, validate each row."""
+        # Build rename map: source_header -> target_field
+        rename_map = {m.source_header: m.target_field for m in mapping.mappings}
+
+        # Read the full file
+        if file_path.endswith(".csv"):
+            df = pl.read_csv(file_path)
+        else:
+            df = pl.read_excel(file_path)
+
+        # Rename mapped columns
+        df = df.rename({k: v for k, v in rename_map.items() if k in df.columns})
+
+        rows = df.to_dicts()
+        valid_records: list[RiskRecord] = []
+        invalid_records: list[dict[str, object]] = []
+        errors: list[RowError] = []
+
+        for i, row in enumerate(rows):
+            try:
+                record = RiskRecord.model_validate(row)
+                valid_records.append(record)
+            except (ValidationError, ValueError) as e:
+                invalid_records.append(row)
+                errors.append(RowError(row=i + 1, error=str(e)))
+
+        return ProcessingResult(
+            mapping=mapping,
+            valid_records=valid_records,
+            invalid_records=invalid_records,
+            errors=errors,
+        )
 
     def _build_cache_key(self, headers: list[str]) -> str:
         """SHA-256 of sorted, lowercased, stripped headers.

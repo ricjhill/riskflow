@@ -17,26 +17,31 @@ from src.domain.model.errors import (
     SchemaValidationError,
     SLMUnavailableError,
 )
-from src.domain.model.schema import ColumnMapping, MappingResult
+from src.domain.model.schema import ColumnMapping, MappingResult, ProcessingResult
 
 from fastapi import FastAPI
 
 
-def _make_mapping_result() -> MappingResult:
-    return MappingResult(
-        mappings=[
-            ColumnMapping(
-                source_header="Policy No.",
-                target_field="Policy_ID",
-                confidence=0.99,
-            ),
-            ColumnMapping(
-                source_header="GWP",
-                target_field="Gross_Premium",
-                confidence=0.95,
-            ),
-        ],
-        unmapped_headers=["Extra"],
+def _make_processing_result() -> ProcessingResult:
+    return ProcessingResult(
+        mapping=MappingResult(
+            mappings=[
+                ColumnMapping(
+                    source_header="Policy No.",
+                    target_field="Policy_ID",
+                    confidence=0.99,
+                ),
+                ColumnMapping(
+                    source_header="GWP",
+                    target_field="Gross_Premium",
+                    confidence=0.95,
+                ),
+            ],
+            unmapped_headers=["Extra"],
+        ),
+        valid_records=[],
+        invalid_records=[],
+        errors=[],
     )
 
 
@@ -57,7 +62,7 @@ def _upload_csv(client: TestClient, content: str = "ID,Value\n1,a\n") -> object:
 class TestUploadEndpoint:
     def test_returns_200_with_mapping_result(self) -> None:
         service = AsyncMock()
-        service.process_file.return_value = _make_mapping_result()
+        service.process_file.return_value = _make_processing_result()
         app = _create_test_app(service)
         client = TestClient(app)
 
@@ -65,18 +70,19 @@ class TestUploadEndpoint:
 
         assert response.status_code == 200
         body = response.json()
-        assert "mappings" in body
-        assert "unmapped_headers" in body
-        assert len(body["mappings"]) == 2
+        assert "mapping" in body
+        assert "valid_records" in body
+        assert "errors" in body
+        assert len(body["mapping"]["mappings"]) == 2
 
     def test_mapping_result_contains_expected_fields(self) -> None:
         service = AsyncMock()
-        service.process_file.return_value = _make_mapping_result()
+        service.process_file.return_value = _make_processing_result()
         app = _create_test_app(service)
         client = TestClient(app)
 
         response = _upload_csv(client)
-        mapping = response.json()["mappings"][0]
+        mapping = response.json()["mapping"]["mappings"][0]
 
         assert "source_header" in mapping
         assert "target_field" in mapping
@@ -84,7 +90,7 @@ class TestUploadEndpoint:
 
     def test_passes_file_to_service(self) -> None:
         service = AsyncMock()
-        service.process_file.return_value = _make_mapping_result()
+        service.process_file.return_value = _make_processing_result()
         app = _create_test_app(service)
         client = TestClient(app)
 
@@ -99,7 +105,7 @@ class TestUploadEndpoint:
         import os
 
         service = AsyncMock()
-        service.process_file.return_value = _make_mapping_result()
+        service.process_file.return_value = _make_processing_result()
         app = _create_test_app(service)
         client = TestClient(app)
 
@@ -209,7 +215,7 @@ class TestFileValidation:
     @pytest.mark.parametrize("filename", ["data.csv", "data.xlsx", "data.xls"])
     def test_accepts_spreadsheet_extensions(self, filename: str) -> None:
         service = AsyncMock()
-        service.process_file.return_value = _make_mapping_result()
+        service.process_file.return_value = _make_processing_result()
         app = _create_test_app(service)
         client = TestClient(app)
 
@@ -237,7 +243,7 @@ class TestFileValidation:
 
     def test_accepts_file_under_size_limit(self) -> None:
         service = AsyncMock()
-        service.process_file.return_value = _make_mapping_result()
+        service.process_file.return_value = _make_processing_result()
         app = _create_test_app(service)
         client = TestClient(app)
 

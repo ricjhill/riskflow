@@ -88,8 +88,9 @@ class TestEndToEnd:
 
         assert response.status_code == 200
         body = response.json()
-        assert "mappings" in body
-        assert "unmapped_headers" in body
+        assert "mapping" in body
+        assert "valid_records" in body
+        assert "errors" in body
 
     def test_maps_all_known_headers(self, client: TestClient) -> None:
         response = client.post(
@@ -100,7 +101,7 @@ class TestEndToEnd:
         )
 
         body = response.json()
-        mapped_targets = {m["target_field"] for m in body["mappings"]}
+        mapped_targets = {m["target_field"] for m in body["mapping"]["mappings"]}
         assert "Policy_ID" in mapped_targets
         assert "Inception_Date" in mapped_targets
         assert "Expiry_Date" in mapped_targets
@@ -117,7 +118,7 @@ class TestEndToEnd:
         )
 
         body = response.json()
-        assert "Notes" in body["unmapped_headers"]
+        assert "Notes" in body["mapping"]["unmapped_headers"]
 
     def test_confidence_scores_are_present(self, client: TestClient) -> None:
         response = client.post(
@@ -128,7 +129,7 @@ class TestEndToEnd:
         )
 
         body = response.json()
-        for mapping in body["mappings"]:
+        for mapping in body["mapping"]["mappings"]:
             assert "confidence" in mapping
             assert 0.0 <= mapping["confidence"] <= 1.0
 
@@ -150,8 +151,8 @@ class TestEdgeCases:
 
         assert response.status_code == 200
         body = response.json()
-        assert len(body["mappings"]) == 1
-        assert body["mappings"][0]["target_field"] == "Gross_Premium"
+        assert len(body["mapping"]["mappings"]) == 1
+        assert body["mapping"]["mappings"][0]["target_field"] == "Gross_Premium"
 
     def test_all_unmapped_headers(self, client: TestClient) -> None:
         csv = "Foo,Bar,Baz\n1,2,3\n"
@@ -162,8 +163,8 @@ class TestEdgeCases:
 
         assert response.status_code == 200
         body = response.json()
-        assert len(body["mappings"]) == 0
-        assert set(body["unmapped_headers"]) == {"Foo", "Bar", "Baz"}
+        assert len(body["mapping"]["mappings"]) == 0
+        assert set(body["mapping"]["unmapped_headers"]) == {"Foo", "Bar", "Baz"}
 
     def test_empty_csv_with_headers_only(self, client: TestClient) -> None:
         csv = "Policy No.,GWP\n"
@@ -174,4 +175,4 @@ class TestEdgeCases:
 
         assert response.status_code == 200
         body = response.json()
-        assert len(body["mappings"]) == 2
+        assert len(body["mapping"]["mappings"]) == 2
