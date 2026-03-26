@@ -1,0 +1,25 @@
+[project]
+name = "riskflow"
+version = "0.1.0"
+description = "Reinsurance data mapper — automates mapping of Bordereaux spreadsheets to a standardized schema using SLMs"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.135.2",
+    "openai>=2.29.0",
+    "openpyxl>=3.1.5",
+    "polars>=1.39.3",
+    "pydantic-settings>=2.13.1",
+    "python-dotenv>=1.2.2",
+    "python-multipart>=0.0.22",
+    "uvicorn>=0.42.0",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.1",
+    "pytest>=9.0.2",
+    "pytest-mock>=3.15.1",
+    "redis>=7.4.0",
+    "ruff>=0.15.7",
+    "structlog>=25.5.0",
+]
