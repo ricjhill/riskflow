@@ -34,12 +34,7 @@ tests/
 ---
 
 ## Reinsurance Domain Rules
-- **Target Schema:** All mapping must result in these fields: `Policy_ID`, `Inception_Date`, `Expiry_Date`, `Sum_Insured`, `Gross_Premium`, `Currency`.
-- **Validation:**
-  - Currencies must be ISO 4217 (USD, GBP, EUR, JPY).
-  - Dates must be ISO 8601 (YYYY-MM-DD).
-  - Financials (Sum_Insured, Gross_Premium) must be non-negative floats.
-- **Context:** SLM prompts must emphasize that "GWP" usually means `Gross_Premium`.
+See `.claude/rules/reinsurance.md` — loads automatically when editing `src/domain/` or `src/adapters/slm/`.
 
 ---
 

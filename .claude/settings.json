@@ -1,4 +1,23 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(uv run:*)",
+      "Bash(uv sync:*)",
+      "Bash(uv add:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git branch:*)",
+      "Bash(git checkout:*)",
+      "Bash(git commit:*)",
+      "Bash(git add:*)"
+    ],
+    "deny": [
+      "Edit(uv.lock)",
+      "Edit(.env)",
+      "Bash(git push --force:*)"
+    ]
+  },
   "hooks": {
     "PreToolUse": [
       {
@@ -8,6 +27,16 @@
             "type": "command",
             "command": ".claude/hooks/pre-commit.sh",
             "timeout": 120
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/protect-files.sh",
+            "timeout": 5
           }
         ]
       }
