@@ -2,7 +2,7 @@
 
 Maps domain operations to HTTP endpoints and domain errors to HTTP status
 codes. The route handler is a thin adapter — all business logic lives in
-MappingService.
+MappingService. Logging happens here at the adapter boundary.
 
 Error mapping:
 - InvalidCedentDataError → 400 Bad Request
@@ -14,7 +14,9 @@ Error mapping:
 
 import os
 import tempfile
+import time
 
+import structlog
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
 from src.domain.model.errors import (
@@ -25,6 +27,8 @@ from src.domain.model.errors import (
     SLMUnavailableError,
 )
 from src.domain.service.mapping_service import MappingService
+
+logger = structlog.get_logger()
 
 ALLOWED_EXTENSIONS = {".csv", ".xlsx", ".xls"}
 MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10MB
@@ -42,21 +46,43 @@ def create_router(mapping_service: MappingService) -> APIRouter:
     async def upload_file(file: UploadFile = File(...)) -> dict:
         """Upload a spreadsheet and map its headers to the target schema."""
         _validate_file(file)
+
+        logger.info("file_received", filename=file.filename)
+        start = time.monotonic()
+
         temp_path = _save_temp_file(file)
         try:
             result = await mapping_service.process_file(temp_path)
+            duration_ms = int((time.monotonic() - start) * 1000)
+            logger.info(
+                "mapping_complete",
+                filename=file.filename,
+                mapped_count=len(result.mappings),
+                unmapped_count=len(result.unmapped_headers),
+                duration_ms=duration_ms,
+            )
             return result.model_dump()
         except MappingConfidenceLowError as e:
+            logger.warning(
+                "mapping_low_confidence", filename=file.filename, error=str(e)
+            )
             raise HTTPException(status_code=422, detail=str(e)) from e
         except SchemaValidationError as e:
+            logger.warning(
+                "schema_validation_error", filename=file.filename, error=str(e)
+            )
             raise HTTPException(status_code=422, detail=str(e)) from e
         except InvalidCedentDataError as e:
+            logger.warning("invalid_cedent_data", filename=file.filename, error=str(e))
             raise HTTPException(status_code=400, detail=str(e)) from e
         except SLMUnavailableError as e:
+            logger.error("slm_unavailable", filename=file.filename, error=str(e))
             raise HTTPException(status_code=503, detail=str(e)) from e
         except RiskFlowError as e:
+            logger.error("domain_error", filename=file.filename, error=str(e))
             raise HTTPException(status_code=500, detail=str(e)) from e
         except Exception as e:
+            logger.error("unexpected_error", filename=file.filename, error=str(e))
             raise HTTPException(status_code=500, detail="Internal server error") from e
         finally:
             if os.path.exists(temp_path):
