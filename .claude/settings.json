@@ -32,6 +32,11 @@
             "type": "command",
             "command": ".claude/hooks/check-boundaries.sh",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": ".claude/hooks/security-scan.sh",
+            "timeout": 120
           }
         ]
       },
