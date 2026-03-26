@@ -97,3 +97,19 @@ class MappingResult(BaseModel):
             msg = f"MappingResult contains duplicate target fields: {set(dupes)}"
             raise ValueError(msg)
         return self
+
+
+class RowError(BaseModel):
+    """A validation error for a specific row."""
+
+    row: int
+    error: str
+
+
+class ProcessingResult(BaseModel):
+    """Full result of processing a spreadsheet: mapping + row validation."""
+
+    mapping: MappingResult
+    valid_records: list[RiskRecord]
+    invalid_records: list[dict[str, object]]
+    errors: list[RowError]

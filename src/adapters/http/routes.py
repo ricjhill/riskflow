@@ -57,8 +57,10 @@ def create_router(mapping_service: MappingService) -> APIRouter:
             logger.info(
                 "mapping_complete",
                 filename=file.filename,
-                mapped_count=len(result.mappings),
-                unmapped_count=len(result.unmapped_headers),
+                mapped_count=len(result.mapping.mappings),
+                unmapped_count=len(result.mapping.unmapped_headers),
+                valid_count=len(result.valid_records),
+                error_count=len(result.errors),
                 duration_ms=duration_ms,
             )
             return result.model_dump()
