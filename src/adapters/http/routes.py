@@ -26,6 +26,9 @@ from src.domain.model.errors import (
 )
 from src.domain.service.mapping_service import MappingService
 
+ALLOWED_EXTENSIONS = {".csv", ".xlsx", ".xls"}
+MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10MB
+
 
 def create_router(mapping_service: MappingService) -> APIRouter:
     """Create a FastAPI router wired to the given MappingService.
@@ -38,6 +41,7 @@ def create_router(mapping_service: MappingService) -> APIRouter:
     @router.post("/upload")
     async def upload_file(file: UploadFile = File(...)) -> dict:
         """Upload a spreadsheet and map its headers to the target schema."""
+        _validate_file(file)
         temp_path = _save_temp_file(file)
         try:
             result = await mapping_service.process_file(temp_path)
@@ -59,6 +63,26 @@ def create_router(mapping_service: MappingService) -> APIRouter:
                 os.remove(temp_path)
 
     return router
+
+
+def _validate_file(file: UploadFile) -> None:
+    """Reject files with unsupported extensions or that exceed the size limit."""
+    filename = file.filename or ""
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file type '{ext}'. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}",
+        )
+
+    content = file.file.read()
+    if len(content) > MAX_FILE_SIZE_BYTES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File size {len(content)} bytes exceeds limit of {MAX_FILE_SIZE_BYTES} bytes",
+        )
+    # Reset file position so _save_temp_file can read it again
+    file.file.seek(0)
 
 
 def _save_temp_file(file: UploadFile) -> str:
