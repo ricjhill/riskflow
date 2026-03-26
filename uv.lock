@@ -584,6 +584,8 @@ dependencies = [
     { name = "pydantic-settings" },
     { name = "python-dotenv" },
     { name = "python-multipart" },
+    { name = "redis" },
+    { name = "structlog" },
     { name = "uvicorn" },
 ]
 
@@ -592,9 +594,7 @@ dev = [
     { name = "mypy" },
     { name = "pytest" },
     { name = "pytest-mock" },
-    { name = "redis" },
     { name = "ruff" },
-    { name = "structlog" },
 ]
 
 [package.metadata]
@@ -606,6 +606,8 @@ requires-dist = [
     { name = "pydantic-settings", specifier = ">=2.13.1" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "python-multipart", specifier = ">=0.0.22" },
+    { name = "redis", specifier = ">=7.4.0" },
+    { name = "structlog", specifier = ">=25.5.0" },
     { name = "uvicorn", specifier = ">=0.42.0" },
 ]
 
@@ -614,9 +616,7 @@ dev = [
     { name = "mypy", specifier = ">=1.19.1" },
     { name = "pytest", specifier = ">=9.0.2" },
     { name = "pytest-mock", specifier = ">=3.15.1" },
-    { name = "redis", specifier = ">=7.4.0" },
     { name = "ruff", specifier = ">=0.15.7" },
-    { name = "structlog", specifier = ">=25.5.0" },
 ]
 
 [[package]]
