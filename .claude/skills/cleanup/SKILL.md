@@ -13,7 +13,7 @@ Scan the RiskFlow codebase for entropy and open a cleanup PR if needed. This is 
 - Check for empty placeholder files that were never populated
 
 ### 2. Architectural drift
-- Run `.claude/hooks/check-boundaries.sh` logic manually — grep for cross-layer imports
+- Run `echo '{"tool_input":{"command":"git commit"}}' | bash .claude/hooks/check-boundaries.sh` to invoke the boundary checker directly
 - Check that all files in `src/domain/` have zero imports from `src/adapters/` or `src/entrypoint/`
 - Check that no adapter reads environment variables directly
 - Verify all port interfaces are `typing.Protocol`, not ABC
