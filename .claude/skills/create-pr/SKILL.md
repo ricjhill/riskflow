@@ -23,6 +23,7 @@ Create a PR for the current branch. The code-reviewer agent must approve before 
 4. Run `uv run pytest -v tests/ 2>&1 | tail -5` to get test results
 5. Run `uv run mypy src/ 2>&1 | tail -1` for mypy status
 6. Run `uv run ruff check src/ 2>&1 | tail -1` for ruff status
+7. Run `uv run ruff format --check src/ 2>&1 | tail -1` for format status
 
 ### Phase 3: Create PR
 
