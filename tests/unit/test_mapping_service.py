@@ -15,6 +15,11 @@ import pytest
 from src.adapters.parsers.ingestor import PolarsIngestor
 from src.domain.model.errors import MappingConfidenceLowError
 from src.domain.model.schema import ColumnMapping, MappingResult, ProcessingResult
+from src.domain.model.target_schema import (
+    FieldDefinition,
+    FieldType,
+    TargetSchema,
+)
 from src.domain.service.mapping_service import MappingService
 
 
@@ -372,3 +377,147 @@ class TestPartialMapping:
         assert len(result.valid_records) == 0
         assert len(result.invalid_records) == 1
         assert len(result.errors) == 1
+
+
+class TestCustomSchema:
+    """MappingService accepts an optional TargetSchema. When provided,
+    row validation uses a dynamic model built from that schema instead
+    of the hardcoded RiskRecord."""
+
+    @pytest.mark.asyncio
+    async def test_validates_rows_against_custom_schema(
+        self, cache: MagicMock, tmp_path: Path
+    ) -> None:
+        """A 2-field schema should validate rows with just those 2 fields."""
+        file_path = str(tmp_path / "simple.csv")
+        with open(file_path, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["ID", "Amount"])
+            writer.writerow(["P001", "50000"])
+
+        custom_schema = TargetSchema(
+            name="simple",
+            fields={
+                "ID": FieldDefinition(type=FieldType.STRING, not_empty=True),
+                "Amount": FieldDefinition(type=FieldType.FLOAT, non_negative=True),
+            },
+        )
+
+        mapping = MappingResult(
+            mappings=[
+                ColumnMapping(source_header="ID", target_field="ID", confidence=0.95),
+                ColumnMapping(source_header="Amount", target_field="Amount", confidence=0.90),
+            ],
+            unmapped_headers=[],
+        )
+
+        mapper = AsyncMock()
+        mapper.map_headers.return_value = mapping
+        cache.get_mapping.return_value = None
+
+        service = MappingService(
+            ingestor=PolarsIngestor(),
+            mapper=mapper,
+            cache=cache,
+            schema=custom_schema,
+        )
+
+        result = await service.process_file(file_path)
+        assert len(result.valid_records) == 1
+        assert len(result.errors) == 0
+
+    @pytest.mark.asyncio
+    async def test_custom_schema_rejects_invalid_rows(
+        self, cache: MagicMock, tmp_path: Path
+    ) -> None:
+        """Custom schema with non_negative should reject negative amounts."""
+        file_path = str(tmp_path / "bad.csv")
+        with open(file_path, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["ID", "Amount"])
+            writer.writerow(["P001", "-100"])
+
+        custom_schema = TargetSchema(
+            name="simple",
+            fields={
+                "ID": FieldDefinition(type=FieldType.STRING),
+                "Amount": FieldDefinition(type=FieldType.FLOAT, non_negative=True),
+            },
+        )
+
+        mapping = MappingResult(
+            mappings=[
+                ColumnMapping(source_header="ID", target_field="ID", confidence=0.95),
+                ColumnMapping(source_header="Amount", target_field="Amount", confidence=0.90),
+            ],
+            unmapped_headers=[],
+        )
+
+        mapper = AsyncMock()
+        mapper.map_headers.return_value = mapping
+        cache.get_mapping.return_value = None
+
+        service = MappingService(
+            ingestor=PolarsIngestor(),
+            mapper=mapper,
+            cache=cache,
+            schema=custom_schema,
+        )
+
+        result = await service.process_file(file_path)
+        assert len(result.valid_records) == 0
+        assert len(result.errors) == 1
+
+    @pytest.mark.asyncio
+    async def test_default_schema_when_none_provided(
+        self, service: MappingService, mapper: AsyncMock, tmp_path: Path
+    ) -> None:
+        """When no schema is provided, existing behavior is preserved."""
+        path = _write_csv(tmp_path)
+        result = await service.process_file(path)
+        assert isinstance(result, ProcessingResult)
+
+    @pytest.mark.asyncio
+    async def test_confidence_report_uses_custom_schema_fields(
+        self, cache: MagicMock, tmp_path: Path
+    ) -> None:
+        """missing_fields should reference the custom schema's fields,
+        not the hardcoded 6-field set."""
+        file_path = str(tmp_path / "partial.csv")
+        with open(file_path, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["ID"])
+            writer.writerow(["P001"])
+
+        custom_schema = TargetSchema(
+            name="three_field",
+            fields={
+                "ID": FieldDefinition(type=FieldType.STRING),
+                "Amount": FieldDefinition(type=FieldType.FLOAT),
+                "Notes": FieldDefinition(type=FieldType.STRING),
+            },
+        )
+
+        mapping = MappingResult(
+            mappings=[
+                ColumnMapping(source_header="ID", target_field="ID", confidence=0.95),
+            ],
+            unmapped_headers=[],
+        )
+
+        mapper = AsyncMock()
+        mapper.map_headers.return_value = mapping
+        cache.get_mapping.return_value = None
+
+        service = MappingService(
+            ingestor=PolarsIngestor(),
+            mapper=mapper,
+            cache=cache,
+            schema=custom_schema,
+        )
+
+        result = await service.process_file(file_path)
+        # Custom schema has 3 fields, only 1 mapped → 2 missing
+        assert len(result.confidence_report.missing_fields) == 2
+        assert "Amount" in result.confidence_report.missing_fields
+        assert "Notes" in result.confidence_report.missing_fields
