@@ -106,8 +106,14 @@ class TargetSchema(BaseModel):
 
     @model_validator(mode="after")
     def cross_field_rules_reference_valid_date_fields(self) -> "TargetSchema":
-        """Cross-field rules must reference existing fields of type DATE."""
+        """Cross-field rules must reference existing, distinct fields of type DATE."""
         for rule in self.cross_field_rules:
+            if rule.earlier == rule.later:
+                msg = (
+                    f"Cross-field rule has same field '{rule.earlier}' "
+                    f"as both earlier and later"
+                )
+                raise ValueError(msg)
             for field_ref in [rule.earlier, rule.later]:
                 if field_ref not in self.fields:
                     msg = (
