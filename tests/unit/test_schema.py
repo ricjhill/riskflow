@@ -160,24 +160,19 @@ class TestColumnMapping:
         assert mapping.confidence == 0.95
 
     # --- target_field validation ---
+    # target_field is no longer validated on ColumnMapping itself —
+    # validation moved to MappingResult.validate_against_schema()
+    # to support configurable schemas with non-standard field names.
 
-    @pytest.mark.parametrize("field", VALID_TARGET_FIELDS)
-    def test_accepts_all_valid_target_fields(self, field: str) -> None:
+    def test_accepts_any_target_field_string(self) -> None:
+        """ColumnMapping now accepts any string for target_field.
+        Schema-aware validation happens at MappingResult level."""
         mapping = ColumnMapping(
             source_header="Header",
-            target_field=field,
+            target_field="CustomField",
             confidence=0.9,
         )
-        assert mapping.target_field == field
-
-    @pytest.mark.parametrize("field", ["gross_premium", "Amount", "ID", ""])
-    def test_rejects_invalid_target_fields(self, field: str) -> None:
-        with pytest.raises(ValueError, match="target_field"):
-            ColumnMapping(
-                source_header="Header",
-                target_field=field,
-                confidence=0.9,
-            )
+        assert mapping.target_field == "CustomField"
 
     # --- confidence validation ---
 
@@ -258,6 +253,38 @@ class TestMappingResult:
                 ],
                 unmapped_headers=[],
             )
+
+    # --- Schema validation ---
+
+    def test_validate_against_schema_accepts_valid_fields(self) -> None:
+        result = MappingResult(
+            mappings=[
+                ColumnMapping(source_header="GWP", target_field="Gross_Premium", confidence=0.95),
+            ],
+            unmapped_headers=[],
+        )
+        result.validate_against_schema(VALID_TARGET_FIELDS)  # should not raise
+
+    @pytest.mark.parametrize("field", ["gross_premium", "Amount", "ID", ""])
+    def test_validate_against_schema_rejects_invalid_fields(self, field: str) -> None:
+        result = MappingResult(
+            mappings=[
+                ColumnMapping(source_header="Header", target_field=field, confidence=0.9),
+            ],
+            unmapped_headers=[],
+        )
+        with pytest.raises(ValueError, match=field if field else "target_field"):
+            result.validate_against_schema(VALID_TARGET_FIELDS)
+
+    def test_validate_against_custom_field_set(self) -> None:
+        """validate_against_schema works with any field set, not just VALID_TARGET_FIELDS."""
+        result = MappingResult(
+            mappings=[
+                ColumnMapping(source_header="Col1", target_field="CustomField", confidence=0.9),
+            ],
+            unmapped_headers=[],
+        )
+        result.validate_against_schema({"CustomField", "OtherField"})  # should not raise
 
     # --- Constants ---
 

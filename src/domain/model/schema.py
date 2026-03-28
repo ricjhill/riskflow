@@ -60,19 +60,17 @@ class RiskRecord(BaseModel):
 
 
 class ColumnMapping(BaseModel):
-    """Maps a source spreadsheet header to a target schema field."""
+    """Maps a source spreadsheet header to a target schema field.
+
+    target_field is not validated here — it's validated at the
+    MappingResult level via validate_against_schema() where the
+    TargetSchema is known. This allows ColumnMapping to work with
+    any schema, not just the hardcoded default.
+    """
 
     source_header: str
     target_field: str
     confidence: float
-
-    @field_validator("target_field")
-    @classmethod
-    def target_field_must_be_valid(cls, v: str) -> str:
-        if v not in VALID_TARGET_FIELDS:
-            msg = f"target_field must be one of {VALID_TARGET_FIELDS}, got '{v}'"
-            raise ValueError(msg)
-        return v
 
     @field_validator("confidence")
     @classmethod
@@ -98,6 +96,21 @@ class MappingResult(BaseModel):
             raise ValueError(msg)
         return self
 
+    def validate_against_schema(self, valid_fields: set[str]) -> None:
+        """Validate that all target fields exist in the given field set.
+
+        Called by the MappingService after receiving the SLM response,
+        using the active TargetSchema's field_names. Raises ValueError
+        if any mapping references a field not in the schema.
+        """
+        for mapping in self.mappings:
+            if mapping.target_field not in valid_fields:
+                msg = (
+                    f"target_field '{mapping.target_field}' not in schema fields: "
+                    f"{sorted(valid_fields)}"
+                )
+                raise ValueError(msg)
+
 
 DEFAULT_CONFIDENCE_REVIEW_THRESHOLD = 0.6
 
@@ -121,13 +134,16 @@ class ConfidenceReport(BaseModel):
         cls,
         result: "MappingResult",
         threshold: float = DEFAULT_CONFIDENCE_REVIEW_THRESHOLD,
+        valid_fields: set[str] | None = None,
     ) -> "ConfidenceReport":
+        all_fields = valid_fields if valid_fields is not None else VALID_TARGET_FIELDS
+
         if not result.mappings:
             return cls(
                 min_confidence=0.0,
                 avg_confidence=0.0,
                 low_confidence_fields=[],
-                missing_fields=sorted(VALID_TARGET_FIELDS),
+                missing_fields=sorted(all_fields),
             )
 
         confidences = [m.confidence for m in result.mappings]
@@ -139,7 +155,7 @@ class ConfidenceReport(BaseModel):
             low_confidence_fields=[
                 m for m in result.mappings if m.confidence < threshold
             ],
-            missing_fields=sorted(VALID_TARGET_FIELDS - mapped_targets),
+            missing_fields=sorted(all_fields - mapped_targets),
         )
 
 
@@ -151,10 +167,16 @@ class RowError(BaseModel):
 
 
 class ProcessingResult(BaseModel):
-    """Full result of processing a spreadsheet: mapping + row validation."""
+    """Full result of processing a spreadsheet: mapping + row validation.
+
+    valid_records uses list[dict] instead of list[RiskRecord] because
+    the record model is dynamic — field names depend on the active
+    TargetSchema. Dicts are the natural serialization format and avoid
+    complex generic type gymnastics.
+    """
 
     mapping: MappingResult
     confidence_report: ConfidenceReport
-    valid_records: list[RiskRecord]
+    valid_records: list[dict[str, object]]
     invalid_records: list[dict[str, object]]
     errors: list[RowError]

@@ -57,14 +57,14 @@ class TestProcessingResult:
             mapping=mapping,
             confidence_report=ConfidenceReport.from_mapping_result(mapping),
             valid_records=[
-                RiskRecord(
-                    Policy_ID="P001",
-                    Inception_Date=datetime.date(2024, 1, 1),
-                    Expiry_Date=datetime.date(2025, 1, 1),
-                    Sum_Insured=1000000.0,
-                    Gross_Premium=50000.0,
-                    Currency="USD",
-                ),
+                {
+                    "Policy_ID": "P001",
+                    "Inception_Date": datetime.date(2024, 1, 1),
+                    "Expiry_Date": datetime.date(2025, 1, 1),
+                    "Sum_Insured": 1000000.0,
+                    "Gross_Premium": 50000.0,
+                    "Currency": "USD",
+                },
             ],
             invalid_records=[],
             errors=[],

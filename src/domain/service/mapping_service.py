@@ -7,13 +7,14 @@ import structlog
 from pydantic import ValidationError
 
 from src.domain.model.errors import MappingConfidenceLowError
+from src.domain.model.record_factory import build_record_model
 from src.domain.model.schema import (
     ConfidenceReport,
     MappingResult,
     ProcessingResult,
-    RiskRecord,
     RowError,
 )
+from src.domain.model.target_schema import DEFAULT_TARGET_SCHEMA, TargetSchema
 from src.ports.input.ingestor import IngestorPort
 from src.ports.output.mapper import MapperPort
 from src.ports.output.repo import CachePort
@@ -40,11 +41,14 @@ class MappingService:
         mapper: MapperPort,
         cache: CachePort,
         confidence_threshold: float = DEFAULT_CONFIDENCE_THRESHOLD,
+        schema: TargetSchema | None = None,
     ) -> None:
         self._ingestor = ingestor
         self._mapper = mapper
         self._cache = cache
         self._confidence_threshold = confidence_threshold
+        self._schema = schema or DEFAULT_TARGET_SCHEMA
+        self._record_model = build_record_model(self._schema)
         self._logger = structlog.get_logger()
 
     def get_sheet_names(self, file_path: str) -> list[str]:
@@ -95,14 +99,14 @@ class MappingService:
         df = df.rename({k: v for k, v in rename_map.items() if k in df.columns})
 
         rows = df.to_dicts()
-        valid_records: list[RiskRecord] = []
+        valid_records: list[dict[str, object]] = []
         invalid_records: list[dict[str, object]] = []
         errors: list[RowError] = []
 
         for i, row in enumerate(rows):
             try:
-                record = RiskRecord.model_validate(row)
-                valid_records.append(record)
+                record = self._record_model.model_validate(row)
+                valid_records.append(record.model_dump())
             except (ValidationError, ValueError) as e:
                 invalid_records.append(row)
                 errors.append(RowError(row=i + 1, error=str(e)))
@@ -110,7 +114,9 @@ class MappingService:
         return ProcessingResult(
             mapping=mapping,
             confidence_report=ConfidenceReport.from_mapping_result(
-                mapping, threshold=self._confidence_threshold
+                mapping,
+                threshold=self._confidence_threshold,
+                valid_fields=self._schema.field_names,
             ),
             valid_records=valid_records,
             invalid_records=invalid_records,
