@@ -13,10 +13,13 @@ import os
 import pytest
 from fastapi.testclient import TestClient
 
-pytestmark = pytest.mark.skipif(
-    not os.environ.get("GROQ_API_KEY"),
-    reason="GROQ_API_KEY not set — skipping smoke tests",
-)
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.skipif(
+        not os.environ.get("GROQ_API_KEY"),
+        reason="GROQ_API_KEY not set — skipping smoke tests",
+    ),
+]
 
 
 SAMPLE_CSV = (
