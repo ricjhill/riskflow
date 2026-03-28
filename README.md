@@ -45,7 +45,7 @@ uv run ruff format src/
 3. **Check** — Run `uv run mypy src/` and `uv run ruff check src/`
 4. **Commit** — If all pass, commit with a descriptive message
 
-A pre-commit hook enforces this — it blocks any commit where mypy, pytest, ruff check, or ruff format fail.
+Claude Code hooks enforce this — they block any commit where mypy, pytest, ruff check, or ruff format fail. GitHub Actions CI provides the same checks on PRs and pushes to main.
 
 ## Architecture
 
@@ -75,8 +75,7 @@ graph LR
 
     subgraph Domain
         Service[MappingService]
-        Models[RiskRecord<br>ColumnMapping<br>MappingResult]
-        Validator[Validator]
+        Models[RiskRecord<br>ColumnMapping<br>MappingResult<br>ProcessingResult]
         Errors[Domain Errors]
     end
 
@@ -85,8 +84,7 @@ graph LR
     Service --> IngestorPort
     Service --> MapperPort
     Service --> CachePort
-    Service --> Validator
-    Validator --> Models
+    Service --> Models
     IngestorPort -.-> Parser
     MapperPort -.-> SLM
     CachePort -.-> Cache

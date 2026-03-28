@@ -15,20 +15,19 @@ The codebase is strictly organized into three zones. Dependencies only point inw
 src/
   entrypoint/        # main.py — wires FastAPI, Groq, and Polars together
   domain/
-    model/           # Reinsurance entities (Risk, Premium, Treaty)
-    service/         # Mapping logic, SLM prompt construction
+    model/           # RiskRecord, ColumnMapping, MappingResult, ProcessingResult, errors
+    service/         # MappingService — orchestrates mapping and row validation
   ports/
-    input/           # IngestorInterface (how data enters the domain)
-    output/          # MapperInterface (SLM calls), RepoInterface (Redis)
+    input/           # IngestorPort (how data enters the domain)
+    output/          # MapperPort (SLM calls), CachePort (Redis)
   adapters/
     http/            # FastAPI routes
     slm/             # Groq API implementation
     storage/         # Redis caching implementation
     parsers/         # Polars-based Excel/CSV readers
-  mocks/             # Generated mocks for ports
 tests/
   unit/              # Domain and service tests — no I/O
-  integration/       # Adapter tests — marked with @pytest.mark.integration
+  integration/       # E2E pipeline tests
 ```
 
 ---

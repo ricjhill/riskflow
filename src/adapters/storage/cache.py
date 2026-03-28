@@ -6,7 +6,6 @@ connection failures — cache is an optimization, not a requirement.
 NullCache: no-op fallback used when Redis is unavailable or in tests.
 """
 
-import logging
 from typing import cast
 
 import redis
@@ -14,8 +13,6 @@ import redis
 from src.domain.model.schema import MappingResult
 
 KEY_PREFIX = "riskflow:mapping:"
-
-logger = logging.getLogger(__name__)
 
 
 class RedisCache:
