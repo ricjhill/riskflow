@@ -169,6 +169,60 @@ class TestCacheInteraction:
         assert key1 == key2
 
 
+class TestCacheLogging:
+    """Test that cache hit/miss events are logged via structlog."""
+
+    @pytest.fixture(autouse=True)
+    def _configure_structlog(self) -> None:
+        from src.entrypoint.main import configure_logging
+
+        configure_logging()
+
+    @pytest.mark.asyncio
+    async def test_logs_cache_miss(
+        self,
+        service: MappingService,
+        cache: MagicMock,
+        tmp_path: Path,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        import json
+
+        path = _write_csv(tmp_path)
+        cache.get_mapping.return_value = None
+        with caplog.at_level("INFO"):
+            await service.process_file(path)
+        log_events = [
+            json.loads(r.message)
+            for r in caplog.records
+            if "cache_lookup" in r.message
+        ]
+        assert len(log_events) == 1
+        assert log_events[0]["result"] == "miss"
+
+    @pytest.mark.asyncio
+    async def test_logs_cache_hit(
+        self,
+        service: MappingService,
+        cache: MagicMock,
+        tmp_path: Path,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        import json
+
+        path = _write_csv(tmp_path)
+        cache.get_mapping.return_value = _make_mapping_result()
+        with caplog.at_level("INFO"):
+            await service.process_file(path)
+        log_events = [
+            json.loads(r.message)
+            for r in caplog.records
+            if "cache_lookup" in r.message
+        ]
+        assert len(log_events) == 1
+        assert log_events[0]["result"] == "hit"
+
+
 class TestConfidenceThreshold:
     """Test that low-confidence mappings are rejected."""
 
