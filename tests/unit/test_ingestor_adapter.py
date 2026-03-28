@@ -3,6 +3,7 @@
 import csv
 from pathlib import Path
 
+import openpyxl
 import pytest
 
 from src.adapters.parsers.ingestor import PolarsIngestor
@@ -103,3 +104,100 @@ class TestGetPreview:
     def test_raises_on_missing_file(self) -> None:
         with pytest.raises(FileNotFoundError):
             PolarsIngestor().get_preview("/nonexistent/file.csv")
+
+
+def _write_xlsx(
+    path: Path,
+    sheets: dict[str, tuple[list[str], list[list[str]]]],
+) -> str:
+    """Helper to create a multi-sheet Excel fixture.
+
+    sheets: {"SheetName": (headers, [rows])}
+    """
+    file_path = str(path / "test.xlsx")
+    wb = openpyxl.Workbook()
+    # Remove default sheet
+    wb.remove(wb.active)
+    for sheet_name, (headers, rows) in sheets.items():
+        ws = wb.create_sheet(sheet_name)
+        ws.append(headers)
+        for row in rows:
+            ws.append(row)
+    wb.save(file_path)
+    return file_path
+
+
+class TestExcelHeaders:
+    """Test get_headers with .xlsx files including multi-sheet."""
+
+    def test_reads_first_sheet_by_default(self, tmp_path: Path) -> None:
+        path = _write_xlsx(
+            tmp_path,
+            {
+                "Policies": (["Policy_ID", "GWP"], [["P001", "50000"]]),
+                "Claims": (["Claim_ID", "Amount"], [["C001", "10000"]]),
+            },
+        )
+        headers = PolarsIngestor().get_headers(path)
+        assert headers == ["Policy_ID", "GWP"]
+
+    def test_reads_named_sheet(self, tmp_path: Path) -> None:
+        path = _write_xlsx(
+            tmp_path,
+            {
+                "Policies": (["Policy_ID", "GWP"], [["P001", "50000"]]),
+                "Claims": (["Claim_ID", "Amount"], [["C001", "10000"]]),
+            },
+        )
+        headers = PolarsIngestor().get_headers(path, sheet_name="Claims")
+        assert headers == ["Claim_ID", "Amount"]
+
+    def test_raises_on_nonexistent_sheet(self, tmp_path: Path) -> None:
+        path = _write_xlsx(
+            tmp_path,
+            {"Policies": (["Policy_ID"], [["P001"]])},
+        )
+        with pytest.raises(ValueError, match="NoSuchSheet"):
+            PolarsIngestor().get_headers(path, sheet_name="NoSuchSheet")
+
+
+class TestExcelPreview:
+    """Test get_preview with .xlsx files including multi-sheet."""
+
+    def test_preview_first_sheet_by_default(self, tmp_path: Path) -> None:
+        path = _write_xlsx(
+            tmp_path,
+            {
+                "Policies": (
+                    ["Policy_ID", "GWP"],
+                    [["P001", "50000"], ["P002", "75000"]],
+                ),
+                "Claims": (["Claim_ID"], [["C001"]]),
+            },
+        )
+        preview = PolarsIngestor().get_preview(path, n=1)
+        assert len(preview) == 1
+        assert "Policy_ID" in preview[0]
+
+    def test_preview_named_sheet(self, tmp_path: Path) -> None:
+        path = _write_xlsx(
+            tmp_path,
+            {
+                "Policies": (["Policy_ID"], [["P001"]]),
+                "Claims": (
+                    ["Claim_ID", "Amount"],
+                    [["C001", "10000"], ["C002", "20000"]],
+                ),
+            },
+        )
+        preview = PolarsIngestor().get_preview(path, sheet_name="Claims")
+        assert len(preview) == 2
+        assert preview[0]["Claim_ID"] == "C001"
+
+    def test_preview_raises_on_nonexistent_sheet(self, tmp_path: Path) -> None:
+        path = _write_xlsx(
+            tmp_path,
+            {"Policies": (["Policy_ID"], [["P001"]])},
+        )
+        with pytest.raises(ValueError, match="NoSuchSheet"):
+            PolarsIngestor().get_preview(path, sheet_name="NoSuchSheet")
