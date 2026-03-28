@@ -17,7 +17,7 @@ import tempfile
 import time
 
 import structlog
-from fastapi import APIRouter, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, BackgroundTasks, File, HTTPException, Query, UploadFile
 
 from src.domain.model.errors import (
     InvalidCedentDataError,
@@ -26,7 +26,9 @@ from src.domain.model.errors import (
     SchemaValidationError,
     SLMUnavailableError,
 )
+from src.domain.model.job import Job
 from src.domain.service.mapping_service import MappingService
+from src.ports.output.job_store import JobStorePort
 
 logger = structlog.get_logger()
 
@@ -34,11 +36,15 @@ ALLOWED_EXTENSIONS = {".csv", ".xlsx", ".xls"}
 MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10MB
 
 
-def create_router(mapping_service: MappingService) -> APIRouter:
+def create_router(
+    mapping_service: MappingService,
+    job_store: JobStorePort | None = None,
+) -> APIRouter:
     """Create a FastAPI router wired to the given MappingService.
 
     The service is injected — the router never constructs adapters itself.
     This keeps the HTTP adapter decoupled from concrete implementations.
+    job_store is optional — async endpoints are only available when provided.
     """
     router = APIRouter()
 
@@ -147,7 +153,72 @@ def create_router(mapping_service: MappingService) -> APIRouter:
             if os.path.exists(temp_path):
                 os.remove(temp_path)
 
+    if job_store is not None:
+
+        @router.post("/upload/async", status_code=202)
+        async def upload_file_async(
+            background_tasks: BackgroundTasks,
+            file: UploadFile = File(...),
+            sheet_name: str | None = Query(
+                default=None,
+                description="Sheet name for multi-sheet Excel files",
+            ),
+        ) -> dict:
+            """Accept a file for async processing, return job ID immediately."""
+            _validate_file(file)
+
+            job = Job.create()
+            job_store.save(job)
+
+            temp_path = _save_temp_file(file)
+            logger.info(
+                "async_job_created",
+                job_id=job.id,
+                filename=file.filename,
+                sheet_name=sheet_name,
+            )
+
+            background_tasks.add_task(
+                _process_job, job, temp_path, sheet_name, mapping_service, job_store
+            )
+
+            return {"job_id": job.id}
+
+        @router.get("/jobs/{job_id}")
+        async def get_job_status(job_id: str) -> dict:
+            """Get the status and result of an async job."""
+            job = job_store.get(job_id)
+            if job is None:
+                raise HTTPException(status_code=404, detail="Job not found")
+            return {
+                "job_id": job.id,
+                "status": job.status.value,
+                "result": job.result,
+                "error": job.error,
+            }
+
     return router
+
+
+async def _process_job(
+    job: Job,
+    temp_path: str,
+    sheet_name: str | None,
+    mapping_service: MappingService,
+    job_store: JobStorePort,
+) -> None:
+    """Background task that processes the file and updates the job."""
+    job.start()
+    job_store.save(job)
+    try:
+        result = await mapping_service.process_file(temp_path, sheet_name=sheet_name)
+        job.complete(result=result.model_dump())
+    except Exception as e:
+        job.fail(error=str(e))
+    finally:
+        job_store.save(job)
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
 
 
 def _error_detail(error_code: str, message: str, suggestion: str) -> dict[str, str]:
