@@ -19,3 +19,7 @@ class SchemaValidationError(RiskFlowError):
 
 class SLMUnavailableError(RiskFlowError):
     """Raised when the Groq API is unreachable or returns invalid data."""
+
+
+class InvalidSchemaError(RiskFlowError):
+    """Raised when a target schema config file is missing, malformed, or invalid."""
