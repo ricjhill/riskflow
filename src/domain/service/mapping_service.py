@@ -6,6 +6,7 @@ import polars as pl
 import structlog
 from pydantic import ValidationError
 
+from src.domain.model.correction import Correction
 from src.domain.model.errors import InvalidCorrectionError, MappingConfidenceLowError
 from src.domain.model.record_factory import build_record_model
 from src.domain.model.schema import (
@@ -58,6 +59,21 @@ class MappingService:
     def get_sheet_names(self, file_path: str) -> list[str]:
         """Return sheet names for Excel files, empty list for CSV."""
         return self._ingestor.get_sheet_names(file_path)
+
+    def store_correction(self, correction: Correction) -> None:
+        """Validate and store a human-verified correction.
+
+        Raises InvalidCorrectionError if the target_field is not in the
+        active schema.
+        """
+        if correction.target_field not in self._schema.field_names:
+            msg = (
+                f"Correction target '{correction.target_field}' not in schema "
+                f"fields: {sorted(self._schema.field_names)}"
+            )
+            raise InvalidCorrectionError(msg)
+        if self._correction_cache:
+            self._correction_cache.set_correction(correction)
 
     async def process_file(
         self,

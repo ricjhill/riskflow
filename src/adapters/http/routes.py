@@ -19,8 +19,12 @@ import time
 import structlog
 from fastapi import APIRouter, BackgroundTasks, File, HTTPException, Query, UploadFile
 
+from pydantic import BaseModel
+
+from src.domain.model.correction import Correction
 from src.domain.model.errors import (
     InvalidCedentDataError,
+    InvalidCorrectionError,
     MappingConfidenceLowError,
     RiskFlowError,
     SchemaValidationError,
@@ -34,6 +38,20 @@ logger = structlog.get_logger()
 
 ALLOWED_EXTENSIONS = {".csv", ".xlsx", ".xls"}
 MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10MB
+
+
+class CorrectionItem(BaseModel):
+    """A single correction in a POST /corrections request."""
+
+    source_header: str
+    target_field: str
+
+
+class CorrectionRequest(BaseModel):
+    """Request body for POST /corrections."""
+
+    cedent_id: str
+    corrections: list[CorrectionItem]
 
 
 def create_router(
@@ -54,6 +72,9 @@ def create_router(
         sheet_name: str | None = Query(
             default=None, description="Sheet name for multi-sheet Excel files"
         ),
+        cedent_id: str | None = Query(
+            default=None, description="Cedent ID for correction cache lookup"
+        ),
     ) -> dict:
         """Upload a spreadsheet and map its headers to the target schema."""
         _validate_file(file)
@@ -64,7 +85,7 @@ def create_router(
         temp_path = _save_temp_file(file)
         try:
             result = await mapping_service.process_file(
-                temp_path, sheet_name=sheet_name
+                temp_path, sheet_name=sheet_name, cedent_id=cedent_id
             )
             duration_ms = int((time.monotonic() - start) * 1000)
             logger.info(
@@ -121,6 +142,16 @@ def create_router(
                     "The mapping service is temporarily unavailable. Retry in a few seconds.",
                 ),
             ) from e
+        except InvalidCorrectionError as e:
+            logger.warning("invalid_correction", filename=file.filename, error=str(e))
+            raise HTTPException(
+                status_code=422,
+                detail=_error_detail(
+                    "INVALID_CORRECTION",
+                    str(e),
+                    "The correction references a target field not in the active schema.",
+                ),
+            ) from e
         except ValueError as e:
             logger.warning("invalid_input", filename=file.filename, error=str(e))
             raise HTTPException(
@@ -164,6 +195,41 @@ def create_router(
         finally:
             if os.path.exists(temp_path):
                 os.remove(temp_path)
+
+    @router.post("/corrections", status_code=201)
+    async def submit_corrections(request: CorrectionRequest) -> dict:
+        """Submit human-verified mapping corrections for a cedent."""
+        if not request.cedent_id.strip():
+            raise HTTPException(status_code=400, detail="cedent_id must not be empty")
+        if not request.corrections:
+            raise HTTPException(
+                status_code=400, detail="corrections list must not be empty"
+            )
+
+        for item in request.corrections:
+            correction = Correction(
+                cedent_id=request.cedent_id,
+                source_header=item.source_header,
+                target_field=item.target_field,
+            )
+            try:
+                mapping_service.store_correction(correction)
+            except InvalidCorrectionError as e:
+                raise HTTPException(
+                    status_code=422,
+                    detail=_error_detail(
+                        "INVALID_CORRECTION",
+                        str(e),
+                        "The correction references a target field not in the active schema.",
+                    ),
+                ) from e
+
+        logger.info(
+            "corrections_submitted",
+            cedent_id=request.cedent_id,
+            count=len(request.corrections),
+        )
+        return {"stored": len(request.corrections)}
 
     if job_store is not None:
 
