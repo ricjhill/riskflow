@@ -25,7 +25,18 @@ Create a PR for the current branch. The code-reviewer agent must approve before 
 6. Run `uv run ruff check src/ 2>&1 | tail -1` for ruff status
 7. Run `uv run ruff format --check src/ 2>&1 | tail -1` for format status
 
-### Phase 3: Create PR
+### Phase 3: Verify PR description accuracy (blocking)
+
+Before creating the PR, draft the body text then verify every factual claim against the code:
+
+1. **Error paths:** For each error/status code mentioned (e.g., "returns 400"), trace the exception from where it's raised through the handler chain to the HTTP response. Confirm the status code matches.
+2. **Behavior claims:** For each "does X" statement, find the code that does X. If it's not tested, don't claim it.
+3. **TDD cycles:** Distinguish between intentional RED tests (wrote a test that correctly fails) and infrastructure failures (missing dependency, wrong config). Only describe intentional RED→GREEN cycles as TDD.
+4. **Mechanism explanations:** For any "because X" or "this works by Y" explanation, trace the actual step-by-step mechanism through the code. Don't describe from memory — read the code.
+
+If any claim doesn't match the code, either fix the code or fix the description before proceeding.
+
+### Phase 4: Create PR
 
 Create the PR using `gh pr create` with this template:
 
@@ -77,7 +88,9 @@ EOF
 ## Rules
 
 - **Never create a PR without an APPROVE from the code-reviewer agent**
+- **Never create a PR without verifying every claim in the description against the code**
 - If the reviewer blocks, fix the code and re-run the reviewer — do not skip it
+- If a description claim doesn't match the code, fix the code or the description — do not skip verification
 - Always run the data-gathering commands fresh — do not rely on earlier output
 - The summary must explain WHY, not just WHAT
 - Test inventory must be the complete output, not a subset

@@ -115,6 +115,16 @@ def create_router(mapping_service: MappingService) -> APIRouter:
                     "The mapping service is temporarily unavailable. Retry in a few seconds.",
                 ),
             ) from e
+        except ValueError as e:
+            logger.warning("invalid_input", filename=file.filename, error=str(e))
+            raise HTTPException(
+                status_code=400,
+                detail=_error_detail(
+                    "INVALID_SHEET",
+                    str(e),
+                    "Check the sheet name and try again. Omit sheet_name to use the first sheet.",
+                ),
+            ) from e
         except RiskFlowError as e:
             logger.error("domain_error", filename=file.filename, error=str(e))
             raise HTTPException(

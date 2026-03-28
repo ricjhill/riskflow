@@ -145,6 +145,29 @@ class TestSheetNameParam:
         assert call_kwargs[1]["sheet_name"] is None
 
 
+class TestSheetNameErrors:
+    """Nonexistent sheet names must return 400, not 500."""
+
+    def test_nonexistent_sheet_returns_400(self) -> None:
+        service = AsyncMock()
+        service.process_file.side_effect = ValueError(
+            "Sheet 'NoSuchSheet' not found in /tmp/test.xlsx"
+        )
+        app = _create_test_app(service)
+        client = TestClient(app)
+
+        response = client.post(
+            "/upload?sheet_name=NoSuchSheet",
+            files={"file": ("test.xlsx", io.BytesIO(b"data"), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+        )
+
+        assert response.status_code == 400
+        detail = response.json()["detail"]
+        assert detail["error_code"] == "INVALID_SHEET"
+        assert "NoSuchSheet" in detail["message"]
+        assert "suggestion" in detail
+
+
 class TestErrorMapping:
     """Domain errors must map to appropriate HTTP status codes."""
 
