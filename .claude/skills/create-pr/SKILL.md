@@ -7,15 +7,7 @@ Create a PR for the current branch. The code-reviewer agent must approve before 
 
 ## Steps
 
-### Phase 1: Agent review (blocking)
-
-1. Launch the `code-reviewer` agent to review the changes on this branch
-2. If the reviewer returns **BLOCK**: fix the issues it identified, then re-run the reviewer
-3. If the reviewer returns **REVISE**: address the feedback, then re-run the reviewer
-4. If the reviewer returns **APPROVE**: proceed to Phase 2
-5. Include the reviewer's full output in the PR description
-
-### Phase 2: Gather data
+### Phase 1: Gather data
 
 1. Run `git log --oneline main..HEAD` to get commits on this branch
 2. Run `git diff main..HEAD --stat` to get changed files
@@ -25,16 +17,18 @@ Create a PR for the current branch. The code-reviewer agent must approve before 
 6. Run `uv run ruff check src/ 2>&1 | tail -1` for ruff status
 7. Run `uv run ruff format --check src/ 2>&1 | tail -1` for format status
 
-### Phase 3: Verify PR description accuracy (blocking)
+### Phase 2: Draft PR body
 
-Before creating the PR, draft the body text then verify every factual claim against the code:
+Write the full PR body using the template in Phase 4. Do not create the PR yet.
 
-1. **Error paths:** For each error/status code mentioned (e.g., "returns 400"), trace the exception from where it's raised through the handler chain to the HTTP response. Confirm the status code matches.
-2. **Behavior claims:** For each "does X" statement, find the code that does X. If it's not tested, don't claim it.
-3. **TDD cycles:** Distinguish between intentional RED tests (wrote a test that correctly fails) and infrastructure failures (missing dependency, wrong config). Only describe intentional RED→GREEN cycles as TDD.
-4. **Mechanism explanations:** For any "because X" or "this works by Y" explanation, trace the actual step-by-step mechanism through the code. Don't describe from memory — read the code.
+### Phase 3: Agent review of code AND PR text (blocking)
 
-If any claim doesn't match the code, either fix the code or fix the description before proceeding.
+1. Launch the `code-reviewer` agent, providing both the branch diff and the draft PR body text
+2. The reviewer will check code quality AND verify that every claim in the PR description matches the actual code
+3. If the reviewer returns **BLOCK**: fix the issues, then re-run the reviewer
+4. If the reviewer returns **REVISE**: address the feedback, then re-run the reviewer
+5. If the reviewer returns **APPROVE**: proceed to Phase 4
+6. Include the reviewer's full output in the PR description
 
 ### Phase 4: Create PR
 
@@ -88,9 +82,9 @@ EOF
 ## Rules
 
 - **Never create a PR without an APPROVE from the code-reviewer agent**
-- **Never create a PR without verifying every claim in the description against the code**
-- If the reviewer blocks, fix the code and re-run the reviewer — do not skip it
-- If a description claim doesn't match the code, fix the code or the description — do not skip verification
+- **The reviewer must see the draft PR body** — pass it as part of the review prompt so it can verify accuracy
+- If the reviewer blocks on code issues, fix the code and re-run
+- If the reviewer blocks on PR text accuracy, fix the description and re-run
 - Always run the data-gathering commands fresh — do not rely on earlier output
 - The summary must explain WHY, not just WHAT
 - Test inventory must be the complete output, not a subset
