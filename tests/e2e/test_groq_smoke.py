@@ -14,10 +14,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 pytestmark = [
-    pytest.mark.integration,
+    pytest.mark.e2e,
     pytest.mark.skipif(
         not os.environ.get("GROQ_API_KEY"),
-        reason="GROQ_API_KEY not set — skipping smoke tests",
+        reason="GROQ_API_KEY not set — skipping e2e tests",
     ),
 ]
 
