@@ -1,6 +1,6 @@
 # Harness Engineering: Building Software by Asking Better Questions
 
-**Duration:** 45 minutes
+**Duration:** 90 minutes
 **Audience:** Engineering team
 **Project:** RiskFlow — Reinsurance Data Mapper
 
@@ -163,17 +163,131 @@ The complete `.claude/` directory and what each piece does:
 
 ---
 
-## 11. Takeaway (2 min)
+---
+
+## 11. "How do we stop hallucinations on PRs?" (7 min)
+*Accuracy enforcement — the harness must check its own output*
+
+- PR #26 claimed "Raises 400" but the code returned 500 — a ValueError had no handler
+- **Before:** manual review caught it. No mechanical enforcement.
+- **After:** Extended code-reviewer agent with "PR Description Accuracy" blocking category
+- The reviewer now traces error paths, verifies behavior claims, checks mechanism explanations against the actual code
+- Reordered `/create-pr` skill: draft PR body (Phase 2) → agent reviews both code AND text (Phase 3)
+- Also added commit message accuracy feedback: trace actual step-by-step mechanics before writing
+- **Principle: If the harness can generate wrong documentation about correct code, add a second agent to cross-reference claims against the diff.**
+
+---
+
+## 12. Configurable Schema — The "Expand and Contract" Pattern (10 min)
+*Swapping the engine while the harness keeps running*
+
+- Problem: hardcoded 6-field schema (Policy_ID, Sum_Insured, etc.) limits the tool to one shape of bordereaux data
+- Solution: configurable TargetSchema loaded from YAML, with a dynamic pydantic model factory
+- **The migration strategy:**
+  - Phase 1: Build new code alongside old code (TargetSchema, build_record_model) — zero existing tests broken
+  - Phase 2: Add optional `schema` parameter with DEFAULT_TARGET_SCHEMA default — existing callers unchanged
+  - Phase 3: Equivalence test proves dynamic model matches hardcoded RiskRecord for all inputs
+  - Phase 4: Wire in, relax ColumnMapping validator, switch ProcessingResult to dict
+- **Safety nets:**
+  - Loop 7 equivalence tests: 18 tests feeding identical inputs to both models
+  - Schema fingerprint (blake2b) in cache keys prevents poisoned data across schema changes
+  - Self-validating schema: constraint-type safety, cross-field rule validation, SLM hint integrity all checked at parse time
+- "A broken YAML config is a fatal startup error — the app refuses to boot"
+- **Principle: When replacing a foundation, build the new one next to the old one, prove they're identical, then switch. The harness validates both at every step.**
+
+---
+
+## 13. The Feedback Loop — Correction Cache (7 min)
+*Human corrections improve future mappings automatically*
+
+- Problem: when the SLM maps wrong, there's no way to correct it and have the correction persist
+- Solution: `POST /corrections` stores `(cedent_id, source_header) → target_field` in Redis
+- On subsequent uploads with `?cedent_id=ABC`:
+  1. Check corrections for this cedent's headers
+  2. Corrected headers get confidence 1.0 — skip the SLM entirely
+  3. Only uncorrected headers go to the SLM
+  4. All headers corrected? SLM never called
+- Redis hash per cedent: `HMGET` for batch lookup (one round-trip for all headers)
+- Invalid corrections (target field not in schema) rejected with `InvalidCorrectionError` → 422
+- Graceful degradation: Redis down → NullCorrectionCache → pure SLM path
+- **Principle: Build feedback loops into the domain, not as afterthoughts. Corrections are a first-class port with their own adapter, not a patch on the mapper.**
+
+---
+
+## 14. Testing Strategy & CI/CD Pipeline (10 min)
+*Three tiers, five CI jobs, zero manual gates*
+
+### Three-tier test taxonomy
+| Tier | Count | What | External deps | When |
+|------|-------|------|---------------|------|
+| Unit | 376 | Isolated components, all mocked | None | Every PR |
+| Integration | 25 | Full pipeline, SLM mocked | None | Every PR |
+| E2E | 5 | Real Groq API, nothing mocked | GROQ_API_KEY | Push to main only |
+
+### CI pipeline
+```
+PR → quality (unit + integration + mypy + ruff + hex linter)
+   → boot-test (Docker build + /health, if app code changed)
+   → security (bandit + pip-audit)
+Merge → e2e (real Groq API)
+      → CD (Docker build → ghcr.io with :latest and :sha tags)
+```
+
+### Why e2e runs after merge, not before
+- PRs use mocked tests — fast, free, never blocked by Groq outages
+- Post-merge e2e catches model deprecation and API drift
+- If e2e fails, the code is correct — the external dependency changed. Fix forward.
+
+### Test artifacts
+- JUnit XML reports uploaded as 30-day artifacts
+- `dorny/test-reporter` renders results as PR check annotations — test names and pass/fail visible in the PR Checks tab without opening logs
+
+### The hexagonal linter
+- AST-based Python linter that enforces `domain ← ports ← adapters ← entrypoint`
+- Runs in CI alongside ruff and mypy
+- Agent-readable error messages: "VIOLATION: Layer 'domain' cannot import 'adapters'. FIX: Define a Protocol in src/ports/output/"
+- 18 tests including a scan of the real codebase
+
+---
+
+## 15. By the Numbers (3 min)
+
+| Metric | Session 1 | Session 2 | Session 3 |
+|--------|-----------|-----------|-----------|
+| PRs merged | 19 | 22 | 62 |
+| Tests | 148 | 148 | 406 |
+| Hooks | 5 | 5 | 5 |
+| Agents | 2 | 2 | 2 (reviewer checks PR text) |
+| Skills | 2 | 3 | 3 |
+| CI jobs | 0 | 2 | 5 (quality, boot-test, security, e2e, CD) |
+| Source files | 25 | 25 | 34 |
+| Lines of source | ~900 | ~900 | ~2,000 |
+| Manual code written | 0 | 0 | 0 |
+| Endpoints | 2 | 2 | 6 |
+| Features | Upload + health | + logging, validation | + configurable schema, correction cache, async upload, sheets, confidence report |
+
+---
+
+## 16. Takeaway (3 min)
 
 Harness engineering isn't about the tools — it's about asking the right questions in the right order:
 
-1. **What can be automated?** -> Hooks
-2. **What instructions does the agent actually need?** -> Pruned CLAUDE.md
-3. **Are the tests strong enough?** -> Testing rules
-4. **Does it actually run?** -> Smoke tests
-5. **How do we keep it working?** -> Security scanning, CI
+1. **What can be automated?** → Hooks
+2. **What instructions does the agent need?** → Pruned CLAUDE.md
+3. **Are the tests strong enough?** → Testing rules + coverage validation before every loop
+4. **Does it actually run?** → Smoke tests, Docker boot test in CI
+5. **Is the documentation accurate?** → Code-reviewer verifies PR text against code
+6. **Can we swap the foundation safely?** → Expand and Contract with equivalence tests
+7. **Do users get feedback?** → Correction cache with confidence 1.0 overrides
+8. **How do we keep it working?** → CI/CD pipeline: 5 jobs, 406 tests, Docker image on green
 
 Each question tightened the constraints. Each constraint improved the output. The agent didn't get smarter — the harness got better.
+
+**The harness is the product.** The code is a side effect.
+
+---
+
+## 17. Q&A (5 min)
 
 ---
 
