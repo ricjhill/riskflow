@@ -269,3 +269,106 @@ class TestConfidenceThreshold:
         mapper.map_headers.return_value = _make_mapping_result(confidence=0.7)
         with pytest.raises(MappingConfidenceLowError):
             await service.process_file(path)
+
+
+class TestPartialMapping:
+    """When the SLM maps fewer than 6 target fields, the service should
+    still return a result with the confidence report showing missing fields,
+    rather than failing entirely."""
+
+    @pytest.mark.asyncio
+    async def test_partial_mapping_returns_result(
+        self, cache: MagicMock, tmp_path: Path
+    ) -> None:
+        """A file with only 2 of 6 target fields should still process."""
+        # CSV has Policy No. and GWP but not the other 4 target fields
+        file_path = str(tmp_path / "partial.csv")
+        with open(file_path, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["Policy No.", "GWP", "Notes"])
+            writer.writerow(["P001", "50000", "test"])
+
+        # SLM maps only 2 fields
+        partial_mapping = MappingResult(
+            mappings=[
+                ColumnMapping(source_header="Policy No.", target_field="Policy_ID", confidence=0.95),
+                ColumnMapping(source_header="GWP", target_field="Gross_Premium", confidence=0.90),
+            ],
+            unmapped_headers=["Notes"],
+        )
+
+        mapper = AsyncMock()
+        mapper.map_headers.return_value = partial_mapping
+        cache.get_mapping.return_value = None
+
+        service = MappingService(
+            ingestor=PolarsIngestor(), mapper=mapper, cache=cache
+        )
+
+        result = await service.process_file(file_path)
+        assert isinstance(result, ProcessingResult)
+
+    @pytest.mark.asyncio
+    async def test_partial_mapping_reports_missing_fields(
+        self, cache: MagicMock, tmp_path: Path
+    ) -> None:
+        file_path = str(tmp_path / "partial.csv")
+        with open(file_path, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["Policy No.", "GWP"])
+            writer.writerow(["P001", "50000"])
+
+        partial_mapping = MappingResult(
+            mappings=[
+                ColumnMapping(source_header="Policy No.", target_field="Policy_ID", confidence=0.95),
+                ColumnMapping(source_header="GWP", target_field="Gross_Premium", confidence=0.90),
+            ],
+            unmapped_headers=[],
+        )
+
+        mapper = AsyncMock()
+        mapper.map_headers.return_value = partial_mapping
+        cache.get_mapping.return_value = None
+
+        service = MappingService(
+            ingestor=PolarsIngestor(), mapper=mapper, cache=cache
+        )
+
+        result = await service.process_file(file_path)
+        assert "Inception_Date" in result.confidence_report.missing_fields
+        assert "Currency" in result.confidence_report.missing_fields
+        assert len(result.confidence_report.missing_fields) == 4
+
+    @pytest.mark.asyncio
+    async def test_partial_mapping_rows_are_invalid(
+        self, cache: MagicMock, tmp_path: Path
+    ) -> None:
+        """Rows with missing required fields go to invalid_records."""
+        file_path = str(tmp_path / "partial.csv")
+        with open(file_path, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["Policy No.", "GWP"])
+            writer.writerow(["P001", "50000"])
+
+        partial_mapping = MappingResult(
+            mappings=[
+                ColumnMapping(source_header="Policy No.", target_field="Policy_ID", confidence=0.95),
+                ColumnMapping(source_header="GWP", target_field="Gross_Premium", confidence=0.90),
+            ],
+            unmapped_headers=[],
+        )
+
+        mapper = AsyncMock()
+        mapper.map_headers.return_value = partial_mapping
+        cache.get_mapping.return_value = None
+
+        service = MappingService(
+            ingestor=PolarsIngestor(), mapper=mapper, cache=cache
+        )
+
+        result = await service.process_file(file_path)
+        # Row has Policy_ID and Gross_Premium but missing 4 other fields
+        # → should be invalid because RiskRecord requires all 6
+        assert len(result.valid_records) == 0
+        assert len(result.invalid_records) == 1
+        assert len(result.errors) == 1
