@@ -1,0 +1,34 @@
+name: CD Delivery
+
+# Only runs after CI passes on main — the harness must be green before packaging
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    # Only build if CI succeeded — not on failure or cancellation
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Build Docker image
+        run: docker build -t ghcr.io/${{ github.repository }}/riskflow:latest .
+
+      - name: Tag with commit SHA
+        run: docker tag ghcr.io/${{ github.repository }}/riskflow:latest ghcr.io/${{ github.repository }}/riskflow:${{ github.sha }}
+
+      - name: Push Docker image
+        run: |
+          docker push ghcr.io/${{ github.repository }}/riskflow:latest
+          docker push ghcr.io/${{ github.repository }}/riskflow:${{ github.sha }}
