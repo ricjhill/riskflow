@@ -241,6 +241,12 @@ Session 3 shifted from harness building to feature development — with two harn
 | 14 | #25 | Structured error responses (error_code, message, suggestion) | +5 |
 | 15 | #26 | Multi-sheet Excel support (`?sheet_name=Claims`) | +8 |
 | 16 | #29 | Confidence report (min/avg/low-confidence/missing fields) | +9 |
+| 17 | #31 | Partial mapping (already worked — added tests to prove it) | +3 |
+| 18 | #32 | Async upload with job tracking (`POST /upload/async`, `GET /jobs/{id}`) | +19 |
+| 19 | #33 | List sheet names (`POST /sheets`) | +7 |
+| 20-22 | #34,#38 | Configurable target schema (TargetSchema, build_record_model, YAML loader) | +88 |
+| 23 | #40 | Wire dynamic schema into MappingService, relax ColumnMapping | +8 |
+| CC 1-8 | #41-#48 | Correction cache feedback loop (Correction model, Redis hash, service integration, HTTP endpoint, wiring) | +46 |
 
 ### Bugs found and fixed
 
@@ -282,12 +288,13 @@ A PR that says "returns 400" when the code returns 500 is actively harmful — i
 
 | Metric | After Session 1 | After Session 2 | After Session 3 |
 |--------|-----------------|-----------------|-----------------|
-| PRs merged | 19 | 22 | 29 |
-| Tests | 148 | 148 | 165 |
+| PRs merged | 19 | 22 | 49 |
+| Tests | 148 | 148 | 383 |
 | Hooks | 5 | 5 | 5 |
-| Agents | 2 | 2 | 2 (reviewer now checks PR text) |
+| Agents | 2 | 2 | 2 (reviewer now checks PR text + accuracy) |
 | Skills | 2 | 3 | 3 (create-pr now has 4 phases) |
-| Features | Health + upload | + logging, row validation | + structured errors, multi-sheet, confidence report |
+| CI jobs | None | quality + security | + integration tests + Docker boot test |
+| Features | Health + upload | + logging, row validation | + structured errors, multi-sheet, confidence report, async upload, sheet names, configurable schema, correction cache |
 | Bugs found by review | 0 | 0 | 2 (sheet 400, commit accuracy) |
 
 ---
@@ -317,3 +324,11 @@ The full sequence of questions across all three sessions:
 | 17 | "How can we stop hallucinations on PRs?" | Extended code-reviewer to verify PR text, reordered /create-pr phases |
 | 18 | "Do we have subagents or hooks that can help?" | Chose to extend existing code-reviewer rather than add new tooling |
 | 19 | "Confirm this is correct" | Caught inaccurate Docker volume explanation — corrected on PR #24 |
+| 20 | "Have we got enough integration tests?" | Added 17 integration tests covering all Session 3 features |
+| 21 | "Are our tests sufficient?" (TargetSchema) | Added 15 boundary/edge case tests before continuing |
+| 22 | "Is test coverage sufficient?" (correction cache) | Created test coverage validation process — now runs before every TDD loop |
+| 23 | "Would it make sense to run integration tests before every PR?" | Split CI into unit + integration steps |
+| 24 | "Would it make sense to provision via Docker Compose before each PR?" | Added Docker boot test to CI for app code changes |
+| 25 | "Which features are most useful for RiskFlow?" | Reprioritized: configurable schema first (foundation), then correction cache (feedback loop) |
+| 26 | "Can you plan implementation of configurable schema?" | 20-loop Expand and Contract migration plan with safety nets |
+| 27 | "Feedback Loop: Redis Correction Cache" | 9-loop plan for human-verified mapping corrections |
