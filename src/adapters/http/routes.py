@@ -68,29 +68,78 @@ def create_router(mapping_service: MappingService) -> APIRouter:
             logger.warning(
                 "mapping_low_confidence", filename=file.filename, error=str(e)
             )
-            raise HTTPException(status_code=422, detail=str(e)) from e
+            raise HTTPException(
+                status_code=422,
+                detail=_error_detail(
+                    "LOW_CONFIDENCE",
+                    str(e),
+                    "Review the unmapped headers and consider providing more representative sample data.",
+                ),
+            ) from e
         except SchemaValidationError as e:
             logger.warning(
                 "schema_validation_error", filename=file.filename, error=str(e)
             )
-            raise HTTPException(status_code=422, detail=str(e)) from e
+            raise HTTPException(
+                status_code=422,
+                detail=_error_detail(
+                    "SCHEMA_VALIDATION",
+                    str(e),
+                    "Check that the source data matches the expected format for each target field.",
+                ),
+            ) from e
         except InvalidCedentDataError as e:
             logger.warning("invalid_cedent_data", filename=file.filename, error=str(e))
-            raise HTTPException(status_code=400, detail=str(e)) from e
+            raise HTTPException(
+                status_code=400,
+                detail=_error_detail(
+                    "INVALID_DATA",
+                    str(e),
+                    "Ensure the file is a valid CSV or Excel spreadsheet with headers in the first row.",
+                ),
+            ) from e
         except SLMUnavailableError as e:
             logger.error("slm_unavailable", filename=file.filename, error=str(e))
-            raise HTTPException(status_code=503, detail=str(e)) from e
+            raise HTTPException(
+                status_code=503,
+                detail=_error_detail(
+                    "SLM_UNAVAILABLE",
+                    str(e),
+                    "The mapping service is temporarily unavailable. Retry in a few seconds.",
+                ),
+            ) from e
         except RiskFlowError as e:
             logger.error("domain_error", filename=file.filename, error=str(e))
-            raise HTTPException(status_code=500, detail=str(e)) from e
+            raise HTTPException(
+                status_code=500,
+                detail=_error_detail(
+                    "INTERNAL_ERROR", str(e), "Contact support if the problem persists."
+                ),
+            ) from e
         except Exception as e:
             logger.error("unexpected_error", filename=file.filename, error=str(e))
-            raise HTTPException(status_code=500, detail="Internal server error") from e
+            raise HTTPException(
+                status_code=500,
+                detail=_error_detail(
+                    "INTERNAL_ERROR",
+                    "Internal server error",
+                    "Contact support if the problem persists.",
+                ),
+            ) from e
         finally:
             if os.path.exists(temp_path):
                 os.remove(temp_path)
 
     return router
+
+
+def _error_detail(error_code: str, message: str, suggestion: str) -> dict[str, str]:
+    """Build a structured error response body."""
+    return {
+        "error_code": error_code,
+        "message": message,
+        "suggestion": suggestion,
+    }
 
 
 def _validate_file(file: UploadFile) -> None:
