@@ -33,6 +33,7 @@ dev = [
 [tool.pytest.ini_options]
 asyncio_mode = "strict"
 markers = [
-    "integration: tests that call real external APIs (Groq). Require API keys.",
-    "e2e: end-to-end tests through full pipeline with mocked SLM. No API keys needed.",
+    "unit: isolated component tests, all dependencies mocked.",
+    "wiring: full pipeline tests with mocked SLM. Proves components connect.",
+    "e2e: real external APIs, real data, nothing mocked. Requires GROQ_API_KEY.",
 ]
