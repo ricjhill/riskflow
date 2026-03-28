@@ -9,6 +9,9 @@ on:
 jobs:
   quality:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
     steps:
       - uses: actions/checkout@v4
 
@@ -125,6 +128,9 @@ jobs:
   e2e:
     needs: quality
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
     # Only run on push to main (not on PRs) to avoid burning API credits on every PR
     # Requires GROQ_API_KEY secret in repo settings
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
