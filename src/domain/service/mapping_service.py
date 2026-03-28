@@ -3,6 +3,7 @@
 import hashlib
 
 import polars as pl
+import structlog
 from pydantic import ValidationError
 
 from src.domain.model.errors import MappingConfidenceLowError
@@ -43,6 +44,7 @@ class MappingService:
         self._mapper = mapper
         self._cache = cache
         self._confidence_threshold = confidence_threshold
+        self._logger = structlog.get_logger()
 
     async def process_file(self, file_path: str) -> ProcessingResult:
         """Map a spreadsheet's headers and validate all rows."""
@@ -53,8 +55,10 @@ class MappingService:
 
         cached = self._cache.get_mapping(cache_key)
         if cached is not None:
+            self._logger.info("cache_lookup", result="hit", cache_key=cache_key)
             mapping = cached
         else:
+            self._logger.info("cache_lookup", result="miss", cache_key=cache_key)
             mapping = await self._mapper.map_headers(headers, preview)
             self._check_confidence(mapping)
             self._cache.set_mapping(cache_key, mapping)
