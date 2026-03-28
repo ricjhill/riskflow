@@ -22,6 +22,7 @@ from src.adapters.http.routes import create_router
 from src.adapters.parsers.ingestor import PolarsIngestor
 from src.adapters.slm.mapper import GroqMapper
 from src.adapters.storage.cache import NullCache, RedisCache
+from src.adapters.storage.job_store import InMemoryJobStore
 from src.domain.service.mapping_service import MappingService
 from src.ports.output.repo import CachePort
 
@@ -87,8 +88,11 @@ def create_app() -> FastAPI:
         cache=cache,
     )
 
+    # --- Job store for async uploads ---
+    job_store = InMemoryJobStore()
+
     # --- Routes ---
-    router = create_router(mapping_service)
+    router = create_router(mapping_service, job_store=job_store)
     app.include_router(router)
 
     @app.get("/health")

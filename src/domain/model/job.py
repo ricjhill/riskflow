@@ -1,0 +1,50 @@
+"""Job model for tracking async upload lifecycle.
+
+A Job moves through: PENDING → PROCESSING → COMPLETE or FAILED.
+Invalid transitions raise ValueError.
+"""
+
+import enum
+import uuid
+from typing import Any
+
+
+class JobStatus(str, enum.Enum):
+    PENDING = "pending"
+    PROCESSING = "processing"
+    COMPLETE = "complete"
+    FAILED = "failed"
+
+
+class Job:
+    """Tracks the state of an async file processing task."""
+
+    def __init__(self, job_id: str, status: JobStatus) -> None:
+        self.id = job_id
+        self.status = status
+        self.result: dict[str, Any] | None = None
+        self.error: str | None = None
+
+    @classmethod
+    def create(cls) -> "Job":
+        return cls(job_id=str(uuid.uuid4()), status=JobStatus.PENDING)
+
+    def start(self) -> None:
+        if self.status != JobStatus.PENDING:
+            msg = f"Can only start a PENDING job, got {self.status.value}"
+            raise ValueError(msg)
+        self.status = JobStatus.PROCESSING
+
+    def complete(self, result: dict[str, Any]) -> None:
+        if self.status != JobStatus.PROCESSING:
+            msg = f"Can only complete a PROCESSING job, got {self.status.value}"
+            raise ValueError(msg)
+        self.status = JobStatus.COMPLETE
+        self.result = result
+
+    def fail(self, error: str) -> None:
+        if self.status != JobStatus.PROCESSING:
+            msg = f"Can only fail a PROCESSING job, got {self.status.value}"
+            raise ValueError(msg)
+        self.status = JobStatus.FAILED
+        self.error = error
