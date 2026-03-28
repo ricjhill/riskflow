@@ -1,0 +1,36 @@
+name: standard_reinsurance
+fields:
+  Policy_ID:
+    type: string
+    required: true
+    not_empty: true
+  Inception_Date:
+    type: date
+    required: true
+  Expiry_Date:
+    type: date
+    required: true
+  Sum_Insured:
+    type: float
+    required: true
+    non_negative: true
+  Gross_Premium:
+    type: float
+    required: true
+    non_negative: true
+  Currency:
+    type: currency
+    required: true
+    allowed_values: [USD, GBP, EUR, JPY]
+cross_field_rules:
+  - earlier: Inception_Date
+    later: Expiry_Date
+slm_hints:
+  - source_alias: GWP
+    target: Gross_Premium
+  - source_alias: TSI
+    target: Sum_Insured
+  - source_alias: Ccy
+    target: Currency
+  - source_alias: Certificate
+    target: Policy_ID
