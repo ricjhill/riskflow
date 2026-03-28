@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 from src.adapters.http.routes import create_router
 from src.domain.model.errors import (
     InvalidCedentDataError,
+    InvalidCorrectionError,
     MappingConfidenceLowError,
     SchemaValidationError,
     SLMUnavailableError,
@@ -54,9 +55,11 @@ def _create_test_app(mapping_service: AsyncMock) -> FastAPI:
     return app
 
 
-def _upload_csv(client: TestClient, content: str = "ID,Value\n1,a\n") -> object:
+def _upload_csv(
+    client: TestClient, content: str = "ID,Value\n1,a\n", url: str = "/upload"
+) -> object:
     return client.post(
-        "/upload",
+        url,
         files={"file": ("test.csv", io.BytesIO(content.encode()), "text/csv")},
     )
 
@@ -427,3 +430,152 @@ class TestFileValidation:
         )
 
         assert response.status_code == 200
+
+
+class TestCedentIdParam:
+    """Upload endpoints pass cedent_id to the service."""
+
+    def test_upload_with_cedent_id(self) -> None:
+        service = AsyncMock()
+        service.process_file.return_value = _make_processing_result()
+        app = _create_test_app(service)
+        client = TestClient(app)
+
+        _upload_csv(client, url="/upload?cedent_id=ACME_RE")
+
+        call_kwargs = service.process_file.call_args[1]
+        assert call_kwargs["cedent_id"] == "ACME_RE"
+
+    def test_upload_without_cedent_id(self) -> None:
+        service = AsyncMock()
+        service.process_file.return_value = _make_processing_result()
+        app = _create_test_app(service)
+        client = TestClient(app)
+
+        _upload_csv(client)
+
+        call_kwargs = service.process_file.call_args[1]
+        assert call_kwargs["cedent_id"] is None
+
+    def test_cedent_id_with_special_characters(self) -> None:
+        service = AsyncMock()
+        service.process_file.return_value = _make_processing_result()
+        app = _create_test_app(service)
+        client = TestClient(app)
+
+        _upload_csv(client, url="/upload?cedent_id=ACME%20RE%2F2024")
+
+        call_kwargs = service.process_file.call_args[1]
+        assert call_kwargs["cedent_id"] == "ACME RE/2024"
+
+
+class TestCorrectionsEndpoint:
+    """POST /corrections stores human-verified mappings."""
+
+    def test_post_correction_returns_201(self) -> None:
+        service = AsyncMock()
+        service.store_correction = MagicMock()
+        app = _create_test_app(service)
+        client = TestClient(app)
+
+        response = client.post(
+            "/corrections",
+            json={
+                "cedent_id": "ABC",
+                "corrections": [
+                    {"source_header": "GWP", "target_field": "Gross_Premium"},
+                ],
+            },
+        )
+
+        assert response.status_code == 201
+
+    def test_correction_stored_via_service(self) -> None:
+        service = AsyncMock()
+        service.store_correction = MagicMock()
+        app = _create_test_app(service)
+        client = TestClient(app)
+
+        client.post(
+            "/corrections",
+            json={
+                "cedent_id": "ABC",
+                "corrections": [
+                    {"source_header": "GWP", "target_field": "Gross_Premium"},
+                    {"source_header": "Ccy", "target_field": "Currency"},
+                ],
+            },
+        )
+
+        assert service.store_correction.call_count == 2
+
+    def test_rejects_empty_cedent_id(self) -> None:
+        service = AsyncMock()
+        app = _create_test_app(service)
+        client = TestClient(app)
+
+        response = client.post(
+            "/corrections",
+            json={
+                "cedent_id": "",
+                "corrections": [
+                    {"source_header": "GWP", "target_field": "Gross_Premium"},
+                ],
+            },
+        )
+
+        assert response.status_code == 400
+
+    def test_rejects_empty_corrections_list(self) -> None:
+        service = AsyncMock()
+        app = _create_test_app(service)
+        client = TestClient(app)
+
+        response = client.post(
+            "/corrections",
+            json={"cedent_id": "ABC", "corrections": []},
+        )
+
+        assert response.status_code == 400
+
+    def test_invalid_target_field_returns_422(self) -> None:
+        service = AsyncMock()
+        service.store_correction = MagicMock(
+            side_effect=InvalidCorrectionError("Nonexistent not in schema")
+        )
+        app = _create_test_app(service)
+        client = TestClient(app)
+
+        response = client.post(
+            "/corrections",
+            json={
+                "cedent_id": "ABC",
+                "corrections": [
+                    {"source_header": "GWP", "target_field": "Nonexistent"},
+                ],
+            },
+        )
+
+        assert response.status_code == 422
+        assert "INVALID_CORRECTION" in response.json()["detail"]["error_code"]
+
+    def test_duplicate_corrections_in_request(self) -> None:
+        """Same source_header twice — last one wins, both stored."""
+        service = AsyncMock()
+        service.store_correction = MagicMock()
+        app = _create_test_app(service)
+        client = TestClient(app)
+
+        response = client.post(
+            "/corrections",
+            json={
+                "cedent_id": "ABC",
+                "corrections": [
+                    {"source_header": "GWP", "target_field": "Gross_Premium"},
+                    {"source_header": "GWP", "target_field": "Sum_Insured"},
+                ],
+            },
+        )
+
+        assert response.status_code == 201
+        assert service.store_correction.call_count == 2
