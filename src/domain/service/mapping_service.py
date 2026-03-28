@@ -8,6 +8,7 @@ from pydantic import ValidationError
 
 from src.domain.model.errors import MappingConfidenceLowError
 from src.domain.model.schema import (
+    ConfidenceReport,
     MappingResult,
     ProcessingResult,
     RiskRecord,
@@ -104,6 +105,9 @@ class MappingService:
 
         return ProcessingResult(
             mapping=mapping,
+            confidence_report=ConfidenceReport.from_mapping_result(
+                mapping, threshold=self._confidence_threshold
+            ),
             valid_records=valid_records,
             invalid_records=invalid_records,
             errors=errors,

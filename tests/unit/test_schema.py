@@ -1,4 +1,4 @@
-"""Tests for domain models: RiskRecord, ColumnMapping, MappingResult."""
+"""Tests for domain models: RiskRecord, ColumnMapping, MappingResult, ConfidenceReport."""
 
 import datetime
 
@@ -8,6 +8,7 @@ from src.domain.model.schema import (
     VALID_CURRENCIES,
     VALID_TARGET_FIELDS,
     ColumnMapping,
+    ConfidenceReport,
     MappingResult,
     RiskRecord,
 )
@@ -269,3 +270,104 @@ class TestMappingResult:
             "Gross_Premium",
             "Currency",
         }
+
+
+class TestConfidenceReport:
+    """ConfidenceReport summarizes mapping quality for human review."""
+
+    def _make_mapping(self, fields_and_confs: list[tuple[str, float]]) -> MappingResult:
+        return MappingResult(
+            mappings=[
+                ColumnMapping(
+                    source_header=f"src_{f}",
+                    target_field=f,
+                    confidence=c,
+                )
+                for f, c in fields_and_confs
+            ],
+            unmapped_headers=[],
+        )
+
+    def test_from_mapping_result(self) -> None:
+        mapping = self._make_mapping([
+            ("Policy_ID", 0.95),
+            ("Gross_Premium", 0.85),
+        ])
+        report = ConfidenceReport.from_mapping_result(mapping)
+        assert isinstance(report, ConfidenceReport)
+
+    def test_min_confidence(self) -> None:
+        mapping = self._make_mapping([
+            ("Policy_ID", 0.95),
+            ("Gross_Premium", 0.60),
+            ("Currency", 0.85),
+        ])
+        report = ConfidenceReport.from_mapping_result(mapping)
+        assert report.min_confidence == 0.60
+
+    def test_avg_confidence(self) -> None:
+        mapping = self._make_mapping([
+            ("Policy_ID", 0.90),
+            ("Gross_Premium", 0.80),
+        ])
+        report = ConfidenceReport.from_mapping_result(mapping)
+        assert report.avg_confidence == pytest.approx(0.85)
+
+    def test_low_confidence_fields_flagged(self) -> None:
+        mapping = self._make_mapping([
+            ("Policy_ID", 0.95),
+            ("Gross_Premium", 0.55),
+            ("Currency", 0.40),
+        ])
+        report = ConfidenceReport.from_mapping_result(mapping, threshold=0.6)
+        assert len(report.low_confidence_fields) == 2
+        names = [f.target_field for f in report.low_confidence_fields]
+        assert "Gross_Premium" in names
+        assert "Currency" in names
+
+    def test_no_low_confidence_when_all_high(self) -> None:
+        mapping = self._make_mapping([
+            ("Policy_ID", 0.95),
+            ("Gross_Premium", 0.90),
+        ])
+        report = ConfidenceReport.from_mapping_result(mapping, threshold=0.6)
+        assert report.low_confidence_fields == []
+
+    def test_missing_fields(self) -> None:
+        mapping = self._make_mapping([
+            ("Policy_ID", 0.95),
+            ("Gross_Premium", 0.90),
+        ])
+        report = ConfidenceReport.from_mapping_result(mapping)
+        assert "Inception_Date" in report.missing_fields
+        assert "Expiry_Date" in report.missing_fields
+        assert "Sum_Insured" in report.missing_fields
+        assert "Currency" in report.missing_fields
+        assert "Policy_ID" not in report.missing_fields
+
+    def test_no_missing_when_all_mapped(self) -> None:
+        mapping = self._make_mapping([
+            ("Policy_ID", 0.95),
+            ("Inception_Date", 0.90),
+            ("Expiry_Date", 0.90),
+            ("Sum_Insured", 0.85),
+            ("Gross_Premium", 0.80),
+            ("Currency", 0.95),
+        ])
+        report = ConfidenceReport.from_mapping_result(mapping)
+        assert report.missing_fields == []
+
+    def test_empty_mapping_result(self) -> None:
+        mapping = MappingResult(mappings=[], unmapped_headers=["A", "B"])
+        report = ConfidenceReport.from_mapping_result(mapping)
+        assert report.min_confidence == 0.0
+        assert report.avg_confidence == 0.0
+        assert len(report.missing_fields) == 6
+        assert report.low_confidence_fields == []
+
+    def test_default_threshold_is_0_6(self) -> None:
+        mapping = self._make_mapping([
+            ("Policy_ID", 0.59),
+        ])
+        report = ConfidenceReport.from_mapping_result(mapping)
+        assert len(report.low_confidence_fields) == 1

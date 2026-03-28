@@ -99,6 +99,50 @@ class MappingResult(BaseModel):
         return self
 
 
+DEFAULT_CONFIDENCE_REVIEW_THRESHOLD = 0.6
+
+
+class ConfidenceReport(BaseModel):
+    """Summarizes mapping quality for human review.
+
+    Built from a MappingResult, this report highlights:
+    - Overall confidence (min and average)
+    - Which fields have low confidence and need review
+    - Which target fields were not mapped at all
+    """
+
+    min_confidence: float
+    avg_confidence: float
+    low_confidence_fields: list["ColumnMapping"]
+    missing_fields: list[str]
+
+    @classmethod
+    def from_mapping_result(
+        cls,
+        result: "MappingResult",
+        threshold: float = DEFAULT_CONFIDENCE_REVIEW_THRESHOLD,
+    ) -> "ConfidenceReport":
+        if not result.mappings:
+            return cls(
+                min_confidence=0.0,
+                avg_confidence=0.0,
+                low_confidence_fields=[],
+                missing_fields=sorted(VALID_TARGET_FIELDS),
+            )
+
+        confidences = [m.confidence for m in result.mappings]
+        mapped_targets = {m.target_field for m in result.mappings}
+
+        return cls(
+            min_confidence=min(confidences),
+            avg_confidence=sum(confidences) / len(confidences),
+            low_confidence_fields=[
+                m for m in result.mappings if m.confidence < threshold
+            ],
+            missing_fields=sorted(VALID_TARGET_FIELDS - mapped_targets),
+        )
+
+
 class RowError(BaseModel):
     """A validation error for a specific row."""
 
@@ -110,6 +154,7 @@ class ProcessingResult(BaseModel):
     """Full result of processing a spreadsheet: mapping + row validation."""
 
     mapping: MappingResult
+    confidence_report: ConfidenceReport
     valid_records: list[RiskRecord]
     invalid_records: list[dict[str, object]]
     errors: list[RowError]
