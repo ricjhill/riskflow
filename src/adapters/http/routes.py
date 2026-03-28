@@ -153,6 +153,18 @@ def create_router(
             if os.path.exists(temp_path):
                 os.remove(temp_path)
 
+    @router.post("/sheets")
+    async def list_sheets(file: UploadFile = File(...)) -> dict:
+        """Upload a file and return its sheet names (Excel only)."""
+        _validate_file(file)
+        temp_path = _save_temp_file(file)
+        try:
+            names = mapping_service.get_sheet_names(temp_path)
+            return {"sheets": names}
+        finally:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+
     if job_store is not None:
 
         @router.post("/upload/async", status_code=202)

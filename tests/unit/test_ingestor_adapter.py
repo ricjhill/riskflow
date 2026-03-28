@@ -201,3 +201,36 @@ class TestExcelPreview:
         )
         with pytest.raises(ValueError, match="NoSuchSheet"):
             PolarsIngestor().get_preview(path, sheet_name="NoSuchSheet")
+
+
+class TestGetSheetNames:
+    """Test get_sheet_names for Excel files."""
+
+    def test_returns_sheet_names(self, tmp_path: Path) -> None:
+        path = _write_xlsx(
+            tmp_path,
+            {
+                "Policies": (["Policy_ID"], [["P001"]]),
+                "Claims": (["Claim_ID"], [["C001"]]),
+                "Summary": (["Total"], [["100"]]),
+            },
+        )
+        names = PolarsIngestor().get_sheet_names(path)
+        assert names == ["Policies", "Claims", "Summary"]
+
+    def test_single_sheet(self, tmp_path: Path) -> None:
+        path = _write_xlsx(
+            tmp_path,
+            {"Data": (["Col1"], [["val"]])},
+        )
+        names = PolarsIngestor().get_sheet_names(path)
+        assert names == ["Data"]
+
+    def test_csv_returns_empty_list(self, tmp_path: Path) -> None:
+        path = _write_csv(tmp_path, ["A", "B"], [["1", "2"]])
+        names = PolarsIngestor().get_sheet_names(path)
+        assert names == []
+
+    def test_raises_on_missing_file(self) -> None:
+        with pytest.raises(FileNotFoundError):
+            PolarsIngestor().get_sheet_names("/nonexistent/file.xlsx")
