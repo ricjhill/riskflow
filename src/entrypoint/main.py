@@ -13,6 +13,7 @@ other adapters. All wiring happens here.
 import logging
 import os
 import sys
+from typing import Any
 
 import openai
 import structlog
@@ -22,8 +23,13 @@ from src.adapters.http.routes import create_router
 from src.adapters.parsers.ingestor import PolarsIngestor
 from src.adapters.slm.mapper import GroqMapper
 from src.adapters.storage.cache import NullCache, RedisCache
+from src.adapters.storage.correction_cache import (
+    NullCorrectionCache,
+    RedisCorrectionCache,
+)
 from src.adapters.storage.job_store import InMemoryJobStore
 from src.domain.service.mapping_service import MappingService
+from src.ports.output.correction_cache import CorrectionCachePort
 from src.ports.output.repo import CachePort
 
 
@@ -75,17 +81,24 @@ def create_app() -> FastAPI:
 
     # --- Adapters ---
     ingestor = PolarsIngestor()
-    cache = _create_cache()
+    redis_client = _create_redis_client()
+    cache = _create_cache(redis_client)
+    correction_cache = _create_correction_cache(redis_client)
     groq_client = _create_groq_client()
     mapper = GroqMapper(client=groq_client)
 
-    logger.info("app_configured", cache_type=type(cache).__name__)
+    logger.info(
+        "app_configured",
+        cache_type=type(cache).__name__,
+        correction_cache_type=type(correction_cache).__name__,
+    )
 
     # --- Domain service ---
     mapping_service = MappingService(
         ingestor=ingestor,
         mapper=mapper,
         cache=cache,
+        correction_cache=correction_cache,
     )
 
     # --- Job store for async uploads ---
@@ -102,15 +115,28 @@ def create_app() -> FastAPI:
     return app
 
 
-def _create_cache() -> CachePort:
-    """Create Redis cache if REDIS_URL is set, otherwise NullCache."""
+def _create_redis_client() -> Any:
+    """Create a shared Redis client if REDIS_URL is set, otherwise None."""
     redis_url = os.environ.get("REDIS_URL")
     if redis_url:
         import redis
 
-        client = redis.Redis.from_url(redis_url)
-        return RedisCache(client=client)
+        return redis.Redis.from_url(redis_url)
+    return None
+
+
+def _create_cache(redis_client: Any) -> CachePort:
+    """Create Redis cache if client is available, otherwise NullCache."""
+    if redis_client:
+        return RedisCache(client=redis_client)
     return NullCache()
+
+
+def _create_correction_cache(redis_client: Any) -> CorrectionCachePort:
+    """Create Redis correction cache if client is available, otherwise NullCorrectionCache."""
+    if redis_client:
+        return RedisCorrectionCache(client=redis_client)
+    return NullCorrectionCache()
 
 
 def _create_groq_client() -> openai.AsyncOpenAI:
