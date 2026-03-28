@@ -6,26 +6,47 @@ import polars as pl
 
 
 class PolarsIngestor:
-    """Reads CSV and Excel files using Polars."""
+    """Reads CSV and Excel files using Polars.
 
-    def get_headers(self, file_path: str) -> list[str]:
+    For Excel files with multiple sheets, pass sheet_name to select
+    a specific sheet. Defaults to the first sheet if not specified.
+    CSV files ignore sheet_name.
+    """
+
+    def get_headers(
+        self, file_path: str, *, sheet_name: str | None = None
+    ) -> list[str]:
         """Extract column headers from a spreadsheet."""
         self._check_file_exists(file_path)
         if file_path.endswith(".csv"):
             df = pl.read_csv(file_path, n_rows=0)
         else:
-            df = pl.read_excel(file_path)
+            df = self._read_excel(file_path, sheet_name)
         return df.columns
 
-    def get_preview(self, file_path: str, n: int = 5) -> list[dict[str, object]]:
+    def get_preview(
+        self, file_path: str, n: int = 5, *, sheet_name: str | None = None
+    ) -> list[dict[str, object]]:
         """Return first n rows as a list of dicts."""
         self._check_file_exists(file_path)
         if file_path.endswith(".csv"):
             df = pl.read_csv(file_path, n_rows=n)
         else:
-            df = pl.read_excel(file_path)
+            df = self._read_excel(file_path, sheet_name)
             df = df.head(n)
         return df.to_dicts()
+
+    def _read_excel(self, file_path: str, sheet_name: str | None) -> pl.DataFrame:
+        """Read an Excel sheet, validating the sheet name exists."""
+        if sheet_name is not None:
+            try:
+                return pl.read_excel(file_path, sheet_name=sheet_name)
+            except Exception as e:
+                if "not found" in str(e).lower() or "no sheet" in str(e).lower():
+                    msg = f"Sheet '{sheet_name}' not found in {file_path}"
+                    raise ValueError(msg) from e
+                raise
+        return pl.read_excel(file_path)
 
     def _check_file_exists(self, file_path: str) -> None:
         if not Path(file_path).exists():

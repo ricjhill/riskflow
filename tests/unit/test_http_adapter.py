@@ -116,6 +116,35 @@ class TestUploadEndpoint:
         assert not os.path.exists(call_path)
 
 
+class TestSheetNameParam:
+    """Upload endpoint accepts optional sheet_name query param."""
+
+    def test_passes_sheet_name_to_service(self) -> None:
+        service = AsyncMock()
+        service.process_file.return_value = _make_processing_result()
+        app = _create_test_app(service)
+        client = TestClient(app)
+
+        client.post(
+            "/upload?sheet_name=Claims",
+            files={"file": ("test.xlsx", io.BytesIO(b"data"), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+        )
+
+        call_kwargs = service.process_file.call_args
+        assert call_kwargs[1]["sheet_name"] == "Claims"
+
+    def test_sheet_name_defaults_to_none(self) -> None:
+        service = AsyncMock()
+        service.process_file.return_value = _make_processing_result()
+        app = _create_test_app(service)
+        client = TestClient(app)
+
+        _upload_csv(client)
+
+        call_kwargs = service.process_file.call_args
+        assert call_kwargs[1]["sheet_name"] is None
+
+
 class TestErrorMapping:
     """Domain errors must map to appropriate HTTP status codes."""
 

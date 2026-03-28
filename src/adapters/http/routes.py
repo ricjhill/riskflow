@@ -17,7 +17,7 @@ import tempfile
 import time
 
 import structlog
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 
 from src.domain.model.errors import (
     InvalidCedentDataError,
@@ -43,16 +43,23 @@ def create_router(mapping_service: MappingService) -> APIRouter:
     router = APIRouter()
 
     @router.post("/upload")
-    async def upload_file(file: UploadFile = File(...)) -> dict:
+    async def upload_file(
+        file: UploadFile = File(...),
+        sheet_name: str | None = Query(
+            default=None, description="Sheet name for multi-sheet Excel files"
+        ),
+    ) -> dict:
         """Upload a spreadsheet and map its headers to the target schema."""
         _validate_file(file)
 
-        logger.info("file_received", filename=file.filename)
+        logger.info("file_received", filename=file.filename, sheet_name=sheet_name)
         start = time.monotonic()
 
         temp_path = _save_temp_file(file)
         try:
-            result = await mapping_service.process_file(temp_path)
+            result = await mapping_service.process_file(
+                temp_path, sheet_name=sheet_name
+            )
             duration_ms = int((time.monotonic() - start) * 1000)
             logger.info(
                 "mapping_complete",

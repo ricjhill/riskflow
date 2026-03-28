@@ -46,10 +46,12 @@ class MappingService:
         self._confidence_threshold = confidence_threshold
         self._logger = structlog.get_logger()
 
-    async def process_file(self, file_path: str) -> ProcessingResult:
+    async def process_file(
+        self, file_path: str, *, sheet_name: str | None = None
+    ) -> ProcessingResult:
         """Map a spreadsheet's headers and validate all rows."""
-        headers = self._ingestor.get_headers(file_path)
-        preview = self._ingestor.get_preview(file_path)
+        headers = self._ingestor.get_headers(file_path, sheet_name=sheet_name)
+        preview = self._ingestor.get_preview(file_path, sheet_name=sheet_name)
 
         cache_key = self._build_cache_key(headers)
 
@@ -63,10 +65,14 @@ class MappingService:
             self._check_confidence(mapping)
             self._cache.set_mapping(cache_key, mapping)
 
-        return self._validate_rows(file_path, mapping)
+        return self._validate_rows(file_path, mapping, sheet_name=sheet_name)
 
     def _validate_rows(
-        self, file_path: str, mapping: MappingResult
+        self,
+        file_path: str,
+        mapping: MappingResult,
+        *,
+        sheet_name: str | None = None,
     ) -> ProcessingResult:
         """Read full dataframe, rename columns, validate each row."""
         # Build rename map: source_header -> target_field
@@ -75,6 +81,8 @@ class MappingService:
         # Read the full file
         if file_path.endswith(".csv"):
             df = pl.read_csv(file_path)
+        elif sheet_name is not None:
+            df = pl.read_excel(file_path, sheet_name=sheet_name)
         else:
             df = pl.read_excel(file_path)
 
