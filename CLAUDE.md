@@ -13,21 +13,26 @@ The codebase is strictly organized into three zones. Dependencies only point inw
 
 ```
 src/
-  entrypoint/        # main.py — wires FastAPI, Groq, and Polars together
+  entrypoint/        # main.py — wires FastAPI, Groq, Redis, and schema loader
   domain/
-    model/           # RiskRecord, ColumnMapping, MappingResult, ProcessingResult, errors
-    service/         # MappingService — orchestrates mapping and row validation
+    model/           # RiskRecord, ColumnMapping, MappingResult, ProcessingResult,
+                     # TargetSchema, FieldDefinition, record_factory, Correction,
+                     # ConfidenceReport, errors
+    service/         # MappingService — orchestrates mapping, corrections, and row validation
   ports/
     input/           # IngestorPort (how data enters the domain)
-    output/          # MapperPort (SLM calls), CachePort (Redis)
+    output/          # MapperPort (SLM calls), CachePort (Redis),
+                     # CorrectionCachePort, JobStorePort, SchemaLoaderPort
   adapters/
-    http/            # FastAPI routes
+    http/            # FastAPI routes (/upload, /upload/async, /jobs, /sheets, /corrections)
     slm/             # Groq API implementation
-    storage/         # Redis caching implementation
-    parsers/         # Polars-based Excel/CSV readers
+    storage/         # Redis cache, Redis correction cache, in-memory job store
+    parsers/         # Polars-based Excel/CSV readers, YAML schema loader
 tests/
   unit/              # Domain and service tests — no I/O
   integration/       # E2E pipeline tests
+schemas/
+  default.yaml       # Default 6-field reinsurance target schema
 ```
 
 ---
