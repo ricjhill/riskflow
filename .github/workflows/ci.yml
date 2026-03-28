@@ -105,3 +105,28 @@ jobs:
         # Tracked in security-scan.sh hook with the same ignore.
         # pygments is a dev dep (via rich) not exposed to users. Low risk.
         run: uv run pip-audit --ignore-vuln CVE-2026-4539
+
+  smoke:
+    needs: quality
+    runs-on: ubuntu-latest
+    # Only run on push to main (not on PRs) to avoid burning API credits on every PR
+    # Requires GROQ_API_KEY secret in repo settings
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Run Groq smoke tests
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: uv run pytest -x -v tests/smoke/
