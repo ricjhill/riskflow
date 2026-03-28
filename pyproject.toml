@@ -34,6 +34,6 @@ dev = [
 asyncio_mode = "strict"
 markers = [
     "unit: isolated component tests, all dependencies mocked.",
-    "wiring: full pipeline tests with mocked SLM. Proves components connect.",
+    "integration: full pipeline tests with mocked SLM. Proves components connect.",
     "e2e: real external APIs, real data, nothing mocked. Requires GROQ_API_KEY.",
 ]
