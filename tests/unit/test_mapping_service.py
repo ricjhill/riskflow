@@ -13,9 +13,10 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from src.adapters.parsers.ingestor import PolarsIngestor
-from src.domain.model.errors import MappingConfidenceLowError
+from src.domain.model.errors import InvalidCorrectionError, MappingConfidenceLowError
 from src.domain.model.schema import ColumnMapping, MappingResult, ProcessingResult
 from src.domain.model.target_schema import (
+    DEFAULT_TARGET_SCHEMA,
     FieldDefinition,
     FieldType,
     TargetSchema,
@@ -521,3 +522,219 @@ class TestCustomSchema:
         assert len(result.confidence_report.missing_fields) == 2
         assert "Amount" in result.confidence_report.missing_fields
         assert "Notes" in result.confidence_report.missing_fields
+
+
+class TestCorrectionCache:
+    """MappingService checks human-verified corrections before calling
+    the SLM. Corrected headers get confidence 1.0 and skip the SLM."""
+
+    @pytest.fixture
+    def correction_cache(self) -> MagicMock:
+        mock = MagicMock()
+        mock.get_corrections.return_value = {}
+        return mock
+
+    def _make_service(
+        self,
+        mapper: AsyncMock,
+        cache: MagicMock,
+        correction_cache: MagicMock,
+    ) -> MappingService:
+        return MappingService(
+            ingestor=PolarsIngestor(),
+            mapper=mapper,
+            cache=cache,
+            correction_cache=correction_cache,
+        )
+
+    @pytest.mark.asyncio
+    async def test_without_cedent_id_skips_corrections(
+        self, mapper: AsyncMock, cache: MagicMock, correction_cache: MagicMock, tmp_path: Path
+    ) -> None:
+        path = _write_csv(tmp_path)
+        service = self._make_service(mapper, cache, correction_cache)
+
+        await service.process_file(path)
+
+        correction_cache.get_corrections.assert_not_called()
+        mapper.map_headers.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_with_cedent_id_checks_corrections(
+        self, mapper: AsyncMock, cache: MagicMock, correction_cache: MagicMock, tmp_path: Path
+    ) -> None:
+        path = _write_csv(tmp_path)
+        service = self._make_service(mapper, cache, correction_cache)
+
+        await service.process_file(path, cedent_id="ABC")
+
+        correction_cache.get_corrections.assert_called_once()
+        call_args = correction_cache.get_corrections.call_args
+        assert call_args[0][0] == "ABC"
+
+    @pytest.mark.asyncio
+    async def test_corrections_used_with_confidence_1(
+        self, mapper: AsyncMock, cache: MagicMock, correction_cache: MagicMock, tmp_path: Path
+    ) -> None:
+        correction_cache.get_corrections.return_value = {"Policy No.": "Policy_ID"}
+        # SLM maps the remaining header
+        mapper.map_headers.return_value = MappingResult(
+            mappings=[
+                ColumnMapping(source_header="GWP", target_field="Gross_Premium", confidence=0.90),
+            ],
+            unmapped_headers=["Extra"],
+        )
+        path = _write_csv(tmp_path)
+        service = self._make_service(mapper, cache, correction_cache)
+
+        result = await service.process_file(path, cedent_id="ABC")
+
+        corrected = [m for m in result.mapping.mappings if m.source_header == "Policy No."]
+        assert len(corrected) == 1
+        assert corrected[0].confidence == 1.0
+        assert corrected[0].target_field == "Policy_ID"
+
+    @pytest.mark.asyncio
+    async def test_corrected_headers_not_sent_to_slm(
+        self, mapper: AsyncMock, cache: MagicMock, correction_cache: MagicMock, tmp_path: Path
+    ) -> None:
+        correction_cache.get_corrections.return_value = {"Policy No.": "Policy_ID"}
+        mapper.map_headers.return_value = MappingResult(
+            mappings=[
+                ColumnMapping(source_header="GWP", target_field="Gross_Premium", confidence=0.90),
+            ],
+            unmapped_headers=["Extra"],
+        )
+        path = _write_csv(tmp_path)
+        service = self._make_service(mapper, cache, correction_cache)
+
+        await service.process_file(path, cedent_id="ABC")
+
+        slm_headers = mapper.map_headers.call_args[0][0]
+        assert "Policy No." not in slm_headers
+        assert "GWP" in slm_headers
+
+    @pytest.mark.asyncio
+    async def test_all_headers_corrected_skips_slm(
+        self, mapper: AsyncMock, cache: MagicMock, correction_cache: MagicMock, tmp_path: Path
+    ) -> None:
+        correction_cache.get_corrections.return_value = {
+            "Policy No.": "Policy_ID",
+            "GWP": "Gross_Premium",
+            "Extra": "Currency",
+        }
+        path = _write_csv(tmp_path)
+        service = self._make_service(mapper, cache, correction_cache)
+
+        result = await service.process_file(path, cedent_id="ABC")
+
+        mapper.map_headers.assert_not_called()
+        assert len(result.mapping.mappings) == 3
+
+    @pytest.mark.asyncio
+    async def test_no_corrections_falls_through_to_slm(
+        self, mapper: AsyncMock, cache: MagicMock, correction_cache: MagicMock, tmp_path: Path
+    ) -> None:
+        correction_cache.get_corrections.return_value = {}
+        path = _write_csv(tmp_path)
+        service = self._make_service(mapper, cache, correction_cache)
+
+        await service.process_file(path, cedent_id="ABC")
+
+        mapper.map_headers.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_correction_with_invalid_target_raises(
+        self, mapper: AsyncMock, cache: MagicMock, correction_cache: MagicMock, tmp_path: Path
+    ) -> None:
+        """Correction referencing a field not in the schema should raise."""
+        correction_cache.get_corrections.return_value = {
+            "Policy No.": "Nonexistent_Field",
+        }
+        path = _write_csv(tmp_path)
+        service = self._make_service(mapper, cache, correction_cache)
+
+        with pytest.raises(InvalidCorrectionError, match="Nonexistent_Field"):
+            await service.process_file(path, cedent_id="ABC")
+
+    @pytest.mark.asyncio
+    async def test_cedent_id_with_no_correction_cache_injected(
+        self, mapper: AsyncMock, cache: MagicMock, tmp_path: Path
+    ) -> None:
+        """When correction_cache is None, cedent_id is ignored gracefully."""
+        service = MappingService(
+            ingestor=PolarsIngestor(),
+            mapper=mapper,
+            cache=cache,
+        )
+        path = _write_csv(tmp_path)
+
+        result = await service.process_file(path, cedent_id="ABC")
+
+        assert isinstance(result, ProcessingResult)
+        mapper.map_headers.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_merged_result_has_no_duplicate_targets(
+        self, mapper: AsyncMock, cache: MagicMock, correction_cache: MagicMock, tmp_path: Path
+    ) -> None:
+        """If SLM maps a target already covered by a correction,
+        the SLM mapping is filtered out to prevent duplicate target error."""
+        correction_cache.get_corrections.return_value = {"Policy No.": "Policy_ID"}
+        # SLM also tries to map something to Policy_ID — this should be filtered
+        mapper.map_headers.return_value = MappingResult(
+            mappings=[
+                ColumnMapping(source_header="GWP", target_field="Policy_ID", confidence=0.80),
+            ],
+            unmapped_headers=["Extra"],
+        )
+        path = _write_csv(tmp_path)
+        service = self._make_service(mapper, cache, correction_cache)
+
+        result = await service.process_file(path, cedent_id="ABC")
+
+        # Correction wins — only one Policy_ID mapping with confidence 1.0
+        policy_mappings = [m for m in result.mapping.mappings if m.target_field == "Policy_ID"]
+        assert len(policy_mappings) == 1
+        assert policy_mappings[0].confidence == 1.0
+
+    @pytest.mark.asyncio
+    async def test_corrections_logged(
+        self,
+        mapper: AsyncMock,
+        cache: MagicMock,
+        correction_cache: MagicMock,
+        tmp_path: Path,
+        capfd: pytest.CaptureFixture[str],
+    ) -> None:
+        import json
+
+        from src.entrypoint.main import configure_logging
+
+        configure_logging()
+        capfd.readouterr()  # clear setup output
+
+        correction_cache.get_corrections.return_value = {"Policy No.": "Policy_ID"}
+        mapper.map_headers.return_value = MappingResult(
+            mappings=[
+                ColumnMapping(source_header="GWP", target_field="Gross_Premium", confidence=0.90),
+            ],
+            unmapped_headers=["Extra"],
+        )
+        path = _write_csv(tmp_path)
+        service = self._make_service(mapper, cache, correction_cache)
+
+        await service.process_file(path, cedent_id="ABC")
+
+        captured = capfd.readouterr().out
+        lines = [l for l in captured.strip().splitlines() if l.strip()]
+        events = []
+        for line in lines:
+            try:
+                events.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+        correction_events = [e for e in events if e.get("event") == "corrections_applied"]
+        assert len(correction_events) == 1
+        assert correction_events[0]["corrected_count"] == 1
+        assert correction_events[0]["cedent_id"] == "ABC"

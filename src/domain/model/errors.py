@@ -23,3 +23,7 @@ class SLMUnavailableError(RiskFlowError):
 
 class InvalidSchemaError(RiskFlowError):
     """Raised when a target schema config file is missing, malformed, or invalid."""
+
+
+class InvalidCorrectionError(RiskFlowError):
+    """Raised when a correction references a target field not in the active schema."""

@@ -6,9 +6,10 @@ import polars as pl
 import structlog
 from pydantic import ValidationError
 
-from src.domain.model.errors import MappingConfidenceLowError
+from src.domain.model.errors import InvalidCorrectionError, MappingConfidenceLowError
 from src.domain.model.record_factory import build_record_model
 from src.domain.model.schema import (
+    ColumnMapping,
     ConfidenceReport,
     MappingResult,
     ProcessingResult,
@@ -16,6 +17,7 @@ from src.domain.model.schema import (
 )
 from src.domain.model.target_schema import DEFAULT_TARGET_SCHEMA, TargetSchema
 from src.ports.input.ingestor import IngestorPort
+from src.ports.output.correction_cache import CorrectionCachePort
 from src.ports.output.mapper import MapperPort
 from src.ports.output.repo import CachePort
 
@@ -42,6 +44,7 @@ class MappingService:
         cache: CachePort,
         confidence_threshold: float = DEFAULT_CONFIDENCE_THRESHOLD,
         schema: TargetSchema | None = None,
+        correction_cache: CorrectionCachePort | None = None,
     ) -> None:
         self._ingestor = ingestor
         self._mapper = mapper
@@ -49,6 +52,7 @@ class MappingService:
         self._confidence_threshold = confidence_threshold
         self._schema = schema or DEFAULT_TARGET_SCHEMA
         self._record_model = build_record_model(self._schema)
+        self._correction_cache = correction_cache
         self._logger = structlog.get_logger()
 
     def get_sheet_names(self, file_path: str) -> list[str]:
@@ -56,7 +60,11 @@ class MappingService:
         return self._ingestor.get_sheet_names(file_path)
 
     async def process_file(
-        self, file_path: str, *, sheet_name: str | None = None
+        self,
+        file_path: str,
+        *,
+        sheet_name: str | None = None,
+        cedent_id: str | None = None,
     ) -> ProcessingResult:
         """Map a spreadsheet's headers and validate all rows."""
         headers = self._ingestor.get_headers(file_path, sheet_name=sheet_name)
@@ -70,11 +78,72 @@ class MappingService:
             mapping = cached
         else:
             self._logger.info("cache_lookup", result="miss", cache_key=cache_key)
-            mapping = await self._mapper.map_headers(headers, preview)
-            self._check_confidence(mapping)
+            mapping = await self._map_with_corrections(headers, preview, cedent_id)
             self._cache.set_mapping(cache_key, mapping)
 
         return self._validate_rows(file_path, mapping, sheet_name=sheet_name)
+
+    async def _map_with_corrections(
+        self,
+        headers: list[str],
+        preview: list[dict[str, object]],
+        cedent_id: str | None,
+    ) -> MappingResult:
+        """Check corrections, then call SLM for uncorrected headers."""
+        corrections: dict[str, str] = {}
+        if cedent_id and self._correction_cache:
+            corrections = self._correction_cache.get_corrections(cedent_id, headers)
+
+        if corrections:
+            self._validate_corrections(corrections)
+            self._logger.info(
+                "corrections_applied",
+                cedent_id=cedent_id,
+                corrected_count=len(corrections),
+            )
+
+        corrected_mappings = [
+            ColumnMapping(source_header=h, target_field=t, confidence=1.0)
+            for h, t in corrections.items()
+        ]
+        corrected_targets = {t for t in corrections.values()}
+
+        uncorrected_headers = [h for h in headers if h not in corrections]
+
+        if uncorrected_headers:
+            uncorrected_preview = [
+                {k: v for k, v in row.items() if k in uncorrected_headers}
+                for row in preview
+            ]
+            slm_result = await self._mapper.map_headers(
+                uncorrected_headers, uncorrected_preview
+            )
+            self._check_confidence(slm_result)
+            # Filter SLM results to exclude targets already covered by corrections
+            filtered_slm = [
+                m
+                for m in slm_result.mappings
+                if m.target_field not in corrected_targets
+            ]
+            all_mappings = corrected_mappings + filtered_slm
+            all_unmapped = slm_result.unmapped_headers
+        else:
+            all_mappings = corrected_mappings
+            all_unmapped = []
+
+        mapping = MappingResult(mappings=all_mappings, unmapped_headers=all_unmapped)
+        return mapping
+
+    def _validate_corrections(self, corrections: dict[str, str]) -> None:
+        """Raise if any correction references a field not in the schema."""
+        valid_fields = self._schema.field_names
+        for header, target in corrections.items():
+            if target not in valid_fields:
+                msg = (
+                    f"Correction for '{header}' references target '{target}' "
+                    f"which is not in schema fields: {sorted(valid_fields)}"
+                )
+                raise InvalidCorrectionError(msg)
 
     def _validate_rows(
         self,
