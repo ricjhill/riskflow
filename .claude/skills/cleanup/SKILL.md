@@ -8,7 +8,7 @@ Scan the RiskFlow codebase for entropy and open a cleanup PR if needed. This is 
 ## Checks to run (in order)
 
 ### 1. Dead code detection
-- Run `uv run vulture src/ --min-confidence 80` if vulture is installed, otherwise grep for unused imports: `uv run ruff check src/ --select F401`
+- Grep for unused imports: `uv run ruff check src/ --select F401`
 - Check for empty `__init__.py` files that could have `__all__` exports but don't need them
 - Check for empty placeholder files that were never populated
 
