@@ -181,9 +181,57 @@ Each question tightened the constraints. Each constraint improved the output. Th
 
 ---
 
-## Appendix: Question Arc
+## Appendix A: Session 2 — Closing the Gaps
 
-The full sequence of questions that built the harness:
+After the initial build session, we ran a second session to close open items. This demonstrated the harness working in maintenance mode, not just greenfield development.
+
+### Tasks completed
+
+| Task | Result |
+|------|--------|
+| Smoke test row validation (real SLM) | Pass — uploaded bordereaux CSV to Groq Llama 3.3, got 5 validated RiskRecords with full ProcessingResult response |
+| Smoke test Redis caching | Skipped — no Docker installed on dev machine |
+| Docker build test | Skipped — no Docker installed |
+| GitHub Actions CI | Added — two jobs (quality + security). Code-reviewer agent caught: missing `needs:` dependency between jobs, undocumented CVE ignore. Both fixed before merge. |
+| Run /doc-gardener | Found 9 stale items across 5 files on a codebase only two days old |
+| Run /cleanup fixes | Fixed all 9 items: wrong entity names in CLAUDE.md, phantom Validator in README diagram, unused stdlib logging import, empty mocks/ directory, misleading hook claim |
+
+### Key insight: documentation rots in days, not months
+
+The doc-gardener found 9 stale items in a codebase that was **two days old** with only **~900 lines of code**. Examples:
+- CLAUDE.md still said "IngestorInterface" from the initial scaffold — Loop 2 renamed it to "IngestorPort"
+- README mermaid diagram had a "Validator" component from the plan — Loop 12 implemented validation inline
+- `src/mocks/` was listed in the architecture tree but was empty and unused — tests use `unittest.mock`
+
+This validates the doc-gardening pattern: if you don't scan for drift regularly, your docs mislead the agent, and the agent generates code based on wrong assumptions.
+
+### Agent-to-agent review in action
+
+The code-reviewer agent reviewed 3 PRs in this session:
+1. **Cleanup skill** — approved with advisory note to invoke `check-boundaries.sh` directly (fixed)
+2. **Doc-gardener agent** — approved, incorrectly flagged one path as wrong (we verified and overrode)
+3. **CI workflow** — caught two real issues: missing job dependency and undocumented CVE ignore (both fixed)
+
+The reviewer isn't perfect (it made one false positive), but it caught issues a human would likely miss in a quick review.
+
+### Final numbers
+
+| Metric | After Session 1 | After Session 2 |
+|--------|-----------------|-----------------|
+| PRs merged | 19 | 21 |
+| Tests | 148 | 148 |
+| Hooks | 5 | 5 |
+| Agents | 2 | 2 |
+| Skills | 2 | 2 |
+| CI | None | GitHub Actions (quality + security) |
+| Doc drift items found | Unknown | 9 (all fixed) |
+| Open items | 5 | 2 (Redis + Docker, need Docker installed) |
+
+---
+
+## Appendix B: Question Arc
+
+The full sequence of questions across both sessions:
 
 | # | Question | What it changed |
 |---|----------|----------------|
@@ -197,3 +245,6 @@ The full sequence of questions that built the harness:
 | 8 | "Review our way of working" | Automated commit/push/PR/merge, improved commit messages |
 | 9 | "How do we stop regressions?" | Added security scanning hooks |
 | 10 | "Can we add security scanning?" | bandit + pip-audit + semgrep pre-commit gate |
+| 11 | "Which OpenAI practices are we missing?" | Agent-to-agent review, /cleanup skill, doc-gardener agent |
+| 12 | "How is drift defined?" | Clarified six categories of drift, built /cleanup to detect them |
+| 13 | "Run the doc-gardener" | Found 9 stale items in a 2-day-old codebase — proved the tool's value |
