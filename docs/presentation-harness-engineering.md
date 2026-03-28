@@ -229,9 +229,72 @@ The reviewer isn't perfect (it made one false positive), but it caught issues a 
 
 ---
 
-## Appendix B: Question Arc
+## Appendix B: Session 3 Results (2026-03-28)
 
-The full sequence of questions across both sessions:
+Session 3 shifted from harness building to feature development — with two harness improvements driven by bugs we found along the way.
+
+### Features built (Loops 13–16)
+
+| Loop | PR | Feature | Tests added |
+|------|-----|---------|------------|
+| 13 | #24 | Cache hit/miss logging + Docker Compose Redis fix | +2 |
+| 14 | #25 | Structured error responses (error_code, message, suggestion) | +5 |
+| 15 | #26 | Multi-sheet Excel support (`?sheet_name=Claims`) | +8 |
+| 16 | #29 | Confidence report (min/avg/low-confidence/missing fields) | +9 |
+
+### Bugs found and fixed
+
+| Bug | How found | Fix |
+|-----|-----------|-----|
+| Docker Compose: REDIS_URL=localhost inside container | Smoke test — Redis unreachable | Added `environment:` override in docker-compose.yml |
+| Docker .venv: host bind mount overwrites container's venv | Repeated Permission denied after `docker compose up` | Added anonymous volume `/app/.venv` to isolate |
+| Sheet name 400 error: nonexistent sheet returned 500 | PR #26 review — traced error path and found ValueError had no handler | Added `except ValueError` handler returning 400 INVALID_SHEET (#27) |
+
+### Harness improvements driven by bugs
+
+**1. PR description accuracy verification (PR #28)**
+
+PR #26 claimed "Raises 400 with descriptive error if the named sheet doesn't exist" but the code actually returned 500. The ValueError from the adapter had no handler in the route — it fell through to the generic Exception handler.
+
+This was caught during manual review, not by the harness. To prevent future occurrences:
+- Extended the code-reviewer agent with a "PR Description Accuracy" blocking category
+- Reordered `/create-pr` skill: draft PR body (Phase 2) → agent reviews both code AND text (Phase 3)
+- The reviewer now traces error paths, verifies behavior claims, and checks mechanism explanations
+
+**2. Commit message accuracy (feedback memory)**
+
+The Docker anonymous volume commit described the wrong direction of interference ("host's root-owned copy overwriting the container's" instead of the bidirectional bind mount issue). Led to a feedback memory: trace actual step-by-step mechanics before writing commit explanations.
+
+### Key insight: inaccurate documentation is worse than missing documentation
+
+A PR that says "returns 400" when the code returns 500 is actively harmful — it gives future readers (human or agent) false confidence that a path is handled. The fix isn't just "be more careful" — it's adding a second agent that cross-references claims against code, the same way we added hooks to enforce code quality.
+
+### Docker smoke test results
+
+| Test | Result |
+|------|--------|
+| `/health` | 200 OK |
+| Upload CSV (Groq Llama 3.3) | All 6 fields mapped, 5 valid records, 0 errors |
+| Redis cache miss | 1,306ms |
+| Redis cache hit | 1ms (1,306x speedup) |
+
+### Final numbers
+
+| Metric | After Session 1 | After Session 2 | After Session 3 |
+|--------|-----------------|-----------------|-----------------|
+| PRs merged | 19 | 22 | 29 |
+| Tests | 148 | 148 | 165 |
+| Hooks | 5 | 5 | 5 |
+| Agents | 2 | 2 | 2 (reviewer now checks PR text) |
+| Skills | 2 | 3 | 3 (create-pr now has 4 phases) |
+| Features | Health + upload | + logging, row validation | + structured errors, multi-sheet, confidence report |
+| Bugs found by review | 0 | 0 | 2 (sheet 400, commit accuracy) |
+
+---
+
+## Appendix C: Question Arc
+
+The full sequence of questions across all three sessions:
 
 | # | Question | What it changed |
 |---|----------|----------------|
@@ -248,3 +311,9 @@ The full sequence of questions across both sessions:
 | 11 | "Which OpenAI practices are we missing?" | Agent-to-agent review, /cleanup skill, doc-gardener agent |
 | 12 | "How is drift defined?" | Clarified six categories of drift, built /cleanup to detect them |
 | 13 | "Run the doc-gardener" | Found 9 stale items in a 2-day-old codebase — proved the tool's value |
+| 14 | "How can I fix Docker push?" | Led to Docker Compose Redis fix and .dockerignore |
+| 15 | "Why were these commit messages wrong?" | Feedback memory: trace mechanisms step-by-step before writing |
+| 16 | "Review the last PR for accuracy" | Found PR #26 claimed 400 but code returned 500 — a real bug |
+| 17 | "How can we stop hallucinations on PRs?" | Extended code-reviewer to verify PR text, reordered /create-pr phases |
+| 18 | "Do we have subagents or hooks that can help?" | Chose to extend existing code-reviewer rather than add new tooling |
+| 19 | "Confirm this is correct" | Caught inaccurate Docker volume explanation — corrected on PR #24 |
