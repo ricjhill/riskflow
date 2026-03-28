@@ -130,7 +130,7 @@ class TestErrorMapping:
         response = _upload_csv(client)
 
         assert response.status_code == 422
-        assert "confidence" in response.json()["detail"].lower()
+        assert "confidence" in response.json()["detail"]["message"].lower()
 
     def test_invalid_cedent_data_returns_400(self) -> None:
         service = AsyncMock()
@@ -143,7 +143,7 @@ class TestErrorMapping:
         response = _upload_csv(client)
 
         assert response.status_code == 400
-        assert "unparseable" in response.json()["detail"].lower()
+        assert "unparseable" in response.json()["detail"]["message"].lower()
 
     def test_schema_validation_error_returns_422(self) -> None:
         service = AsyncMock()
@@ -156,7 +156,7 @@ class TestErrorMapping:
         response = _upload_csv(client)
 
         assert response.status_code == 422
-        assert "dollars" in response.json()["detail"].lower()
+        assert "dollars" in response.json()["detail"]["message"].lower()
 
     def test_slm_unavailable_returns_503(self) -> None:
         service = AsyncMock()
@@ -180,7 +180,7 @@ class TestErrorMapping:
         response = _upload_csv(client)
 
         assert response.status_code == 500
-        assert "internal" in response.json()["detail"].lower()
+        assert "internal" in response.json()["detail"]["message"].lower()
 
     def test_no_file_uploaded_returns_422(self) -> None:
         service = AsyncMock()
@@ -190,6 +190,80 @@ class TestErrorMapping:
         response = client.post("/upload")
 
         assert response.status_code == 422
+
+
+class TestStructuredErrorResponses:
+    """Error responses must include error_code, message, and suggestion."""
+
+    def test_low_confidence_includes_structured_detail(self) -> None:
+        service = AsyncMock()
+        service.process_file.side_effect = MappingConfidenceLowError(
+            "Mapping 'GWP' -> 'Gross_Premium' has confidence 0.3, below threshold 0.6"
+        )
+        app = _create_test_app(service)
+        client = TestClient(app)
+
+        response = _upload_csv(client)
+        detail = response.json()["detail"]
+
+        assert detail["error_code"] == "LOW_CONFIDENCE"
+        assert "GWP" in detail["message"]
+        assert "suggestion" in detail
+
+    def test_slm_unavailable_includes_structured_detail(self) -> None:
+        service = AsyncMock()
+        service.process_file.side_effect = SLMUnavailableError(
+            "Groq API timeout"
+        )
+        app = _create_test_app(service)
+        client = TestClient(app)
+
+        response = _upload_csv(client)
+        detail = response.json()["detail"]
+
+        assert detail["error_code"] == "SLM_UNAVAILABLE"
+        assert "suggestion" in detail
+
+    def test_invalid_cedent_data_includes_structured_detail(self) -> None:
+        service = AsyncMock()
+        service.process_file.side_effect = InvalidCedentDataError(
+            "unparseable spreadsheet"
+        )
+        app = _create_test_app(service)
+        client = TestClient(app)
+
+        response = _upload_csv(client)
+        detail = response.json()["detail"]
+
+        assert detail["error_code"] == "INVALID_DATA"
+        assert "suggestion" in detail
+
+    def test_schema_validation_includes_structured_detail(self) -> None:
+        service = AsyncMock()
+        service.process_file.side_effect = SchemaValidationError(
+            "Currency 'DOLLARS' not in ISO 4217"
+        )
+        app = _create_test_app(service)
+        client = TestClient(app)
+
+        response = _upload_csv(client)
+        detail = response.json()["detail"]
+
+        assert detail["error_code"] == "SCHEMA_VALIDATION"
+        assert "suggestion" in detail
+
+    def test_unexpected_error_does_not_leak_internals(self) -> None:
+        service = AsyncMock()
+        service.process_file.side_effect = RuntimeError("database connection string: postgres://...")
+        app = _create_test_app(service)
+        client = TestClient(app)
+
+        response = _upload_csv(client)
+        detail = response.json()["detail"]
+
+        assert detail["error_code"] == "INTERNAL_ERROR"
+        assert "postgres" not in detail["message"]
+        assert "suggestion" in detail
 
 
 class TestFileValidation:
