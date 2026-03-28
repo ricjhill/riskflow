@@ -38,6 +38,45 @@ jobs:
       - name: Format check
         run: uv run ruff format --check src/
 
+  boot-test:
+    needs: quality
+    runs-on: ubuntu-latest
+    # Only run when source code, Dockerfile, or compose config changes
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for app changes
+        id: changes
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            app:
+              - 'src/**'
+              - 'Dockerfile'
+              - 'docker-compose.yml'
+              - 'pyproject.toml'
+              - 'uv.lock'
+
+      - name: Build and start containers
+        if: steps.changes.outputs.app == 'true'
+        run: |
+          # Create minimal .env for boot test (no real API key needed for health check)
+          echo "GROQ_API_KEY=test_key_for_boot_check" > .env
+          docker compose up -d --build
+          echo "Waiting for app to start..."
+          sleep 5
+
+      - name: Health check
+        if: steps.changes.outputs.app == 'true'
+        run: |
+          curl --fail --retry 5 --retry-delay 2 --retry-all-errors http://localhost:8000/health
+          echo "Boot test passed: /health returned 200"
+
+      - name: Tear down
+        if: steps.changes.outputs.app == 'true' && always()
+        run: docker compose down
+
   security:
     needs: quality
     runs-on: ubuntu-latest
