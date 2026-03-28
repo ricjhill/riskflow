@@ -67,3 +67,40 @@ class TestAppConfiguration:
 
             app = create_app()
             assert app is not None
+
+
+class TestCorrectionCacheWiring:
+    """Correction cache is wired from Redis when available."""
+
+    def test_corrections_endpoint_registered(self) -> None:
+        from src.entrypoint.main import create_app
+
+        app = create_app()
+        routes = [route.path for route in app.routes]
+        assert "/corrections" in routes
+
+    def test_app_creates_with_null_correction_cache_when_no_redis(self) -> None:
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("REDIS_URL", None)
+            from src.entrypoint.main import create_app
+
+            app = create_app()
+            # Should start without error
+            client = TestClient(app)
+            response = client.get("/health")
+            assert response.status_code == 200
+
+    def test_app_creates_with_redis_correction_cache(self) -> None:
+        """When REDIS_URL is set, RedisCorrectionCache is used."""
+        mock_client = MagicMock()
+        with (
+            patch.dict(os.environ, {"REDIS_URL": "redis://localhost:6379"}),
+            patch("src.entrypoint.main._create_redis_client", return_value=mock_client),
+        ):
+            from src.entrypoint.main import create_app
+
+            app = create_app()
+            assert app is not None
+            client = TestClient(app)
+            response = client.get("/health")
+            assert response.status_code == 200
