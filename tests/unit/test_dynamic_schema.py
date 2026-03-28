@@ -5,8 +5,12 @@ It is a self-validating configuration: invalid schemas fail at parse time,
 not at runtime when processing a file.
 """
 
-import pytest
+import datetime
 
+import pytest
+from pydantic import BaseModel
+
+from src.domain.model.record_factory import build_record_model
 from src.domain.model.target_schema import (
     DEFAULT_TARGET_SCHEMA,
     DateOrderingRule,
@@ -334,3 +338,334 @@ class TestDefaultTargetSchema:
         fp1 = DEFAULT_TARGET_SCHEMA.fingerprint
         fp2 = DEFAULT_TARGET_SCHEMA.fingerprint
         assert fp1 == fp2
+
+
+# --- Loops 3-6: build_record_model ---
+
+
+class TestBuildRecordModelBasicTypes:
+    """Loop 3: build_record_model maps field types to Python types."""
+
+    def test_returns_pydantic_model_class(self) -> None:
+        schema = TargetSchema(
+            name="test",
+            fields={"ID": FieldDefinition(type=FieldType.STRING)},
+        )
+        Model = build_record_model(schema)
+        assert issubclass(Model, BaseModel)
+
+    def test_string_field(self) -> None:
+        schema = TargetSchema(
+            name="test",
+            fields={"Name": FieldDefinition(type=FieldType.STRING)},
+        )
+        Model = build_record_model(schema)
+        record = Model.model_validate({"Name": "Alice"})
+        assert record.Name == "Alice"  # type: ignore[attr-defined]
+
+    def test_float_field(self) -> None:
+        schema = TargetSchema(
+            name="test",
+            fields={"Amount": FieldDefinition(type=FieldType.FLOAT)},
+        )
+        Model = build_record_model(schema)
+        record = Model.model_validate({"Amount": 1000.50})
+        assert record.Amount == 1000.50  # type: ignore[attr-defined]
+
+    def test_date_field(self) -> None:
+        schema = TargetSchema(
+            name="test",
+            fields={"Start": FieldDefinition(type=FieldType.DATE)},
+        )
+        Model = build_record_model(schema)
+        record = Model.model_validate({"Start": "2024-01-15"})
+        assert record.Start == datetime.date(2024, 1, 15)  # type: ignore[attr-defined]
+
+    def test_currency_field(self) -> None:
+        schema = TargetSchema(
+            name="test",
+            fields={
+                "Ccy": FieldDefinition(
+                    type=FieldType.CURRENCY, allowed_values=["USD", "GBP"]
+                ),
+            },
+        )
+        Model = build_record_model(schema)
+        record = Model.model_validate({"Ccy": "USD"})
+        assert record.Ccy == "USD"  # type: ignore[attr-defined]
+
+    def test_rejects_wrong_type(self) -> None:
+        schema = TargetSchema(
+            name="test",
+            fields={"Amount": FieldDefinition(type=FieldType.FLOAT)},
+        )
+        Model = build_record_model(schema)
+        with pytest.raises(Exception):
+            Model.model_validate({"Amount": "not a number"})
+
+    def test_rejects_missing_required_field(self) -> None:
+        schema = TargetSchema(
+            name="test",
+            fields={
+                "ID": FieldDefinition(type=FieldType.STRING),
+                "Amount": FieldDefinition(type=FieldType.FLOAT),
+            },
+        )
+        Model = build_record_model(schema)
+        with pytest.raises(Exception):
+            Model.model_validate({"ID": "P001"})
+
+    def test_multi_field_model(self) -> None:
+        schema = TargetSchema(
+            name="test",
+            fields={
+                "ID": FieldDefinition(type=FieldType.STRING),
+                "Start": FieldDefinition(type=FieldType.DATE),
+                "Amount": FieldDefinition(type=FieldType.FLOAT),
+            },
+        )
+        Model = build_record_model(schema)
+        record = Model.model_validate({
+            "ID": "P001",
+            "Start": "2024-06-15",
+            "Amount": 50000.0,
+        })
+        assert record.ID == "P001"  # type: ignore[attr-defined]
+        assert record.Start == datetime.date(2024, 6, 15)  # type: ignore[attr-defined]
+        assert record.Amount == 50000.0  # type: ignore[attr-defined]
+
+    def test_is_cached(self) -> None:
+        """build_record_model should return the same class for the same schema fingerprint."""
+        schema = TargetSchema(
+            name="test",
+            fields={"ID": FieldDefinition(type=FieldType.STRING)},
+        )
+        Model1 = build_record_model(schema)
+        Model2 = build_record_model(schema)
+        assert Model1 is Model2
+
+
+class TestBuildRecordModelConstraints:
+    """Loop 4: Field constraints — non_negative, not_empty, allowed_values."""
+
+    def test_non_negative_rejects_negative(self) -> None:
+        schema = TargetSchema(
+            name="test",
+            fields={"Amount": FieldDefinition(type=FieldType.FLOAT, non_negative=True)},
+        )
+        Model = build_record_model(schema)
+        with pytest.raises(Exception, match="Amount"):
+            Model.model_validate({"Amount": -100.0})
+
+    def test_non_negative_accepts_zero(self) -> None:
+        schema = TargetSchema(
+            name="test",
+            fields={"Amount": FieldDefinition(type=FieldType.FLOAT, non_negative=True)},
+        )
+        Model = build_record_model(schema)
+        record = Model.model_validate({"Amount": 0.0})
+        assert record.Amount == 0.0  # type: ignore[attr-defined]
+
+    def test_non_negative_accepts_positive(self) -> None:
+        schema = TargetSchema(
+            name="test",
+            fields={"Amount": FieldDefinition(type=FieldType.FLOAT, non_negative=True)},
+        )
+        Model = build_record_model(schema)
+        record = Model.model_validate({"Amount": 999999.99})
+        assert record.Amount == 999999.99  # type: ignore[attr-defined]
+
+    def test_not_empty_rejects_empty_string(self) -> None:
+        schema = TargetSchema(
+            name="test",
+            fields={"ID": FieldDefinition(type=FieldType.STRING, not_empty=True)},
+        )
+        Model = build_record_model(schema)
+        with pytest.raises(Exception, match="ID"):
+            Model.model_validate({"ID": ""})
+
+    def test_not_empty_rejects_whitespace_only(self) -> None:
+        schema = TargetSchema(
+            name="test",
+            fields={"ID": FieldDefinition(type=FieldType.STRING, not_empty=True)},
+        )
+        Model = build_record_model(schema)
+        with pytest.raises(Exception, match="ID"):
+            Model.model_validate({"ID": "   "})
+
+    def test_not_empty_accepts_non_empty(self) -> None:
+        schema = TargetSchema(
+            name="test",
+            fields={"ID": FieldDefinition(type=FieldType.STRING, not_empty=True)},
+        )
+        Model = build_record_model(schema)
+        record = Model.model_validate({"ID": "P001"})
+        assert record.ID == "P001"  # type: ignore[attr-defined]
+
+    @pytest.mark.parametrize("currency", ["USD", "GBP"])
+    def test_allowed_values_accepts_valid(self, currency: str) -> None:
+        schema = TargetSchema(
+            name="test",
+            fields={
+                "Ccy": FieldDefinition(
+                    type=FieldType.CURRENCY, allowed_values=["USD", "GBP"]
+                ),
+            },
+        )
+        Model = build_record_model(schema)
+        record = Model.model_validate({"Ccy": currency})
+        assert record.Ccy == currency  # type: ignore[attr-defined]
+
+    @pytest.mark.parametrize("currency", ["EUR", "DOLLARS", "usd", ""])
+    def test_allowed_values_rejects_invalid(self, currency: str) -> None:
+        schema = TargetSchema(
+            name="test",
+            fields={
+                "Ccy": FieldDefinition(
+                    type=FieldType.CURRENCY, allowed_values=["USD", "GBP"]
+                ),
+            },
+        )
+        Model = build_record_model(schema)
+        with pytest.raises(Exception, match="Ccy"):
+            Model.model_validate({"Ccy": currency})
+
+    def test_float_without_non_negative_accepts_negative(self) -> None:
+        """When non_negative is False, negative values are fine."""
+        schema = TargetSchema(
+            name="test",
+            fields={"Amount": FieldDefinition(type=FieldType.FLOAT, non_negative=False)},
+        )
+        Model = build_record_model(schema)
+        record = Model.model_validate({"Amount": -500.0})
+        assert record.Amount == -500.0  # type: ignore[attr-defined]
+
+
+class TestBuildRecordModelCrossFieldRules:
+    """Loop 5: Cross-field rules — date ordering."""
+
+    def test_rejects_later_before_earlier(self) -> None:
+        schema = TargetSchema(
+            name="test",
+            fields={
+                "Start": FieldDefinition(type=FieldType.DATE),
+                "End": FieldDefinition(type=FieldType.DATE),
+            },
+            cross_field_rules=[DateOrderingRule(earlier="Start", later="End")],
+        )
+        Model = build_record_model(schema)
+        with pytest.raises(Exception, match="End"):
+            Model.model_validate({"Start": "2025-01-01", "End": "2024-01-01"})
+
+    def test_accepts_same_date(self) -> None:
+        schema = TargetSchema(
+            name="test",
+            fields={
+                "Start": FieldDefinition(type=FieldType.DATE),
+                "End": FieldDefinition(type=FieldType.DATE),
+            },
+            cross_field_rules=[DateOrderingRule(earlier="Start", later="End")],
+        )
+        Model = build_record_model(schema)
+        record = Model.model_validate({"Start": "2024-06-15", "End": "2024-06-15"})
+        assert record.Start == record.End  # type: ignore[attr-defined]
+
+    def test_accepts_later_after_earlier(self) -> None:
+        schema = TargetSchema(
+            name="test",
+            fields={
+                "Start": FieldDefinition(type=FieldType.DATE),
+                "End": FieldDefinition(type=FieldType.DATE),
+            },
+            cross_field_rules=[DateOrderingRule(earlier="Start", later="End")],
+        )
+        Model = build_record_model(schema)
+        record = Model.model_validate({"Start": "2024-01-01", "End": "2025-01-01"})
+        assert record.End > record.Start  # type: ignore[attr-defined]
+
+    def test_multiple_date_rules(self) -> None:
+        schema = TargetSchema(
+            name="test",
+            fields={
+                "Created": FieldDefinition(type=FieldType.DATE),
+                "Start": FieldDefinition(type=FieldType.DATE),
+                "End": FieldDefinition(type=FieldType.DATE),
+            },
+            cross_field_rules=[
+                DateOrderingRule(earlier="Created", later="Start"),
+                DateOrderingRule(earlier="Start", later="End"),
+            ],
+        )
+        Model = build_record_model(schema)
+        # Created < Start but Start > End → should fail on second rule
+        with pytest.raises(Exception, match="End"):
+            Model.model_validate({
+                "Created": "2024-01-01",
+                "Start": "2024-06-01",
+                "End": "2024-03-01",
+            })
+
+
+class TestBuildRecordModelOptionalFields:
+    """Loop 6: Optional fields — required=False means None is acceptable."""
+
+    def test_optional_field_accepts_none(self) -> None:
+        schema = TargetSchema(
+            name="test",
+            fields={
+                "ID": FieldDefinition(type=FieldType.STRING),
+                "Notes": FieldDefinition(type=FieldType.STRING, required=False),
+            },
+        )
+        Model = build_record_model(schema)
+        record = Model.model_validate({"ID": "P001"})
+        assert record.Notes is None  # type: ignore[attr-defined]
+
+    def test_optional_field_accepts_value(self) -> None:
+        schema = TargetSchema(
+            name="test",
+            fields={
+                "ID": FieldDefinition(type=FieldType.STRING),
+                "Notes": FieldDefinition(type=FieldType.STRING, required=False),
+            },
+        )
+        Model = build_record_model(schema)
+        record = Model.model_validate({"ID": "P001", "Notes": "urgent"})
+        assert record.Notes == "urgent"  # type: ignore[attr-defined]
+
+    def test_optional_float_defaults_to_none(self) -> None:
+        schema = TargetSchema(
+            name="test",
+            fields={
+                "Amount": FieldDefinition(type=FieldType.FLOAT, required=False),
+            },
+        )
+        Model = build_record_model(schema)
+        record = Model.model_validate({})
+        assert record.Amount is None  # type: ignore[attr-defined]
+
+    def test_optional_date_defaults_to_none(self) -> None:
+        schema = TargetSchema(
+            name="test",
+            fields={
+                "Start": FieldDefinition(type=FieldType.DATE, required=False),
+            },
+        )
+        Model = build_record_model(schema)
+        record = Model.model_validate({})
+        assert record.Start is None  # type: ignore[attr-defined]
+
+    def test_cross_field_rule_skipped_when_optional_field_is_none(self) -> None:
+        """If an optional date field is None, the date ordering rule
+        should not raise — it only applies when both dates are present."""
+        schema = TargetSchema(
+            name="test",
+            fields={
+                "Start": FieldDefinition(type=FieldType.DATE),
+                "End": FieldDefinition(type=FieldType.DATE, required=False),
+            },
+            cross_field_rules=[DateOrderingRule(earlier="Start", later="End")],
+        )
+        Model = build_record_model(schema)
+        record = Model.model_validate({"Start": "2024-01-01"})
+        assert record.End is None  # type: ignore[attr-defined]
