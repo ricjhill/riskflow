@@ -2,8 +2,10 @@
 
 from typing import runtime_checkable
 
+from src.domain.model.correction import Correction
 from src.domain.model.schema import MappingResult
 from src.ports.input.ingestor import IngestorPort
+from src.ports.output.correction_cache import CorrectionCachePort
 from src.ports.output.mapper import MapperPort
 from src.ports.output.repo import CachePort
 
@@ -71,4 +73,27 @@ class TestCachePort:
                 return None
 
         assert not isinstance(BadCache(), CachePort)
+
+
+class TestCorrectionCachePort:
+    def test_concrete_class_satisfies_protocol(self) -> None:
+        class FakeCorrectionCache:
+            def get_corrections(
+                self, cedent_id: str, headers: list[str]
+            ) -> dict[str, str]:
+                return {}
+
+            def set_correction(self, correction: Correction) -> None:
+                pass
+
+        assert isinstance(FakeCorrectionCache(), CorrectionCachePort)
+
+    def test_incomplete_class_does_not_satisfy(self) -> None:
+        class BadCorrectionCache:
+            def get_corrections(
+                self, cedent_id: str, headers: list[str]
+            ) -> dict[str, str]:
+                return {}
+
+        assert not isinstance(BadCorrectionCache(), CorrectionCachePort)
 
