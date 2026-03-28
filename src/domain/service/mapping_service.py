@@ -47,6 +47,10 @@ class MappingService:
         self._confidence_threshold = confidence_threshold
         self._logger = structlog.get_logger()
 
+    def get_sheet_names(self, file_path: str) -> list[str]:
+        """Return sheet names for Excel files, empty list for CSV."""
+        return self._ingestor.get_sheet_names(file_path)
+
     async def process_file(
         self, file_path: str, *, sheet_name: str | None = None
     ) -> ProcessingResult:

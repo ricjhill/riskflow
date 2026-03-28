@@ -48,6 +48,18 @@ class PolarsIngestor:
                 raise
         return pl.read_excel(file_path)
 
+    def get_sheet_names(self, file_path: str) -> list[str]:
+        """Return sheet names for Excel files, empty list for CSV."""
+        self._check_file_exists(file_path)
+        if file_path.endswith(".csv"):
+            return []
+        import openpyxl
+
+        wb = openpyxl.load_workbook(file_path, read_only=True)
+        names = wb.sheetnames
+        wb.close()
+        return names
+
     def _check_file_exists(self, file_path: str) -> None:
         if not Path(file_path).exists():
             msg = f"File not found: {file_path}"

@@ -20,6 +20,9 @@ class TestIngestorPort:
             def get_preview(self, file_path: str, n: int = 5) -> list[dict[str, object]]:
                 return []
 
+            def get_sheet_names(self, file_path: str) -> list[str]:
+                return []
+
         assert isinstance(FakeIngestor(), IngestorPort)
 
     def test_incomplete_class_does_not_satisfy(self) -> None:

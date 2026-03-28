@@ -5,7 +5,7 @@ Tests verify request handling, response shapes, and domain error → HTTP status
 """
 
 import io
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -319,6 +319,50 @@ class TestStructuredErrorResponses:
         assert detail["error_code"] == "INTERNAL_ERROR"
         assert "postgres" not in detail["message"]
         assert "suggestion" in detail
+
+
+class TestSheetsEndpoint:
+    """POST /sheets returns sheet names from an uploaded Excel file."""
+
+    def test_returns_sheet_names_for_xlsx(self) -> None:
+        service = AsyncMock()
+        service.get_sheet_names = MagicMock(return_value=["Policies", "Claims", "Summary"])
+        app = _create_test_app(service)
+        client = TestClient(app)
+
+        response = client.post(
+            "/sheets",
+            files={"file": ("workbook.xlsx", io.BytesIO(b"data"), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {"sheets": ["Policies", "Claims", "Summary"]}
+
+    def test_returns_empty_for_csv(self) -> None:
+        service = AsyncMock()
+        service.get_sheet_names = MagicMock(return_value=[])
+        app = _create_test_app(service)
+        client = TestClient(app)
+
+        response = client.post(
+            "/sheets",
+            files={"file": ("data.csv", io.BytesIO(b"A,B\n1,2\n"), "text/csv")},
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {"sheets": []}
+
+    def test_rejects_invalid_file_type(self) -> None:
+        service = AsyncMock()
+        app = _create_test_app(service)
+        client = TestClient(app)
+
+        response = client.post(
+            "/sheets",
+            files={"file": ("report.pdf", io.BytesIO(b"data"), "application/pdf")},
+        )
+
+        assert response.status_code == 400
 
 
 class TestFileValidation:
