@@ -24,10 +24,10 @@ jobs:
         run: uv sync --frozen
 
       - name: Run unit tests
-        run: uv run pytest -x -v tests/unit/
+        run: uv run pytest -x -v tests/unit/ --junitxml=reports/unit.xml
 
       - name: Run integration tests
-        run: uv run pytest -x -v tests/integration/
+        run: uv run pytest -x -v tests/integration/ --junitxml=reports/integration.xml
 
       - name: Type check
         run: uv run mypy src/
@@ -40,6 +40,22 @@ jobs:
 
       - name: Architecture boundary check
         run: uv run python -m tools.hexagonal_linter
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: reports/
+          retention-days: 30
+
+      - name: Publish test report
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: Test Results
+          path: reports/*.xml
+          reporter: java-junit
 
   boot-test:
     needs: quality
@@ -129,4 +145,20 @@ jobs:
       - name: Run e2e tests (real Groq API)
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-        run: uv run pytest -x -v -m e2e
+        run: uv run pytest -x -v -m e2e --junitxml=reports/e2e.xml
+
+      - name: Upload e2e test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-results
+          path: reports/
+          retention-days: 30
+
+      - name: Publish e2e test report
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: E2E Test Results
+          path: reports/*.xml
+          reporter: java-junit
