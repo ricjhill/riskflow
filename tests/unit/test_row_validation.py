@@ -16,6 +16,7 @@ import pytest
 
 from src.domain.model.schema import (
     ColumnMapping,
+    ConfidenceReport,
     MappingResult,
     ProcessingResult,
     RiskRecord,
@@ -51,8 +52,10 @@ def _full_mapping() -> MappingResult:
 
 class TestProcessingResult:
     def test_valid_processing_result(self) -> None:
+        mapping = _full_mapping()
         result = ProcessingResult(
-            mapping=_full_mapping(),
+            mapping=mapping,
+            confidence_report=ConfidenceReport.from_mapping_result(mapping),
             valid_records=[
                 RiskRecord(
                     Policy_ID="P001",

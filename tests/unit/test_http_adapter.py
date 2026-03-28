@@ -17,28 +17,30 @@ from src.domain.model.errors import (
     SchemaValidationError,
     SLMUnavailableError,
 )
-from src.domain.model.schema import ColumnMapping, MappingResult, ProcessingResult
+from src.domain.model.schema import ColumnMapping, ConfidenceReport, MappingResult, ProcessingResult
 
 from fastapi import FastAPI
 
 
 def _make_processing_result() -> ProcessingResult:
+    mapping = MappingResult(
+        mappings=[
+            ColumnMapping(
+                source_header="Policy No.",
+                target_field="Policy_ID",
+                confidence=0.99,
+            ),
+            ColumnMapping(
+                source_header="GWP",
+                target_field="Gross_Premium",
+                confidence=0.95,
+            ),
+        ],
+        unmapped_headers=["Extra"],
+    )
     return ProcessingResult(
-        mapping=MappingResult(
-            mappings=[
-                ColumnMapping(
-                    source_header="Policy No.",
-                    target_field="Policy_ID",
-                    confidence=0.99,
-                ),
-                ColumnMapping(
-                    source_header="GWP",
-                    target_field="Gross_Premium",
-                    confidence=0.95,
-                ),
-            ],
-            unmapped_headers=["Extra"],
-        ),
+        mapping=mapping,
+        confidence_report=ConfidenceReport.from_mapping_result(mapping),
         valid_records=[],
         invalid_records=[],
         errors=[],
@@ -73,6 +75,7 @@ class TestUploadEndpoint:
         assert "mapping" in body
         assert "valid_records" in body
         assert "errors" in body
+        assert "confidence_report" in body
         assert len(body["mapping"]["mappings"]) == 2
 
     def test_mapping_result_contains_expected_fields(self) -> None:
