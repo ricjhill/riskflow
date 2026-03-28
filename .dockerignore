@@ -1,0 +1,28 @@
+# Virtual environment — prevents root-owned .venv from conflicting with local
+.venv/
+
+# Git
+.git/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Environment variables
+.env
+
+# Claude Code
+.claude/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Tests and docs (not needed in production image)
+tests/
+docs/
+*.md
