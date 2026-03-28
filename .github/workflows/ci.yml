@@ -38,6 +38,9 @@ jobs:
       - name: Format check
         run: uv run ruff format --check src/
 
+      - name: Architecture boundary check
+        run: uv run python -m tools.hexagonal_linter
+
   boot-test:
     needs: quality
     runs-on: ubuntu-latest
