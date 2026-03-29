@@ -27,10 +27,14 @@ from src.adapters.storage.correction_cache import (
     NullCorrectionCache,
     RedisCorrectionCache,
 )
+from src.adapters.parsers.schema_loader import YamlSchemaLoader
 from src.adapters.storage.job_store import InMemoryJobStore
+from src.domain.model.target_schema import TargetSchema
 from src.domain.service.mapping_service import MappingService
 from src.ports.output.correction_cache import CorrectionCachePort
 from src.ports.output.repo import CachePort
+
+DEFAULT_SCHEMA_FILE = "schemas/default.yaml"
 
 
 def configure_logging() -> None:
@@ -79,6 +83,15 @@ def create_app() -> FastAPI:
 
     app = FastAPI(title="RiskFlow API")
 
+    # --- Schema ---
+    schema = _load_schema()
+    logger.info(
+        "schema_loaded",
+        schema_name=schema.name,
+        schema_fingerprint=schema.fingerprint,
+        field_count=len(schema.fields),
+    )
+
     # --- Adapters ---
     ingestor = PolarsIngestor()
     redis_client = _create_redis_client()
@@ -98,6 +111,7 @@ def create_app() -> FastAPI:
         ingestor=ingestor,
         mapper=mapper,
         cache=cache,
+        schema=schema,
         correction_cache=correction_cache,
     )
 
@@ -113,6 +127,19 @@ def create_app() -> FastAPI:
         return {"status": "ok"}
 
     return app
+
+
+def _load_schema() -> TargetSchema:
+    """Load the target schema from SCHEMA_PATH env var or default file.
+
+    If SCHEMA_PATH is set, loads from that path (fatal error if invalid).
+    Otherwise loads from schemas/default.yaml.
+    Both paths use YamlSchemaLoader which raises InvalidSchemaError on
+    any failure — the app refuses to boot with an invalid schema.
+    """
+    schema_path = os.environ.get("SCHEMA_PATH", DEFAULT_SCHEMA_FILE)
+    loader = YamlSchemaLoader()
+    return loader.load(schema_path)
 
 
 def _create_redis_client() -> Any:
