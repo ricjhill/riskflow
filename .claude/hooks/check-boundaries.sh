@@ -1,7 +1,7 @@
 #!/bin/bash
 # Enforce hexagonal architecture: dependencies only point inward
 # domain/ <- ports/ <- adapters/ <- entrypoint/
-COMMAND=$(jq -r '.tool_input.command' 2>/dev/null)
+COMMAND=$(/usr/bin/python3 -c "import json,sys; print(json.load(sys.stdin).get('tool_input',{}).get('command',''))" 2>/dev/null)
 
 # Only run on git commit
 if ! echo "$COMMAND" | grep -q 'git commit'; then

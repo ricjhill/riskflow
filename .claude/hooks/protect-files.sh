@@ -1,6 +1,6 @@
 #!/bin/bash
 # Block edits to protected files
-FILE=$(jq -r '.tool_input.file_path // empty' 2>/dev/null)
+FILE=$(/usr/bin/python3 -c "import json,sys; print(json.load(sys.stdin).get('tool_input',{}).get('file_path',''))" 2>/dev/null)
 
 if [ -z "$FILE" ]; then
   exit 0

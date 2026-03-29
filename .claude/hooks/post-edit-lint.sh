@@ -1,6 +1,6 @@
 #!/bin/bash
 # Run ruff check + ruff format after editing Python files
-FILE=$(jq -r '.tool_input.file_path // empty' 2>/dev/null)
+FILE=$(/usr/bin/python3 -c "import json,sys; print(json.load(sys.stdin).get('tool_input',{}).get('file_path',''))" 2>/dev/null)
 
 # Only check Python files
 if [ -z "$FILE" ] || [[ "$FILE" != *.py ]]; then
