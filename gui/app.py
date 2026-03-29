@@ -17,6 +17,10 @@ import pandas as pd
 import streamlit as st
 import yaml
 
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from gui.api_client import RiskFlowClient
 
 API_URL = st.sidebar.text_input("API URL", value="http://localhost:8000")
