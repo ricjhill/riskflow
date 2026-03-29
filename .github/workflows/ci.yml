@@ -63,6 +63,9 @@ jobs:
   boot-test:
     needs: quality
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     # Only run when source code, Dockerfile, or compose config changes
     if: github.event_name == 'pull_request'
     steps:
