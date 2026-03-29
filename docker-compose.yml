@@ -11,6 +11,18 @@ services:
     volumes:
       - .:/app
       - /app/.venv
+  gui:
+    build:
+      context: .
+      dockerfile: gui/Dockerfile
+    ports:
+      - "8501:8501"
+    environment:
+      - RISKFLOW_API_URL=http://api:8000
+    depends_on:
+      - api
+    volumes:
+      - ./schemas:/app/schemas:ro
   redis:
     image: "redis:alpine"
     ports:

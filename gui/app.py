@@ -23,7 +23,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from gui.api_client import RiskFlowClient
 
-API_URL = st.sidebar.text_input("API URL", value="http://localhost:8000")
+import os
+
+_default_api_url = os.environ.get("RISKFLOW_API_URL", "http://localhost:8000")
+API_URL = st.sidebar.text_input("API URL", value=_default_api_url)
 client = RiskFlowClient(base_url=API_URL)
 
 st.title("RiskFlow Dashboard")
