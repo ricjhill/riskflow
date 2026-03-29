@@ -1,12 +1,20 @@
 # RiskFlow
 
-Automates the mapping of messy reinsurance spreadsheets (Bordereaux) to a standardized schema using Small Language Models (Groq/Llama 3.1).
+Automates the mapping of messy reinsurance spreadsheets (Bordereaux) to a standardized schema using Small Language Models (Groq/Llama 3.3).
+
+## Documentation
+
+- [Getting started tutorial](docs/tutorials/first-upload.md) — upload your first file in 5 minutes
+- [Features overview](docs/explanation/features.md) — what RiskFlow delivers, with acceptance test checklist
+- [API reference](docs/reference/api.md) — all endpoints, parameters, errors
+- [Full documentation index](docs/index.md) — tutorials, how-to guides, explanations, reference
 
 ## Prerequisites
 
 - Python 3.12+
 - [uv](https://docs.astral.sh/uv/)
 - Docker & Docker Compose (for Redis)
+- A [Groq](https://console.groq.com) account and API key (free tier available)
 
 ## Getting Started
 
@@ -91,6 +99,7 @@ graph LR
     Client -->|POST /upload/async| HTTP
     Client -->|GET /jobs/id| HTTP
     Client -->|POST /sheets| HTTP
+    Client -->|GET /schemas| HTTP
     HTTP --> Service
     Service --> IngestorPort
     Service --> MapperPort
@@ -142,4 +151,6 @@ The default target schema (`schemas/default.yaml`) maps Bordereaux data to:
 | `Gross_Premium` | Float | Non-negative |
 | `Currency` | Currency | USD, GBP, EUR, JPY |
 
-The schema is configurable via YAML. Custom schemas can define different fields, types, constraints, cross-field rules, and SLM hints. See `src/domain/model/target_schema.py` for the `TargetSchema` model.
+The schema is configurable via YAML. Custom schemas can define different fields, types, constraints, cross-field rules, and SLM hints. See:
+- [Schema reference](docs/reference/schema.md) — field types, constraints, YAML format
+- [How to use a custom schema](docs/how-to/custom-schema.md) — step-by-step guide
