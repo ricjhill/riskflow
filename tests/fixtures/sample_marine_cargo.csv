@@ -1,0 +1,6 @@
+Ship,Sailing Date,ETA,Cargo Value,GWP,Ccy,Loading Port,Destination,Broker Ref
+MV Atlantic Star,2024-03-15,2024-04-02,8500000,212500,USD,Singapore,Rotterdam,BR-2024-001
+MV Pacific Dawn,2024-05-01,2024-05-20,3200000,96000,GBP,Shanghai,Felixstowe,BR-2024-002
+MV Nordic Spirit,2024-06-10,2024-06-28,12000000,360000,EUR,Hamburg,New York,BR-2024-003
+MV Eastern Wind,2024-08-15,2024-09-01,1500000,45000,JPY,Tokyo,Los Angeles,BR-2024-004
+MV Southern Cross,2024-10-01,2024-10-18,6750000,168750,SGD,Sydney,Hong Kong,BR-2024-005
