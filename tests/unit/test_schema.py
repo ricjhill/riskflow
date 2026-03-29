@@ -5,13 +5,17 @@ import datetime
 import pytest
 
 from src.domain.model.schema import (
-    VALID_CURRENCIES,
-    VALID_TARGET_FIELDS,
     ColumnMapping,
     ConfidenceReport,
     MappingResult,
     RiskRecord,
 )
+from src.domain.model.target_schema import DEFAULT_TARGET_SCHEMA
+
+# Constants moved to DEFAULT_TARGET_SCHEMA — these are test-local copies
+# for backward compatibility with existing RiskRecord tests.
+VALID_CURRENCIES = {"USD", "GBP", "EUR", "JPY"}
+VALID_TARGET_FIELDS = DEFAULT_TARGET_SCHEMA.field_names
 
 
 class TestRiskRecord:
@@ -259,7 +263,9 @@ class TestMappingResult:
     def test_validate_against_schema_accepts_valid_fields(self) -> None:
         result = MappingResult(
             mappings=[
-                ColumnMapping(source_header="GWP", target_field="Gross_Premium", confidence=0.95),
+                ColumnMapping(
+                    source_header="GWP", target_field="Gross_Premium", confidence=0.95
+                ),
             ],
             unmapped_headers=[],
         )
@@ -269,7 +275,9 @@ class TestMappingResult:
     def test_validate_against_schema_rejects_invalid_fields(self, field: str) -> None:
         result = MappingResult(
             mappings=[
-                ColumnMapping(source_header="Header", target_field=field, confidence=0.9),
+                ColumnMapping(
+                    source_header="Header", target_field=field, confidence=0.9
+                ),
             ],
             unmapped_headers=[],
         )
@@ -280,11 +288,15 @@ class TestMappingResult:
         """validate_against_schema works with any field set, not just VALID_TARGET_FIELDS."""
         result = MappingResult(
             mappings=[
-                ColumnMapping(source_header="Col1", target_field="CustomField", confidence=0.9),
+                ColumnMapping(
+                    source_header="Col1", target_field="CustomField", confidence=0.9
+                ),
             ],
             unmapped_headers=[],
         )
-        result.validate_against_schema({"CustomField", "OtherField"})  # should not raise
+        result.validate_against_schema(
+            {"CustomField", "OtherField"}
+        )  # should not raise
 
     # --- Constants ---
 
@@ -316,56 +328,80 @@ class TestConfidenceReport:
         )
 
     def test_from_mapping_result(self) -> None:
-        mapping = self._make_mapping([
-            ("Policy_ID", 0.95),
-            ("Gross_Premium", 0.85),
-        ])
-        report = ConfidenceReport.from_mapping_result(mapping)
+        mapping = self._make_mapping(
+            [
+                ("Policy_ID", 0.95),
+                ("Gross_Premium", 0.85),
+            ]
+        )
+        report = ConfidenceReport.from_mapping_result(
+            mapping, valid_fields=VALID_TARGET_FIELDS
+        )
         assert isinstance(report, ConfidenceReport)
 
     def test_min_confidence(self) -> None:
-        mapping = self._make_mapping([
-            ("Policy_ID", 0.95),
-            ("Gross_Premium", 0.60),
-            ("Currency", 0.85),
-        ])
-        report = ConfidenceReport.from_mapping_result(mapping)
+        mapping = self._make_mapping(
+            [
+                ("Policy_ID", 0.95),
+                ("Gross_Premium", 0.60),
+                ("Currency", 0.85),
+            ]
+        )
+        report = ConfidenceReport.from_mapping_result(
+            mapping, valid_fields=VALID_TARGET_FIELDS
+        )
         assert report.min_confidence == 0.60
 
     def test_avg_confidence(self) -> None:
-        mapping = self._make_mapping([
-            ("Policy_ID", 0.90),
-            ("Gross_Premium", 0.80),
-        ])
-        report = ConfidenceReport.from_mapping_result(mapping)
+        mapping = self._make_mapping(
+            [
+                ("Policy_ID", 0.90),
+                ("Gross_Premium", 0.80),
+            ]
+        )
+        report = ConfidenceReport.from_mapping_result(
+            mapping, valid_fields=VALID_TARGET_FIELDS
+        )
         assert report.avg_confidence == pytest.approx(0.85)
 
     def test_low_confidence_fields_flagged(self) -> None:
-        mapping = self._make_mapping([
-            ("Policy_ID", 0.95),
-            ("Gross_Premium", 0.55),
-            ("Currency", 0.40),
-        ])
-        report = ConfidenceReport.from_mapping_result(mapping, threshold=0.6)
+        mapping = self._make_mapping(
+            [
+                ("Policy_ID", 0.95),
+                ("Gross_Premium", 0.55),
+                ("Currency", 0.40),
+            ]
+        )
+        report = ConfidenceReport.from_mapping_result(
+            mapping, threshold=0.6, valid_fields=VALID_TARGET_FIELDS
+        )
         assert len(report.low_confidence_fields) == 2
         names = [f.target_field for f in report.low_confidence_fields]
         assert "Gross_Premium" in names
         assert "Currency" in names
 
     def test_no_low_confidence_when_all_high(self) -> None:
-        mapping = self._make_mapping([
-            ("Policy_ID", 0.95),
-            ("Gross_Premium", 0.90),
-        ])
-        report = ConfidenceReport.from_mapping_result(mapping, threshold=0.6)
+        mapping = self._make_mapping(
+            [
+                ("Policy_ID", 0.95),
+                ("Gross_Premium", 0.90),
+            ]
+        )
+        report = ConfidenceReport.from_mapping_result(
+            mapping, threshold=0.6, valid_fields=VALID_TARGET_FIELDS
+        )
         assert report.low_confidence_fields == []
 
     def test_missing_fields(self) -> None:
-        mapping = self._make_mapping([
-            ("Policy_ID", 0.95),
-            ("Gross_Premium", 0.90),
-        ])
-        report = ConfidenceReport.from_mapping_result(mapping)
+        mapping = self._make_mapping(
+            [
+                ("Policy_ID", 0.95),
+                ("Gross_Premium", 0.90),
+            ]
+        )
+        report = ConfidenceReport.from_mapping_result(
+            mapping, valid_fields=VALID_TARGET_FIELDS
+        )
         assert "Inception_Date" in report.missing_fields
         assert "Expiry_Date" in report.missing_fields
         assert "Sum_Insured" in report.missing_fields
@@ -373,28 +409,38 @@ class TestConfidenceReport:
         assert "Policy_ID" not in report.missing_fields
 
     def test_no_missing_when_all_mapped(self) -> None:
-        mapping = self._make_mapping([
-            ("Policy_ID", 0.95),
-            ("Inception_Date", 0.90),
-            ("Expiry_Date", 0.90),
-            ("Sum_Insured", 0.85),
-            ("Gross_Premium", 0.80),
-            ("Currency", 0.95),
-        ])
-        report = ConfidenceReport.from_mapping_result(mapping)
+        mapping = self._make_mapping(
+            [
+                ("Policy_ID", 0.95),
+                ("Inception_Date", 0.90),
+                ("Expiry_Date", 0.90),
+                ("Sum_Insured", 0.85),
+                ("Gross_Premium", 0.80),
+                ("Currency", 0.95),
+            ]
+        )
+        report = ConfidenceReport.from_mapping_result(
+            mapping, valid_fields=VALID_TARGET_FIELDS
+        )
         assert report.missing_fields == []
 
     def test_empty_mapping_result(self) -> None:
         mapping = MappingResult(mappings=[], unmapped_headers=["A", "B"])
-        report = ConfidenceReport.from_mapping_result(mapping)
+        report = ConfidenceReport.from_mapping_result(
+            mapping, valid_fields=VALID_TARGET_FIELDS
+        )
         assert report.min_confidence == 0.0
         assert report.avg_confidence == 0.0
         assert len(report.missing_fields) == 6
         assert report.low_confidence_fields == []
 
     def test_default_threshold_is_0_6(self) -> None:
-        mapping = self._make_mapping([
-            ("Policy_ID", 0.59),
-        ])
-        report = ConfidenceReport.from_mapping_result(mapping)
+        mapping = self._make_mapping(
+            [
+                ("Policy_ID", 0.59),
+            ]
+        )
+        report = ConfidenceReport.from_mapping_result(
+            mapping, valid_fields=VALID_TARGET_FIELDS
+        )
         assert len(report.low_confidence_fields) == 1
