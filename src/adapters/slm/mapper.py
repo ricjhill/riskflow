@@ -1,12 +1,12 @@
 """Groq SLM adapter implementing MapperPort.
 
-Calls Groq's Llama 3.1 via the OpenAI-compatible SDK to map messy
-spreadsheet headers to the standardized reinsurance schema. The prompt
-is structured to:
-- Enumerate all 6 target fields explicitly
-- Emphasize that "GWP" usually means Gross_Premium
-- Include sample rows so the SLM can disambiguate by data shape
-- Request JSON-only output via response_format
+Calls Groq's Llama 3.3 via the OpenAI-compatible SDK to map messy
+spreadsheet headers to the target schema. The prompt is built
+dynamically from the TargetSchema:
+- Enumerates all target fields from the schema
+- Includes SLM hints (common aliases) if the schema defines them
+- Includes sample rows so the SLM can disambiguate by data shape
+- Requests JSON-only output via response_format
 """
 
 import json
@@ -14,29 +14,41 @@ import json
 import openai
 
 from src.domain.model.errors import SLMUnavailableError
-from src.domain.model.schema import VALID_TARGET_FIELDS, MappingResult
-
-SYSTEM_PROMPT = f"""You are a reinsurance data specialist. Map spreadsheet column headers \
-to the standard schema.
-
-Target schema fields: {", ".join(sorted(VALID_TARGET_FIELDS))}.
-
-Important context:
-- "GWP" typically means Gross_Premium
-- "TSI" or "Total Sum Insured" means Sum_Insured
-- "Ccy" or "Currency Code" means Currency
-- Policy identifiers may appear as "Policy No.", "Policy Number", "Certificate", etc.
-
-Respond ONLY with valid JSON matching this structure:
-{{"mappings": [{{"source_header": "...", "target_field": "...", "confidence": 0.95}}], \
-"unmapped_headers": ["..."]}}
-
-Rules:
-- target_field MUST be one of: {", ".join(sorted(VALID_TARGET_FIELDS))}
-- confidence is a float between 0.0 and 1.0
-- Headers that don't map to any target field go in unmapped_headers"""
+from src.domain.model.schema import MappingResult
+from src.domain.model.target_schema import DEFAULT_TARGET_SCHEMA, TargetSchema
 
 DEFAULT_MODEL = "llama-3.3-70b-versatile"
+
+
+def _build_system_prompt(schema: TargetSchema) -> str:
+    """Build the system prompt dynamically from the target schema."""
+    field_names = sorted(schema.field_names)
+    fields_str = ", ".join(field_names)
+
+    prompt = (
+        "You are a reinsurance data specialist. Map spreadsheet column headers "
+        "to the standard schema.\n\n"
+        f"Target schema fields: {fields_str}.\n"
+    )
+
+    if schema.slm_hints:
+        prompt += "\nKnown aliases:\n"
+        for hint in schema.slm_hints:
+            prompt += f'- "{hint.source_alias}" typically means {hint.target}\n'
+    else:
+        prompt += "\nNo known aliases for this schema.\n"
+
+    prompt += (
+        "\nRespond ONLY with valid JSON matching this structure:\n"
+        '{"mappings": [{"source_header": "...", "target_field": "...", "confidence": 0.95}], '
+        '"unmapped_headers": ["..."]}\n\n'
+        "Rules:\n"
+        f"- target_field MUST be one of: {fields_str}\n"
+        "- confidence is a float between 0.0 and 1.0\n"
+        "- Headers that don't map to any target field go in unmapped_headers"
+    )
+
+    return prompt
 
 
 class GroqMapper:
@@ -46,9 +58,12 @@ class GroqMapper:
         self,
         client: openai.AsyncOpenAI,
         model: str = DEFAULT_MODEL,
+        schema: TargetSchema | None = None,
     ) -> None:
         self._client = client
         self._model = model
+        self._schema = schema or DEFAULT_TARGET_SCHEMA
+        self._system_prompt = _build_system_prompt(self._schema)
 
     async def map_headers(
         self,
@@ -62,7 +77,7 @@ class GroqMapper:
             response = await self._client.chat.completions.create(
                 model=self._model,
                 messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "system", "content": self._system_prompt},
                     {"role": "user", "content": user_message},
                 ],
                 response_format={"type": "json_object"},
