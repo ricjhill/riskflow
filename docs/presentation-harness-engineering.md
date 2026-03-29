@@ -21,7 +21,7 @@ curl -F "file=@tests/fixtures/sample_bordereaux.csv" localhost:8000/upload | pyt
 ```
 
 - Show the response: 6 mapped fields, confidence scores, valid/invalid rows
-- "Zero lines of manual code. 148 tests. 5 security hooks. Built in one session."
+- "Zero lines of manual code. 406 tests. 5 hooks. 63 PRs. Built across three sessions."
 - "Let me show you how we got here — through questions, not code."
 
 ---
@@ -123,9 +123,9 @@ curl -F "file=@tests/fixtures/sample_bordereaux.csv" localhost:8000/upload | pyt
 
 ---
 
-## 9. The Full Harness (3 min)
+## 9. The Full Harness — Break (5 min)
 
-The complete `.claude/` directory and what each piece does:
+*Take a breather. Walk through the harness layout on screen.*
 
 ```
 .claude/
@@ -133,39 +133,33 @@ The complete `.claude/` directory and what each piece does:
     pre-commit.sh          <- mypy, pytest, ruff (blocks commit)
     post-edit-lint.sh      <- auto-format on every .py edit
     protect-files.sh       <- blocks edits to .env, uv.lock
-    check-boundaries.sh   <- blocks cross-layer imports
+    check-boundaries.sh    <- blocks cross-layer imports
     security-scan.sh       <- bandit, pip-audit, semgrep
   rules/
     reinsurance.md         <- domain rules (path-scoped to domain/ and slm/)
     testing.md             <- test quality standards (path-scoped to tests/)
     operating-principles.md <- agent-driven development philosophy
+  agents/
+    code-reviewer.md       <- reviews code + PR text accuracy before merge
+    doc-gardener.md        <- scans for stale documentation
   skills/
-    create-pr/SKILL.md    <- standardized PR template
+    create-pr/SKILL.md     <- 4-phase PR: draft, review code, verify claims, publish
+    cleanup/SKILL.md       <- garbage collection for pattern drift
+    commit/SKILL.md        <- TDD-aware commit with message standards
   settings.json            <- permissions, hook wiring
 ```
 
----
-
-## 10. By the Numbers (2 min)
-
-| Metric | Value |
-|--------|-------|
-| Questions that shaped the harness | 10 |
-| Hooks | 5 |
-| Rules | 3 |
-| Tests | 148 |
-| PRs | 15 |
-| Lines of source code | ~900 |
-| Lines of manual code | 0 |
-| Security findings | 0 |
-| Bugs caught by smoke test | 1 (model deprecation) |
-| Bugs caught by test review | 5+ (weak validation) |
+- 5 hooks (mechanical gates)
+- 3 rules (scoped instructions)
+- 2 agents (agent-to-agent review)
+- 3 skills (standardized workflows)
+- "Every piece was added because we found a gap. None were planned upfront."
 
 ---
 
 ---
 
-## 11. "How do we stop hallucinations on PRs?" (7 min)
+## 10. "How do we stop hallucinations on PRs?" (7 min)
 *Accuracy enforcement — the harness must check its own output*
 
 - PR #26 claimed "Raises 400" but the code returned 500 — a ValueError had no handler
@@ -178,7 +172,7 @@ The complete `.claude/` directory and what each piece does:
 
 ---
 
-## 12. Configurable Schema — The "Expand and Contract" Pattern (10 min)
+## 11. Configurable Schema — The "Expand and Contract" Pattern (10 min)
 *Swapping the engine while the harness keeps running*
 
 - Problem: hardcoded 6-field schema (Policy_ID, Sum_Insured, etc.) limits the tool to one shape of bordereaux data
@@ -197,7 +191,7 @@ The complete `.claude/` directory and what each piece does:
 
 ---
 
-## 13. The Feedback Loop — Correction Cache (7 min)
+## 12. The Feedback Loop — Correction Cache (7 min)
 *Human corrections improve future mappings automatically*
 
 - Problem: when the SLM maps wrong, there's no way to correct it and have the correction persist
@@ -214,7 +208,7 @@ The complete `.claude/` directory and what each piece does:
 
 ---
 
-## 14. Testing Strategy & CI/CD Pipeline (10 min)
+## 13. Testing Strategy & CI/CD Pipeline (10 min)
 *Three tiers, five CI jobs, zero manual gates*
 
 ### Three-tier test taxonomy
@@ -250,48 +244,46 @@ Merge → e2e (real Groq API)
 
 ---
 
-## 15. By the Numbers (3 min)
+## 14. By the Numbers (3 min)
 
 | Metric | Session 1 | Session 2 | Session 3 |
 |--------|-----------|-----------|-----------|
-| PRs merged | 19 | 22 | 62 |
+| PRs merged | 19 | 22 | 63 |
 | Tests | 148 | 148 | 406 |
 | Hooks | 5 | 5 | 5 |
-| Agents | 2 | 2 | 2 (reviewer checks PR text) |
-| Skills | 2 | 3 | 3 |
+| Agents | 2 | 2 | 2 (reviewer checks PR text + accuracy) |
+| Skills | 2 | 3 | 3 (create-pr now has 4 phases) |
 | CI jobs | 0 | 2 | 5 (quality, boot-test, security, e2e, CD) |
-| Source files | 25 | 25 | 34 |
-| Lines of source | ~900 | ~900 | ~2,000 |
+| Source files | 25 | 25 | 21 |
 | Manual code written | 0 | 0 | 0 |
-| Endpoints | 2 | 2 | 6 |
-| Features | Upload + health | + logging, validation | + configurable schema, correction cache, async upload, sheets, confidence report |
+| Endpoints | 2 | 2 | 7 (health, upload, upload/async, jobs, sheets, corrections, confidence) |
+| Features | Upload + health | + logging, validation | + configurable schema, correction cache, async upload, sheets, confidence report, structured errors |
 
 ---
 
-## 16. Takeaway (3 min)
+## 15. Takeaway (3 min)
 
 Harness engineering isn't about the tools — it's about asking the right questions in the right order:
 
-1. **What can be automated?** → Hooks
-2. **What instructions does the agent need?** → Pruned CLAUDE.md
-3. **Are the tests strong enough?** → Testing rules + coverage validation before every loop
+1. **What can be automated?** → Hooks (5 mechanical gates)
+2. **What instructions does the agent need?** → Pruned CLAUDE.md (78 lines, not 343)
+3. **Are the tests strong enough?** → Testing rules + coverage validation before every TDD loop
 4. **Does it actually run?** → Smoke tests, Docker boot test in CI
-5. **Is the documentation accurate?** → Code-reviewer verifies PR text against code
+5. **Is the documentation accurate?** → Code-reviewer verifies PR text against the actual diff
 6. **Can we swap the foundation safely?** → Expand and Contract with equivalence tests
 7. **Do users get feedback?** → Correction cache with confidence 1.0 overrides
-8. **How do we keep it working?** → CI/CD pipeline: 5 jobs, 406 tests, Docker image on green
+8. **How do we keep it working?** → CI/CD: 5 jobs, 406 tests, Docker image on every green merge
+9. **How do we prevent drift?** → `/cleanup` skill, doc-gardener agent, hexagonal AST linter
 
 Each question tightened the constraints. Each constraint improved the output. The agent didn't get smarter — the harness got better.
 
 **The harness is the product.** The code is a side effect.
 
----
-
-## 17. Q&A (5 min)
+**What we'd do differently:** Start with hooks and CI from commit 1. The hardest bugs to find were the ones that mattered most — model deprecation, inaccurate PR claims, cross-layer imports. All were caught by mechanical checks, not by reading code.
 
 ---
 
-## 12. Q&A (2 min remaining)
+## 16. Q&A (5 min)
 
 ---
 
