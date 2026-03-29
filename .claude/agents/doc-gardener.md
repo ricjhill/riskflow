@@ -56,6 +56,31 @@ Check each claim in CLAUDE.md against reality:
 - Does the Dockerfile CMD match the actual entrypoint module path?
 - Does docker-compose.yml reference files that exist (`.env`, etc.)?
 
+### 8. Diataxis docs vs code
+
+#### Reference docs
+- Read `docs/reference/api.md` — does every endpoint listed match `src/adapters/http/routes.py`? Check:
+  - Are all routes in `routes.py` documented? Are there documented routes that don't exist?
+  - Do query parameters match the actual function signatures?
+  - Do error codes match `_error_detail()` calls in the route handlers?
+- Read `docs/reference/schema.md` — do field types and constraints match `src/domain/model/target_schema.py`? Does the default schema table match `schemas/default.yaml`?
+- Read `docs/reference/errors.md` — does every error class in `src/domain/model/errors.py` appear? Do the HTTP status code mappings match `src/adapters/http/routes.py`?
+
+#### Explanation docs
+- Read `docs/explanation/features.md` — does the feature list match actual endpoints and capabilities? Is the acceptance testing checklist still valid (do the expected results match actual behavior)?
+- Read `docs/explanation/how-mapping-works.md` — does the pipeline description match the actual flow in `src/domain/service/mapping_service.py`?
+- Read `docs/explanation/confidence-scores.md` — does the threshold value match `DEFAULT_CONFIDENCE_THRESHOLD` in `mapping_service.py`?
+- Read `docs/explanation/corrections.md` — does the description match the actual correction flow in `mapping_service.py` and `routes.py`?
+
+#### How-to guides
+- Read each file in `docs/how-to/` — do the curl commands reference endpoints that exist? Do the query parameters match? Do the example responses match the actual response shapes?
+
+#### Tutorial
+- Read `docs/tutorials/first-upload.md` — does the sample command work? Does the example response match what `POST /upload` actually returns for `tests/fixtures/sample_bordereaux.csv`?
+
+#### Index
+- Read `docs/index.md` — do all links point to files that exist?
+
 ## Output format
 
 ```
@@ -77,6 +102,18 @@ Check each claim in CLAUDE.md against reality:
 - [STALE|FRESH] <specific finding>
 
 ### Infrastructure
+- [STALE|FRESH] <specific finding>
+
+### Diataxis: Reference
+- [STALE|FRESH] <specific finding>
+
+### Diataxis: Explanation
+- [STALE|FRESH] <specific finding>
+
+### Diataxis: How-to Guides
+- [STALE|FRESH] <specific finding>
+
+### Diataxis: Tutorial
 - [STALE|FRESH] <specific finding>
 
 ### Summary
