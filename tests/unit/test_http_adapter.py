@@ -5,7 +5,7 @@ Tests verify request handling, response shapes, and domain error → HTTP status
 """
 
 import io
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -18,7 +18,13 @@ from src.domain.model.errors import (
     SchemaValidationError,
     SLMUnavailableError,
 )
-from src.domain.model.schema import ColumnMapping, ConfidenceReport, MappingResult, ProcessingResult
+from src.domain.model.schema import (
+    ColumnMapping,
+    ConfidenceReport,
+    MappingResult,
+    ProcessingResult,
+)
+from src.domain.model.target_schema import DEFAULT_TARGET_SCHEMA
 
 from fastapi import FastAPI
 
@@ -41,7 +47,9 @@ def _make_processing_result() -> ProcessingResult:
     )
     return ProcessingResult(
         mapping=mapping,
-        confidence_report=ConfidenceReport.from_mapping_result(mapping),
+        confidence_report=ConfidenceReport.from_mapping_result(
+            mapping, valid_fields=DEFAULT_TARGET_SCHEMA.field_names
+        ),
         valid_records=[],
         invalid_records=[],
         errors=[],
@@ -133,7 +141,13 @@ class TestSheetNameParam:
 
         client.post(
             "/upload?sheet_name=Claims",
-            files={"file": ("test.xlsx", io.BytesIO(b"data"), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+            files={
+                "file": (
+                    "test.xlsx",
+                    io.BytesIO(b"data"),
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+            },
         )
 
         call_kwargs = service.process_file.call_args
@@ -164,7 +178,13 @@ class TestSheetNameErrors:
 
         response = client.post(
             "/upload?sheet_name=NoSuchSheet",
-            files={"file": ("test.xlsx", io.BytesIO(b"data"), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+            files={
+                "file": (
+                    "test.xlsx",
+                    io.BytesIO(b"data"),
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+            },
         )
 
         assert response.status_code == 400
@@ -218,9 +238,7 @@ class TestErrorMapping:
 
     def test_slm_unavailable_returns_503(self) -> None:
         service = AsyncMock()
-        service.process_file.side_effect = SLMUnavailableError(
-            "Groq API timeout"
-        )
+        service.process_file.side_effect = SLMUnavailableError("Groq API timeout")
         app = _create_test_app(service)
         client = TestClient(app)
 
@@ -270,9 +288,7 @@ class TestStructuredErrorResponses:
 
     def test_slm_unavailable_includes_structured_detail(self) -> None:
         service = AsyncMock()
-        service.process_file.side_effect = SLMUnavailableError(
-            "Groq API timeout"
-        )
+        service.process_file.side_effect = SLMUnavailableError("Groq API timeout")
         app = _create_test_app(service)
         client = TestClient(app)
 
@@ -312,7 +328,9 @@ class TestStructuredErrorResponses:
 
     def test_unexpected_error_does_not_leak_internals(self) -> None:
         service = AsyncMock()
-        service.process_file.side_effect = RuntimeError("database connection string: postgres://...")
+        service.process_file.side_effect = RuntimeError(
+            "database connection string: postgres://..."
+        )
         app = _create_test_app(service)
         client = TestClient(app)
 
@@ -329,13 +347,21 @@ class TestSheetsEndpoint:
 
     def test_returns_sheet_names_for_xlsx(self) -> None:
         service = AsyncMock()
-        service.get_sheet_names = MagicMock(return_value=["Policies", "Claims", "Summary"])
+        service.get_sheet_names = MagicMock(
+            return_value=["Policies", "Claims", "Summary"]
+        )
         app = _create_test_app(service)
         client = TestClient(app)
 
         response = client.post(
             "/sheets",
-            files={"file": ("workbook.xlsx", io.BytesIO(b"data"), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+            files={
+                "file": (
+                    "workbook.xlsx",
+                    io.BytesIO(b"data"),
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+            },
         )
 
         assert response.status_code == 200
@@ -382,7 +408,13 @@ class TestFileValidation:
 
         response = client.post(
             "/upload",
-            files={"file": (filename, io.BytesIO(b"some content"), "application/octet-stream")},
+            files={
+                "file": (
+                    filename,
+                    io.BytesIO(b"some content"),
+                    "application/octet-stream",
+                )
+            },
         )
 
         assert response.status_code == 400
@@ -397,7 +429,9 @@ class TestFileValidation:
 
         response = client.post(
             "/upload",
-            files={"file": (filename, io.BytesIO(b"ID\n1\n"), "application/octet-stream")},
+            files={
+                "file": (filename, io.BytesIO(b"ID\n1\n"), "application/octet-stream")
+            },
         )
 
         assert response.status_code == 200

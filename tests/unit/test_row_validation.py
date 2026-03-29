@@ -19,9 +19,9 @@ from src.domain.model.schema import (
     ConfidenceReport,
     MappingResult,
     ProcessingResult,
-    RiskRecord,
     RowError,
 )
+from src.domain.model.target_schema import DEFAULT_TARGET_SCHEMA  # noqa: F401
 from src.domain.service.mapping_service import MappingService
 
 
@@ -39,12 +39,24 @@ def _full_mapping() -> MappingResult:
     """A mapping that covers all 6 target fields."""
     return MappingResult(
         mappings=[
-            ColumnMapping(source_header="Policy No.", target_field="Policy_ID", confidence=0.95),
-            ColumnMapping(source_header="Start", target_field="Inception_Date", confidence=0.95),
-            ColumnMapping(source_header="End", target_field="Expiry_Date", confidence=0.95),
-            ColumnMapping(source_header="TSI", target_field="Sum_Insured", confidence=0.95),
-            ColumnMapping(source_header="GWP", target_field="Gross_Premium", confidence=0.95),
-            ColumnMapping(source_header="Ccy", target_field="Currency", confidence=0.95),
+            ColumnMapping(
+                source_header="Policy No.", target_field="Policy_ID", confidence=0.95
+            ),
+            ColumnMapping(
+                source_header="Start", target_field="Inception_Date", confidence=0.95
+            ),
+            ColumnMapping(
+                source_header="End", target_field="Expiry_Date", confidence=0.95
+            ),
+            ColumnMapping(
+                source_header="TSI", target_field="Sum_Insured", confidence=0.95
+            ),
+            ColumnMapping(
+                source_header="GWP", target_field="Gross_Premium", confidence=0.95
+            ),
+            ColumnMapping(
+                source_header="Ccy", target_field="Currency", confidence=0.95
+            ),
         ],
         unmapped_headers=[],
     )
@@ -55,7 +67,9 @@ class TestProcessingResult:
         mapping = _full_mapping()
         result = ProcessingResult(
             mapping=mapping,
-            confidence_report=ConfidenceReport.from_mapping_result(mapping),
+            confidence_report=ConfidenceReport.from_mapping_result(
+                mapping, valid_fields=DEFAULT_TARGET_SCHEMA.field_names
+            ),
             valid_records=[
                 {
                     "Policy_ID": "P001",

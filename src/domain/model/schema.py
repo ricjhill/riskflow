@@ -5,17 +5,6 @@ from typing import Literal
 
 from pydantic import BaseModel, field_validator, model_validator
 
-VALID_CURRENCIES: set[str] = {"USD", "GBP", "EUR", "JPY"}
-
-VALID_TARGET_FIELDS: set[str] = {
-    "Policy_ID",
-    "Inception_Date",
-    "Expiry_Date",
-    "Sum_Insured",
-    "Gross_Premium",
-    "Currency",
-}
-
 
 class RiskRecord(BaseModel):
     """A single validated reinsurance risk record."""
@@ -136,7 +125,10 @@ class ConfidenceReport(BaseModel):
         threshold: float = DEFAULT_CONFIDENCE_REVIEW_THRESHOLD,
         valid_fields: set[str] | None = None,
     ) -> "ConfidenceReport":
-        all_fields = valid_fields if valid_fields is not None else VALID_TARGET_FIELDS
+        if valid_fields is None:
+            msg = "valid_fields is required — pass schema.field_names"
+            raise ValueError(msg)
+        all_fields = valid_fields
 
         if not result.mappings:
             return cls(
