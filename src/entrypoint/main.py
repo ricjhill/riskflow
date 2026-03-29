@@ -105,7 +105,6 @@ def create_app() -> FastAPI:
     cache = _create_cache(redis_client)
     correction_cache = _create_correction_cache(redis_client)
     groq_client = _create_groq_client()
-    mapper = GroqMapper(client=groq_client)
 
     logger.info(
         "app_configured",
@@ -115,8 +114,11 @@ def create_app() -> FastAPI:
     )
 
     # --- Build a MappingService per schema ---
+    # Each schema gets its own GroqMapper so the SLM prompt is
+    # tailored to that schema's fields and hints.
     schema_registry: dict[str, MappingService] = {}
     for name, schema in schemas.items():
+        mapper = GroqMapper(client=groq_client, schema=schema)
         schema_registry[name] = MappingService(
             ingestor=ingestor,
             mapper=mapper,
