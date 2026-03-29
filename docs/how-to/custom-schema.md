@@ -6,13 +6,13 @@ Define a custom target schema for bordereaux that don't fit the default 6-field 
 
 ## When to use this
 
-The default schema maps to: Policy_ID, Inception_Date, Expiry_Date, Sum_Insured, Gross_Premium, Currency. If your bordereaux needs different fields (e.g., marine cargo with Vessel_Name and Voyage_Date), create a custom schema.
+The default schema maps to: Policy_ID, Inception_Date, Expiry_Date, Sum_Insured, Gross_Premium, Currency. If your bordereaux needs different fields (e.g., marine cargo with Vessel_Name, Voyage_Date, Cargo_Value, Port_Of_Loading, etc.), create a custom schema. RiskFlow ships with a `marine_cargo.yaml` example alongside the default.
 
 ## Steps
 
 ### 1. Create a YAML schema file
 
-Create a new file in the `schemas/` directory:
+Create a new file in the `schemas/` directory. Here's the `marine_cargo.yaml` schema that ships with RiskFlow as an example:
 
 ```yaml
 # schemas/marine_cargo.yaml
@@ -25,22 +25,53 @@ fields:
   Voyage_Date:
     type: date
     required: true
+  Arrival_Date:
+    type: date
+    required: true
   Cargo_Value:
+    type: float
+    required: true
+    non_negative: true
+  Premium:
     type: float
     required: true
     non_negative: true
   Currency:
     type: currency
     required: true
-    allowed_values: [USD, GBP, EUR]
+    allowed_values: [USD, GBP, EUR, JPY, SGD, HKD]
+  Port_Of_Loading:
+    type: string
+    required: true
+    not_empty: true
+  Port_Of_Discharge:
+    type: string
+    required: false
+cross_field_rules:
+  - earlier: Voyage_Date
+    later: Arrival_Date
 slm_hints:
   - source_alias: Ship
     target: Vessel_Name
+  - source_alias: Vessel
+    target: Vessel_Name
   - source_alias: Departure
     target: Voyage_Date
-  - source_alias: Value
+  - source_alias: ETA
+    target: Arrival_Date
+  - source_alias: Cargo Value
     target: Cargo_Value
+  - source_alias: GWP
+    target: Premium
+  - source_alias: Ccy
+    target: Currency
+  - source_alias: Loading Port
+    target: Port_Of_Loading
+  - source_alias: Destination
+    target: Port_Of_Discharge
 ```
+
+This schema has 8 fields (including one optional: Port_Of_Discharge), a cross-field date ordering rule, extended currencies (SGD, HKD for Asia-Pacific marine), and 9 SLM hints covering shipping terminology.
 
 ### 2. Restart the application
 

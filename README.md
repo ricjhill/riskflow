@@ -63,6 +63,7 @@ Hexagonal (Ports & Adapters). Dependencies only point inward.
 graph LR
     subgraph External
         Client([Client])
+        GUI([Streamlit GUI<br>port 8501])
         Excel[(Excel/CSV)]
         Groq([Groq API])
         Redis[(Redis)]
@@ -94,6 +95,7 @@ graph LR
         Errors[Domain Errors]
     end
 
+    GUI -->|HTTP| HTTP
     Client -->|POST /upload| HTTP
     Client -->|POST /corrections| HTTP
     Client -->|POST /upload/async| HTTP

@@ -1,7 +1,7 @@
 # RiskFlow: Reinsurance Data Mapper — Agent Instructions
 
 ## Project Context
-A DevOps-oriented tool to automate the mapping of messy reinsurance spreadsheets (Bordereaux) to a standardized schema using SLMs (Groq/Llama 3.1).
+A DevOps-oriented tool to automate the mapping of messy reinsurance spreadsheets (Bordereaux) to a standardized schema using SLMs (Groq/Llama 3.3).
 
 ## Stack
 Python 3.12, FastAPI, Polars, Redis, Groq API, `uv` for dependency management
@@ -35,6 +35,11 @@ tests/
   fixtures/          # Sample bordereaux CSV for tests
 schemas/
   default.yaml       # Default 6-field reinsurance target schema
+  marine_cargo.yaml  # 8-field marine cargo schema (demo + testing)
+gui/
+  app.py             # Streamlit dashboard (3 tabs: mapping, debugger, corrections)
+  api_client.py      # Thin httpx wrapper — GUI talks to API via HTTP, not imports
+  Dockerfile         # Separate image with dev deps (includes streamlit)
 ```
 
 ---
@@ -57,7 +62,7 @@ See `.claude/rules/reinsurance.md` — loads automatically when editing `src/dom
 - Logger: `structlog` only — no stdlib `logging` or `loguru`. Pass via dependency injection.
 - Define domain exceptions in `src/domain/model/errors.py`. Adapters map them to HTTP responses.
 - Never leak infrastructure exceptions into the domain layer.
-- Load environment variables only in `src/entrypoint/main.py` using `os.environ` (fail fast, no defaults).
+- Load environment variables only in `src/entrypoint/main.py` using `os.environ`. Required vars (like `GROQ_API_KEY`) should fail on first use; optional vars (`REDIS_URL`, `SCHEMA_PATH`, `DEFAULT_SCHEMA`) use sensible defaults.
 
 ---
 
@@ -83,4 +88,6 @@ See `.claude/rules/reinsurance.md` — loads automatically when editing `src/dom
 ## Infrastructure (Docker Compose)
 - **API:** Runs on port `8000`.
 - **Redis:** Runs on port `6379`.
+- **GUI:** Runs on port `8501` (Streamlit dashboard).
+- Start everything: `docker compose up -d`
 - Environment variables (`GROQ_API_KEY`) are loaded only in `src/entrypoint/main.py`.

@@ -187,10 +187,10 @@ Submit human-verified mapping corrections for a cedent.
 
 **Errors:**
 
-| Status | Cause |
-|--------|-------|
-| 400 | Empty cedent_id or empty corrections list |
-| 422 | target_field not in the active schema |
+| Status | Error Code | Cause |
+|--------|-----------|-------|
+| 400 | *(plain text)* | Empty cedent_id or empty corrections list |
+| 422 | INVALID_CORRECTION | target_field not in the active schema |
 
 ---
 
