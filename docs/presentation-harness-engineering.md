@@ -21,7 +21,7 @@ curl -F "file=@tests/fixtures/sample_bordereaux.csv" localhost:8000/upload | pyt
 ```
 
 - Show the response: 6 mapped fields, confidence scores, valid/invalid rows
-- "Zero lines of manual code. 406 tests. 5 hooks. 63 PRs. Built across three sessions."
+- "Zero lines of manual code. 461 tests. 5 hooks. 73 PRs. Built across three sessions."
 - "Let me show you how we got here — through questions, not code."
 
 ---
@@ -145,14 +145,13 @@ curl -F "file=@tests/fixtures/sample_bordereaux.csv" localhost:8000/upload | pyt
   skills/
     create-pr/SKILL.md     <- 4-phase PR: draft, review code, verify claims, publish
     cleanup/SKILL.md       <- garbage collection for pattern drift
-    commit/SKILL.md        <- TDD-aware commit with message standards
   settings.json            <- permissions, hook wiring
 ```
 
 - 5 hooks (mechanical gates)
 - 3 rules (scoped instructions)
 - 2 agents (agent-to-agent review)
-- 3 skills (standardized workflows)
+- 2 skills (standardized workflows)
 - "Every piece was added because we found a gap. None were planned upfront."
 
 ---
@@ -214,7 +213,7 @@ curl -F "file=@tests/fixtures/sample_bordereaux.csv" localhost:8000/upload | pyt
 ### Three-tier test taxonomy
 | Tier | Count | What | External deps | When |
 |------|-------|------|---------------|------|
-| Unit | 376 | Isolated components, all mocked | None | Every PR |
+| Unit | 431 | Isolated components, all mocked | None | Every PR |
 | Integration | 25 | Full pipeline, SLM mocked | None | Every PR |
 | E2E | 5 | Real Groq API, nothing mocked | GROQ_API_KEY | Push to main only |
 
@@ -248,16 +247,16 @@ Merge → e2e (real Groq API)
 
 | Metric | Session 1 | Session 2 | Session 3 |
 |--------|-----------|-----------|-----------|
-| PRs merged | 19 | 22 | 63 |
-| Tests | 148 | 148 | 406 |
+| PRs merged | 19 | 22 | 73 |
+| Tests | 148 | 148 | 461 |
 | Hooks | 5 | 5 | 5 |
 | Agents | 2 | 2 | 2 (reviewer checks PR text + accuracy) |
-| Skills | 2 | 3 | 3 (create-pr now has 4 phases) |
+| Skills | 2 | 3 | 2 (create-pr has 4 phases, cleanup) |
 | CI jobs | 0 | 2 | 5 (quality, boot-test, security, e2e, CD) |
 | Source files | 25 | 25 | 21 |
 | Manual code written | 0 | 0 | 0 |
-| Endpoints | 2 | 2 | 7 (health, upload, upload/async, jobs, sheets, corrections, confidence) |
-| Features | Upload + health | + logging, validation | + configurable schema, correction cache, async upload, sheets, confidence report, structured errors |
+| Endpoints | 2 | 2 | 8 (health, upload, upload/async, jobs, sheets, corrections, schemas) |
+| Features | Upload + health | + logging, validation | + configurable schema, correction cache, async upload, sheets, confidence report, structured errors, schema selection |
 
 ---
 
@@ -272,7 +271,7 @@ Harness engineering isn't about the tools — it's about asking the right questi
 5. **Is the documentation accurate?** → Code-reviewer verifies PR text against the actual diff
 6. **Can we swap the foundation safely?** → Expand and Contract with equivalence tests
 7. **Do users get feedback?** → Correction cache with confidence 1.0 overrides
-8. **How do we keep it working?** → CI/CD: 5 jobs, 406 tests, Docker image on every green merge
+8. **How do we keep it working?** → CI/CD: 5 jobs, 461 tests, Docker image on every green merge
 9. **How do we prevent drift?** → `/cleanup` skill, doc-gardener agent, hexagonal AST linter
 
 Each question tightened the constraints. Each constraint improved the output. The agent didn't get smarter — the harness got better.

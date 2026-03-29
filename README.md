@@ -113,11 +113,12 @@ graph LR
 **Data flow:** Upload → Parse headers → Check cache → (miss?) Check corrections → SLM maps uncorrected headers → Merge → Validate rows → Return results with confidence report
 
 **Endpoints:**
-- `POST /upload` — synchronous upload with optional `?sheet_name` and `?cedent_id`
+- `POST /upload` — synchronous upload with optional `?sheet_name`, `?cedent_id`, and `?schema`
 - `POST /upload/async` — async upload, returns job ID for polling
 - `GET /jobs/{id}` — poll async job status and result
 - `POST /sheets` — list sheet names in an Excel file
 - `POST /corrections` — submit human-verified mapping corrections
+- `GET /schemas` — list available target schemas
 - `GET /health` — health check
 
 ```

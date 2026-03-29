@@ -6,11 +6,11 @@ RiskFlow uses a three-tier testing strategy aligned with the hexagonal architect
 
 | Tier | Marker | Count | What it tests | External deps | When it runs |
 |------|--------|-------|---------------|---------------|-------------|
-| Unit | `@pytest.mark.unit` | 376 | Isolated components with all deps mocked | None | Every PR, every push to main |
+| Unit | `@pytest.mark.unit` | 431 | Isolated components with all deps mocked | None | Every PR, every push to main |
 | Integration | `@pytest.mark.integration` | 25 | Full pipeline through TestClient, SLM mocked | None | Every PR, every push to main |
 | E2E | `@pytest.mark.e2e` | 5 | Real Groq API, real parsing, nothing mocked | Groq API | Push to main only |
 
-**Total: 406 tests**
+**Total: 461 tests**
 
 ---
 
@@ -46,6 +46,13 @@ Verify individual components in isolation. Every dependency is mocked. A unit te
 | Infrastructure | `test_imports.py` | All packages importable |
 | Infrastructure | `test_logging.py` | structlog JSON output |
 | Infrastructure | `test_hexagonal_linter.py` | AST linter: boundary violations, allowed imports, error messages |
+| Row validation | `test_row_validation.py` | ProcessingResult with valid/invalid rows, RowError |
+| Schema wiring | `test_schema_wiring.py` | Composition root loads schema from YAML, SCHEMA_PATH env var, error paths |
+| Schema selection | `test_schema_selection.py` | ?schema= query param, GET /schemas, path traversal rejection |
+| Cache keys | `test_cache_key_fingerprint.py` | Schema fingerprint in cache key, different schemas = different keys |
+| SLM prompt | `test_schema_aware_prompt.py` | Dynamic prompt from schema fields and hints, no hardcoded leakage |
+| Equivalence | `test_equivalence.py` | Dynamic model matches RiskRecord for all valid/invalid inputs |
+| Shadow deployment | `test_shadow_deployment.py` | Full pipeline: CSV → both models → byte-identical JSON output |
 
 ### Test quality rules
 
