@@ -209,12 +209,15 @@ class MappingService:
         )
 
     def _build_cache_key(self, headers: list[str]) -> str:
-        """SHA-256 of sorted, lowercased, stripped headers.
+        """SHA-256 of sorted headers combined with schema fingerprint.
 
-        Deterministic: same headers in any order produce the same key.
+        Deterministic: same headers in any order + same schema produce the
+        same key. Different schemas produce different keys even with identical
+        headers, preventing stale cached mappings when the schema changes.
         """
         normalized = "|".join(sorted(h.lower().strip() for h in headers))
-        return hashlib.sha256(normalized.encode()).hexdigest()
+        key_input = f"{self._schema.fingerprint}:{normalized}"
+        return hashlib.sha256(key_input.encode()).hexdigest()
 
     def _check_confidence(self, result: MappingResult) -> None:
         """Raise if any mapping falls below the confidence threshold."""

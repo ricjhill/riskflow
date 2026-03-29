@@ -52,9 +52,12 @@ def _write_csv(path: Path) -> str:
     return file_path
 
 
-def _cache_key_for(headers: list[str]) -> str:
+def _cache_key_for(
+    headers: list[str], schema: TargetSchema = DEFAULT_TARGET_SCHEMA
+) -> str:
     normalized = "|".join(sorted(h.lower().strip() for h in headers))
-    return hashlib.sha256(normalized.encode()).hexdigest()
+    key_input = f"{schema.fingerprint}:{normalized}"
+    return hashlib.sha256(key_input.encode()).hexdigest()
 
 
 @pytest.fixture
