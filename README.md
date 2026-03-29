@@ -18,6 +18,21 @@ Automates the mapping of messy reinsurance spreadsheets (Bordereaux) to a standa
 
 ## Getting Started
 
+### One command (Docker — recommended)
+
+```bash
+# Copy environment template and add your Groq API key
+cp .env.example .env
+# Edit .env and set GROQ_API_KEY=gsk_your_key_here
+
+# Start everything: API + Redis + GUI
+docker compose up -d
+```
+
+Open http://localhost:8501 for the GUI, or http://localhost:8000/docs for the API.
+
+### Local development (without Docker)
+
 ```bash
 # Install dependencies
 uv sync
@@ -25,11 +40,14 @@ uv sync
 # Copy environment template and add your Groq API key
 cp .env.example .env
 
-# Start Redis
+# Start Redis (still needs Docker)
 docker compose up -d redis
 
 # Run the API
 uv run uvicorn src.entrypoint.main:app --reload --port 8000
+
+# Run the GUI (in a separate terminal)
+uv run streamlit run gui/app.py
 ```
 
 ## Development

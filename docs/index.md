@@ -23,7 +23,8 @@ Start here if you're new to RiskFlow.
 
 Step-by-step instructions for common tasks.
 
-- [Upload and Map a Spreadsheet](how-to/upload-and-map.md) — Map headers to the target schema
+- [Use the GUI Dashboard](how-to/use-the-gui.md) — Upload, inspect, and correct via the Streamlit dashboard
+- [Upload and Map a Spreadsheet](how-to/upload-and-map.md) — Map headers to the target schema via the API
 - [Handle Multi-Sheet Excel Files](how-to/multi-sheet-excel.md) — Pick which sheet to process
 - [Correct a Wrong Mapping](how-to/correct-mappings.md) — Override the AI when it gets a mapping wrong
 - [Process Large Files Asynchronously](how-to/async-upload.md) — Upload without waiting for results
