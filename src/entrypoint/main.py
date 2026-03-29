@@ -34,6 +34,7 @@ from src.domain.service.mapping_service import MappingService
 from src.ports.output.correction_cache import CorrectionCachePort
 from src.ports.output.repo import CachePort
 
+SCHEMAS_DIR = "schemas"
 DEFAULT_SCHEMA_FILE = "schemas/default.yaml"
 
 
@@ -83,13 +84,19 @@ def create_app() -> FastAPI:
 
     app = FastAPI(title="RiskFlow API")
 
-    # --- Schema ---
-    schema = _load_schema()
-    logger.info(
-        "schema_loaded",
-        schema_name=schema.name,
-        schema_fingerprint=schema.fingerprint,
-        field_count=len(schema.fields),
+    # --- Schemas ---
+    schemas = _load_all_schemas()
+    for name, schema in schemas.items():
+        logger.info(
+            "schema_loaded",
+            schema_name=name,
+            schema_fingerprint=schema.fingerprint,
+            field_count=len(schema.fields),
+        )
+
+    default_schema = schemas.get(
+        os.environ.get("DEFAULT_SCHEMA", "standard_reinsurance"),
+        next(iter(schemas.values())),
     )
 
     # --- Adapters ---
@@ -104,22 +111,33 @@ def create_app() -> FastAPI:
         "app_configured",
         cache_type=type(cache).__name__,
         correction_cache_type=type(correction_cache).__name__,
+        schema_count=len(schemas),
     )
 
-    # --- Domain service ---
-    mapping_service = MappingService(
-        ingestor=ingestor,
-        mapper=mapper,
-        cache=cache,
-        schema=schema,
-        correction_cache=correction_cache,
+    # --- Build a MappingService per schema ---
+    schema_registry: dict[str, MappingService] = {}
+    for name, schema in schemas.items():
+        schema_registry[name] = MappingService(
+            ingestor=ingestor,
+            mapper=mapper,
+            cache=cache,
+            schema=schema,
+            correction_cache=correction_cache,
+        )
+
+    # Default service for requests without ?schema=
+    mapping_service = schema_registry.get(
+        default_schema.name,
+        next(iter(schema_registry.values())),
     )
 
     # --- Job store for async uploads ---
     job_store = InMemoryJobStore()
 
     # --- Routes ---
-    router = create_router(mapping_service, job_store=job_store)
+    router = create_router(
+        mapping_service, job_store=job_store, schema_registry=schema_registry
+    )
     app.include_router(router)
 
     @app.get("/health")
@@ -140,6 +158,39 @@ def _load_schema() -> TargetSchema:
     schema_path = os.environ.get("SCHEMA_PATH", DEFAULT_SCHEMA_FILE)
     loader = YamlSchemaLoader()
     return loader.load(schema_path)
+
+
+def _load_all_schemas() -> dict[str, TargetSchema]:
+    """Load all YAML schemas from the schemas/ directory.
+
+    If SCHEMA_PATH is set, loads only that single schema.
+    Otherwise scans schemas/ for all .yaml files and loads each.
+    Returns a dict keyed by schema name.
+    """
+    loader = YamlSchemaLoader()
+
+    schema_path = os.environ.get("SCHEMA_PATH")
+    if schema_path:
+        schema = loader.load(schema_path)
+        return {schema.name: schema}
+
+    from pathlib import Path
+
+    schemas_dir = Path(SCHEMAS_DIR)
+    if not schemas_dir.exists():
+        schema = loader.load(DEFAULT_SCHEMA_FILE)
+        return {schema.name: schema}
+
+    schemas: dict[str, TargetSchema] = {}
+    for yaml_file in sorted(schemas_dir.glob("*.yaml")):
+        schema = loader.load(str(yaml_file))
+        schemas[schema.name] = schema
+
+    if not schemas:
+        schema = loader.load(DEFAULT_SCHEMA_FILE)
+        return {schema.name: schema}
+
+    return schemas
 
 
 def _create_redis_client() -> Any:
