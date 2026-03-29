@@ -31,7 +31,7 @@ Check each claim in CLAUDE.md against reality:
 
 - Do the "Getting Started" commands reference files that exist? (`cp .env.example .env` — does `.env.example` exist?)
 - Does the architecture diagram list the same components as the actual code?
-- Does the target schema table match `VALID_TARGET_FIELDS` in `src/domain/model/schema.py`?
+- Does the target schema table match the fields in `schemas/default.yaml` and `src/domain/model/target_schema.py:DEFAULT_TARGET_SCHEMA`?
 - Does the TDD Cycle section match what CLAUDE.md says?
 
 ### 4. .env.example vs actual env var usage
