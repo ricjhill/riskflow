@@ -13,6 +13,7 @@ Error mapping:
 """
 
 import os
+import re
 import tempfile
 import time
 
@@ -54,17 +55,59 @@ class CorrectionRequest(BaseModel):
     corrections: list[CorrectionItem]
 
 
+_SCHEMA_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
+
+
+def _validate_schema_name(name: str) -> None:
+    """Reject schema names that contain path traversal or invalid characters."""
+    if not _SCHEMA_NAME_PATTERN.match(name):
+        raise HTTPException(
+            status_code=400,
+            detail=_error_detail(
+                "INVALID_SCHEMA_NAME",
+                f"Invalid schema name '{name}'. Only alphanumeric, hyphens, and underscores allowed.",
+                "Use a valid schema name from GET /schemas.",
+            ),
+        )
+
+
 def create_router(
     mapping_service: MappingService,
     job_store: JobStorePort | None = None,
+    schema_registry: dict[str, MappingService] | None = None,
 ) -> APIRouter:
     """Create a FastAPI router wired to the given MappingService.
 
     The service is injected — the router never constructs adapters itself.
     This keeps the HTTP adapter decoupled from concrete implementations.
     job_store is optional — async endpoints are only available when provided.
+    schema_registry maps schema names to MappingService instances. When
+    ?schema= is provided, the named service is used instead of the default.
     """
     router = APIRouter()
+    _registry = schema_registry or {}
+
+    def _resolve_service(schema_name: str | None) -> MappingService:
+        """Resolve which MappingService to use based on ?schema= param."""
+        if not schema_name or not schema_name.strip():
+            return mapping_service
+        _validate_schema_name(schema_name)
+        service = _registry.get(schema_name)
+        if service is None:
+            raise HTTPException(
+                status_code=404,
+                detail=_error_detail(
+                    "SCHEMA_NOT_FOUND",
+                    f"Schema '{schema_name}' not found. Available: {sorted(_registry.keys())}",
+                    "Use GET /schemas to list available schemas.",
+                ),
+            )
+        return service
+
+    @router.get("/schemas")
+    async def list_schemas() -> dict:
+        """List all available schema names."""
+        return {"schemas": sorted(_registry.keys())}
 
     @router.post("/upload")
     async def upload_file(
@@ -75,16 +118,25 @@ def create_router(
         cedent_id: str | None = Query(
             default=None, description="Cedent ID for correction cache lookup"
         ),
+        schema: str | None = Query(
+            default=None, description="Schema name to use (from GET /schemas)"
+        ),
     ) -> dict:
         """Upload a spreadsheet and map its headers to the target schema."""
         _validate_file(file)
+        active_service = _resolve_service(schema)
 
-        logger.info("file_received", filename=file.filename, sheet_name=sheet_name)
+        logger.info(
+            "file_received",
+            filename=file.filename,
+            sheet_name=sheet_name,
+            schema=schema,
+        )
         start = time.monotonic()
 
         temp_path = _save_temp_file(file)
         try:
-            result = await mapping_service.process_file(
+            result = await active_service.process_file(
                 temp_path, sheet_name=sheet_name, cedent_id=cedent_id
             )
             duration_ms = int((time.monotonic() - start) * 1000)
