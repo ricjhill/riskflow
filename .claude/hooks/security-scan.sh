@@ -3,7 +3,7 @@
 # bandit: static analysis for Python security issues
 # pip-audit: dependency vulnerability scanning
 # semgrep: pattern-based security scanning (OWASP, FastAPI rules)
-COMMAND=$(jq -r '.tool_input.command' 2>/dev/null)
+COMMAND=$(/usr/bin/python3 -c "import json,sys; print(json.load(sys.stdin).get('tool_input',{}).get('command',''))" 2>/dev/null)
 
 # Only run on git commit
 if ! echo "$COMMAND" | grep -q 'git commit'; then

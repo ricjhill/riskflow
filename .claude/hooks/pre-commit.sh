@@ -1,6 +1,6 @@
 #!/bin/bash
 # Block git commit unless mypy, pytest, and ruff all pass
-COMMAND=$(jq -r '.tool_input.command' 2>/dev/null)
+COMMAND=$(/usr/bin/python3 -c "import json,sys; print(json.load(sys.stdin).get('tool_input',{}).get('command',''))" 2>/dev/null)
 
 # Only intercept git commit commands
 if ! echo "$COMMAND" | grep -q 'git commit'; then
