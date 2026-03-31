@@ -102,11 +102,86 @@ jobs:
           echo "Waiting for app to start..."
           sleep 5
 
-      - name: Health check
+      - name: Functional smoke tests
         if: steps.changes.outputs.app == 'true'
         run: |
-          curl --fail --retry 5 --retry-delay 2 --retry-all-errors http://localhost:8000/health
-          echo "Boot test passed: /health returned 200"
+          BASE=http://localhost:8000
+
+          # 1. Health — also serves as readiness check with retries
+          curl --fail --retry 5 --retry-delay 2 --retry-all-errors $BASE/health
+          echo "PASS: GET /health"
+
+          # 2. Schemas — verify both schemas loaded from YAML
+          SCHEMAS=$(curl -sf $BASE/schemas)
+          echo "$SCHEMAS" | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          schemas = data['schemas']
+          assert 'standard_reinsurance' in schemas, f'Missing standard_reinsurance: {schemas}'
+          assert 'marine_cargo' in schemas, f'Missing marine_cargo: {schemas}'
+          print(f'PASS: GET /schemas — {len(schemas)} schemas loaded')
+          "
+
+          # 3. Upload CSV — expect 503 (SLM unavailable with dummy key)
+          UPLOAD=$(curl -s -o /dev/null -w '%{http_code}' \
+            -F "file=@tests/fixtures/sample_bordereaux.csv" $BASE/upload)
+          if [ "$UPLOAD" = "503" ]; then
+            echo "PASS: POST /upload — 503 (SLM unavailable, expected with dummy key)"
+          elif [ "$UPLOAD" = "200" ]; then
+            echo "PASS: POST /upload — 200 (unexpected but valid)"
+          else
+            echo "FAIL: POST /upload — got $UPLOAD, expected 503 or 200"
+            exit 1
+          fi
+
+          # 4. Upload with schema param — proves schema registry + routing
+          UPLOAD_SCHEMA=$(curl -s -o /dev/null -w '%{http_code}' \
+            -F "file=@tests/fixtures/sample_marine_cargo.csv" "$BASE/upload?schema=marine_cargo")
+          if [ "$UPLOAD_SCHEMA" = "503" ] || [ "$UPLOAD_SCHEMA" = "200" ]; then
+            echo "PASS: POST /upload?schema=marine_cargo — $UPLOAD_SCHEMA"
+          else
+            echo "FAIL: POST /upload?schema=marine_cargo — got $UPLOAD_SCHEMA"
+            exit 1
+          fi
+
+          # 5. Sheets endpoint — CSV returns empty sheets list
+          SHEETS=$(curl -s -o /dev/null -w '%{http_code}' \
+            -F "file=@tests/fixtures/sample_bordereaux.csv" $BASE/sheets)
+          [ "$SHEETS" = "200" ] && echo "PASS: POST /sheets — 200" || { echo "FAIL: POST /sheets — $SHEETS"; exit 1; }
+
+          # 6. Async upload — expect 202 then job completes or fails
+          ASYNC=$(curl -sf -F "file=@tests/fixtures/sample_bordereaux.csv" $BASE/upload/async)
+          JOB_ID=$(echo "$ASYNC" | python3 -c "import json,sys; print(json.load(sys.stdin)['job_id'])")
+          echo "PASS: POST /upload/async — 202, job_id=$JOB_ID"
+
+          # Poll job status (should reach terminal state within 10s)
+          for i in $(seq 1 20); do
+            JOB=$(curl -sf "$BASE/jobs/$JOB_ID")
+            STATUS=$(echo "$JOB" | python3 -c "import json,sys; print(json.load(sys.stdin)['status'])")
+            if [ "$STATUS" != "pending" ] && [ "$STATUS" != "processing" ]; then
+              echo "PASS: GET /jobs/$JOB_ID — status=$STATUS"
+              break
+            fi
+            sleep 0.5
+          done
+          if [ "$STATUS" = "pending" ] || [ "$STATUS" = "processing" ]; then
+            echo "FAIL: GET /jobs/$JOB_ID — timed out waiting for terminal state (last=$STATUS)"
+            exit 1
+          fi
+
+          # 7. Corrections — store a human-verified mapping
+          CORR=$(curl -s -o /dev/null -w '%{http_code}' \
+            -X POST -H "Content-Type: application/json" \
+            -d '{"cedent_id":"boot-test","corrections":[{"source_header":"GWP","target_field":"Gross_Premium"}]}' \
+            $BASE/corrections)
+          [ "$CORR" = "201" ] && echo "PASS: POST /corrections — 201" || { echo "FAIL: POST /corrections — $CORR"; exit 1; }
+
+          # 8. File validation — bad file type should return 400
+          BAD=$(curl -s -o /dev/null -w '%{http_code}' \
+            -F "file=@README.md;type=text/plain;filename=bad.txt" $BASE/upload)
+          [ "$BAD" = "400" ] && echo "PASS: POST /upload bad file — 400" || { echo "FAIL: POST /upload bad file — $BAD"; exit 1; }
+
+          echo "All functional smoke tests passed."
 
       - name: Tear down
         if: steps.changes.outputs.app == 'true' && always()
