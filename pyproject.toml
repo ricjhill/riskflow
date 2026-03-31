@@ -21,13 +21,17 @@ dependencies = [
 dev = [
     "bandit>=1.9.4",
     "httpx>=0.28.1",
+    "locust>=2.43.3",
     "mypy>=1.19.1",
     "pip-audit>=2.10.0",
     "pytest>=9.0.2",
     "pytest-asyncio>=1.3.0",
+    "pytest-benchmark>=5.2.3",
     "pytest-mock>=3.15.1",
+    "pytest-xdist>=3.8.0",
     "ruff>=0.15.7",
     "streamlit>=1.55.0",
+    "testcontainers>=4.14.2",
     "types-openpyxl>=3.1.5.20260322",
     "types-pyyaml>=6.0.12.20250915",
 ]
@@ -38,4 +42,20 @@ markers = [
     "unit: isolated component tests, all dependencies mocked.",
     "integration: full pipeline tests with mocked SLM. Proves components connect.",
     "e2e: real external APIs, real data, nothing mocked. Requires GROQ_API_KEY.",
+    "benchmark: performance benchmarks for hot-path functions.",
+    "perf_guardrail: performance regression guardrail tests with time budgets.",
+    "contract: consumer-driven contract tests for internal API boundaries.",
+    "container: tests requiring Docker (testcontainers). Skipped when Docker unavailable.",
+    "load: load/stress tests using Locust runner. Run separately from CI.",
 ]
+# pytest-xdist: parallel test execution
+# Usage: uv run pytest -n auto tests/unit/    (auto-detect CPU cores)
+#        uv run pytest -n 4 tests/unit/        (explicit 4 workers)
+# Note: benchmarks must run single-process (pytest-benchmark + xdist conflict)
+#        uv run pytest tests/benchmark/ -p no:xdist
+
+[tool.pytest-benchmark]
+# Minimum rounds for statistical reliability
+min_rounds = 5
+# Disable benchmarks by default in normal test runs
+disable_gc = true

@@ -29,3 +29,6 @@ dump.rdb
 
 # Test reports (generated in CI)
 reports/
+
+# Benchmark results (machine-generated, use CI artifacts instead)
+benchmarks/*.json
