@@ -6,7 +6,6 @@ connection failures — cache is an optimization, not a requirement.
 NullCache: no-op fallback used when Redis is unavailable or in tests.
 """
 
-import contextlib
 from typing import cast
 
 import redis
@@ -39,12 +38,14 @@ class RedisCache:
 
     def set_mapping(self, cache_key: str, result: MappingResult, ttl: int = 3600) -> None:
         """Store a mapping result with TTL. Silently fails on error."""
-        with contextlib.suppress(ConnectionError, redis.RedisError):
+        try:
             self._client.setex(
                 f"{KEY_PREFIX}{cache_key}",
                 ttl,
                 result.model_dump_json(),
             )
+        except (ConnectionError, redis.RedisError):
+            pass
 
 
 class NullCache:
