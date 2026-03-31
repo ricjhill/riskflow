@@ -6,11 +6,10 @@ target schemas from config files.
 
 import pytest
 
+from src.adapters.parsers.schema_loader import YamlSchemaLoader
 from src.domain.model.errors import InvalidSchemaError, RiskFlowError
 from src.domain.model.target_schema import DEFAULT_TARGET_SCHEMA, TargetSchema
-from src.adapters.parsers.schema_loader import YamlSchemaLoader
 from src.ports.output.schema_loader import SchemaLoaderPort
-
 
 # --- Loop 8: InvalidSchemaError ---
 
@@ -191,7 +190,9 @@ version: 99
         schema = loader.load(str(path))
         assert schema.name == "test_schema"
 
-    def test_raises_on_cross_field_rule_bad_reference(self, tmp_path: pytest.TempPathFactory) -> None:
+    def test_raises_on_cross_field_rule_bad_reference(
+        self, tmp_path: pytest.TempPathFactory
+    ) -> None:
         """Valid YAML, valid structure, but cross-field rule references
         a field that doesn't exist. Error message should propagate."""
         yaml_content = """
@@ -248,22 +249,22 @@ fields:
 
 
 class TestDefaultYamlFile:
-    """schemas/default.yaml must load and match DEFAULT_TARGET_SCHEMA."""
+    """schemas/standard_reinsurance.yaml must load and match DEFAULT_TARGET_SCHEMA."""
 
     def test_default_yaml_loads(self) -> None:
         loader = YamlSchemaLoader()
-        schema = loader.load("schemas/default.yaml")
+        schema = loader.load("schemas/standard_reinsurance.yaml")
         assert isinstance(schema, TargetSchema)
 
     def test_default_yaml_matches_python_constant(self) -> None:
         loader = YamlSchemaLoader()
-        from_yaml = loader.load("schemas/default.yaml")
+        from_yaml = loader.load("schemas/standard_reinsurance.yaml")
         assert from_yaml.field_names == DEFAULT_TARGET_SCHEMA.field_names
         assert from_yaml.required_field_names == DEFAULT_TARGET_SCHEMA.required_field_names
         assert from_yaml.fingerprint == DEFAULT_TARGET_SCHEMA.fingerprint
 
     def test_default_yaml_has_slm_hints(self) -> None:
         loader = YamlSchemaLoader()
-        schema = loader.load("schemas/default.yaml")
+        schema = loader.load("schemas/standard_reinsurance.yaml")
         aliases = {h.source_alias for h in schema.slm_hints}
         assert aliases == {"GWP", "TSI", "Ccy", "Certificate"}

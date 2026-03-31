@@ -15,9 +15,8 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-
 SCHEMAS_DIR = Path(__file__).parent.parent.parent / "schemas"
-DEFAULT_SCHEMA_PATH = str(SCHEMAS_DIR / "default.yaml")
+DEFAULT_SCHEMA_PATH = str(SCHEMAS_DIR / "standard_reinsurance.yaml")
 
 
 class TestSchemaLoaderWiring:
@@ -123,23 +122,21 @@ fields:
     non_negative: true
 """
         )
-        with patch.dict(os.environ, {"SCHEMA_PATH": str(schema_file)}):
-            with patch(
-                "src.entrypoint.main.MappingService"
-            ) as mock_service_class:
-                from src.entrypoint.main import create_app
+        with (
+            patch.dict(os.environ, {"SCHEMA_PATH": str(schema_file)}),
+            patch("src.entrypoint.main.MappingService") as mock_service_class,
+        ):
+            from src.entrypoint.main import create_app
 
-                create_app()
-                # MappingService should have been called with schema kwarg
-                call_kwargs = mock_service_class.call_args
-                assert call_kwargs is not None
-                schema = call_kwargs.kwargs.get("schema") or call_kwargs[1].get(
-                    "schema"
-                )
-                assert schema is not None
-                assert schema.name == "two_field_schema"
-                assert "Policy_ID" in schema.field_names
-                assert "Premium" in schema.field_names
+            create_app()
+            # MappingService should have been called with schema kwarg
+            call_kwargs = mock_service_class.call_args
+            assert call_kwargs is not None
+            schema = call_kwargs.kwargs.get("schema") or call_kwargs[1].get("schema")
+            assert schema is not None
+            assert schema.name == "two_field_schema"
+            assert "Policy_ID" in schema.field_names
+            assert "Premium" in schema.field_names
 
     def test_schema_fingerprint_logged_at_startup(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
@@ -165,9 +162,7 @@ fields:
 
     def test_relative_schema_path_resolves(self) -> None:
         """A relative SCHEMA_PATH resolves from the working directory."""
-        with patch.dict(
-            os.environ, {"SCHEMA_PATH": "schemas/default.yaml"}
-        ):
+        with patch.dict(os.environ, {"SCHEMA_PATH": "schemas/standard_reinsurance.yaml"}):
             from src.entrypoint.main import create_app
 
             app = create_app()
