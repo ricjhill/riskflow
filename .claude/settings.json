@@ -37,6 +37,11 @@
             "type": "command",
             "command": ".claude/hooks/security-scan.sh",
             "timeout": 120
+          },
+          {
+            "type": "command",
+            "command": ".claude/hooks/enforce-create-pr.sh",
+            "timeout": 5
           }
         ]
       },
