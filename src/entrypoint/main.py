@@ -149,19 +149,6 @@ def create_app() -> FastAPI:
     return app
 
 
-def _load_schema() -> TargetSchema:
-    """Load the target schema from SCHEMA_PATH env var or default file.
-
-    If SCHEMA_PATH is set, loads from that path (fatal error if invalid).
-    Otherwise loads from schemas/default.yaml.
-    Both paths use YamlSchemaLoader which raises InvalidSchemaError on
-    any failure — the app refuses to boot with an invalid schema.
-    """
-    schema_path = os.environ.get("SCHEMA_PATH", DEFAULT_SCHEMA_FILE)
-    loader = YamlSchemaLoader()
-    return loader.load(schema_path)
-
-
 def _load_all_schemas() -> dict[str, TargetSchema]:
     """Load all YAML schemas from the schemas/ directory.
 

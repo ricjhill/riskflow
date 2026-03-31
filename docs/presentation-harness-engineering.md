@@ -21,7 +21,7 @@ curl -F "file=@tests/fixtures/sample_bordereaux.csv" localhost:8000/upload | pyt
 ```
 
 - Show the response: 6 mapped fields, confidence scores, valid/invalid rows
-- "Zero lines of manual code. 461 tests. 5 hooks. 73 PRs. Built across three sessions."
+- "Zero lines of manual code. 540 tests. 5 hooks. 84 PRs. Built across multiple sessions."
 - "Let me show you how we got here — through questions, not code."
 
 ---
@@ -47,7 +47,7 @@ curl -F "file=@tests/fixtures/sample_bordereaux.csv" localhost:8000/upload | pyt
 - Reviewed against Anthropic best practices — CLAUDE.md should be under 200 lines
 - Found: redundancy between CLAUDE.md and agent.py.md, stale architecture tree, an incomplete sentence on line 1
 - **Before:** 107 lines + 236 lines across two files, conflicting folder structures
-- **After:** 78 lines in one file, domain rules moved to path-scoped `.claude/rules/reinsurance.md`
+- **After:** 96 lines in one file, domain rules moved to path-scoped `.claude/rules/reinsurance.md`
 - Path scoping: reinsurance rules only load when editing `src/domain/` or `src/adapters/slm/` — no context wasted on irrelevant rules
 
 **Principle: The agent follows shorter instructions better. Prune ruthlessly, scope precisely.**
@@ -210,16 +210,19 @@ curl -F "file=@tests/fixtures/sample_bordereaux.csv" localhost:8000/upload | pyt
 ## 13. Testing Strategy & CI/CD Pipeline (10 min)
 *Three tiers, five CI jobs, zero manual gates*
 
-### Three-tier test taxonomy
+### Test taxonomy
 | Tier | Count | What | External deps | When |
 |------|-------|------|---------------|------|
-| Unit | 431 | Isolated components, all mocked | None | Every PR |
-| Integration | 25 | Full pipeline, SLM mocked | None | Every PR |
+| Unit | 456 | Isolated components, all mocked | None | Every PR |
+| Integration | 39 | Full pipeline, SLM mocked + testcontainers Redis | Docker (optional) | Every PR |
 | E2E | 5 | Real Groq API, nothing mocked | GROQ_API_KEY | Push to main only |
+| Contract | 11 | API response shape verification | None | Every PR |
+| Benchmark | 28 | Performance guardrails, TTFB, memory endurance | None | Every PR |
+| Load | 1 | Locust CI assertions (error rate, P95) | None | Every PR |
 
 ### CI pipeline
 ```
-PR → quality (unit + integration + mypy + ruff + hex linter)
+PR → quality (unit + integration + contract + benchmarks + load + mypy + ruff + hex linter)
    → boot-test (Docker build + /health, if app code changed)
    → security (bandit + pip-audit)
 Merge → e2e (real Groq API)
@@ -255,7 +258,7 @@ Merge → e2e (real Groq API)
 | CI jobs | 0 | 2 | 5 (quality, boot-test, security, e2e, CD) |
 | Source files | 25 | 25 | 21 |
 | Manual code written | 0 | 0 | 0 |
-| Endpoints | 2 | 2 | 8 (health, upload, upload/async, jobs, sheets, corrections, schemas) |
+| Endpoints | 2 | 2 | 7 (health, upload, upload/async, jobs, sheets, corrections, schemas) |
 | Features | Upload + health | + logging, validation | + configurable schema, correction cache, async upload, sheets, confidence report, structured errors, schema selection |
 
 ---
@@ -265,7 +268,7 @@ Merge → e2e (real Groq API)
 Harness engineering isn't about the tools — it's about asking the right questions in the right order:
 
 1. **What can be automated?** → Hooks (5 mechanical gates)
-2. **What instructions does the agent need?** → Pruned CLAUDE.md (78 lines, not 343)
+2. **What instructions does the agent need?** → Pruned CLAUDE.md (96 lines, not 343)
 3. **Are the tests strong enough?** → Testing rules + coverage validation before every TDD loop
 4. **Does it actually run?** → Smoke tests, Docker boot test in CI
 5. **Is the documentation accurate?** → Code-reviewer verifies PR text against the actual diff
@@ -411,7 +414,7 @@ The full sequence of questions across all three sessions:
 | # | Question | What it changed |
 |---|----------|----------------|
 | 1 | "Which rules can be converted to hooks?" | Created 5 automated hooks from manual rules |
-| 2 | "How can we make CLAUDE.md better?" | Pruned from 107 to 78 lines, moved domain rules to scoped files |
+| 2 | "How can we make CLAUDE.md better?" | Pruned from 107 to 96 lines, moved domain rules to scoped files |
 | 3 | "Do we use hooks to ensure a venv is used?" | Learned limits of hooks — some things are instructions, not gates |
 | 4 | "Review this project using Anthropic guidelines" | Found architecture/instruction conflicts, missing .env.example |
 | 5 | "Should we make a plan?" | Designed 10-loop TDD implementation plan before writing code |
