@@ -9,7 +9,7 @@ import uuid
 from typing import Any
 
 
-class JobStatus(str, enum.Enum):
+class JobStatus(enum.StrEnum):
     PENDING = "pending"
     PROCESSING = "processing"
     COMPLETE = "complete"

@@ -20,6 +20,10 @@ case "$FILE" in
     echo "Blocked: do not edit .claude/settings.json directly — use /update-config" >&2
     exit 2
     ;;
+  */pyproject.toml)
+    echo "Blocked: do not edit pyproject.toml directly — use uv add/remove for deps, or ask to modify config sections" >&2
+    exit 2
+    ;;
 esac
 
 exit 0

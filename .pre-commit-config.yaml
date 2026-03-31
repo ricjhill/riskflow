@@ -1,0 +1,40 @@
+# System-level pre-commit hooks — enforced on ALL commits, not just Claude.
+# Install: uv run pre-commit install
+# Run manually: uv run pre-commit run --all-files
+repos:
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy type check
+        entry: uv run mypy src/
+        language: system
+        pass_filenames: false
+        types: [python]
+
+      - id: pytest-unit
+        name: pytest unit tests
+        entry: uv run pytest -x tests/unit/ -q --benchmark-disable
+        language: system
+        pass_filenames: false
+        types: [python]
+
+      - id: ruff-check
+        name: ruff lint
+        entry: uv run ruff check src/
+        language: system
+        pass_filenames: false
+        types: [python]
+
+      - id: ruff-format
+        name: ruff format check
+        entry: uv run ruff format --check src/
+        language: system
+        pass_filenames: false
+        types: [python]
+
+      - id: hexagonal-linter
+        name: architecture boundary check
+        entry: uv run python -m tools.hexagonal_linter
+        language: system
+        pass_filenames: false
+        types: [python]

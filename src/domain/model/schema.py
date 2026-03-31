@@ -144,9 +144,7 @@ class ConfidenceReport(BaseModel):
         return cls(
             min_confidence=min(confidences),
             avg_confidence=sum(confidences) / len(confidences),
-            low_confidence_fields=[
-                m for m in result.mappings if m.confidence < threshold
-            ],
+            low_confidence_fields=[m for m in result.mappings if m.confidence < threshold],
             missing_fields=sorted(all_fields - mapped_targets),
         )
 

@@ -82,13 +82,11 @@ def _build_model(schema: TargetSchema) -> type[BaseModel]:
     if validators:
         namespace: dict[str, Any] = {"__annotations__": {}}
         namespace.update(validators)
-        ModelWithValidators: type[BaseModel] = type(  # type: ignore[assignment]
-            Model.__name__, (Model,), namespace
-        )
-        ModelWithValidators.model_rebuild()
-        return ModelWithValidators
+        model_with_validators: type[BaseModel] = type(Model.__name__, (Model,), namespace)
+        model_with_validators.model_rebuild()
+        return model_with_validators
 
-    return Model
+    return Model  # type: ignore[no-any-return]
 
 
 def _attach_field_validators(
