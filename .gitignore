@@ -32,3 +32,11 @@ reports/
 
 # Benchmark results (machine-generated, use CI artifacts instead)
 benchmarks/*.json
+
+# Coverage reports
+.coverage
+.coverage.*
+htmlcov/
+
+# Logs
+*.log

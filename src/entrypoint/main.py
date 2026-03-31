@@ -21,13 +21,13 @@ from fastapi import FastAPI
 
 from src.adapters.http.routes import create_router
 from src.adapters.parsers.ingestor import PolarsIngestor
+from src.adapters.parsers.schema_loader import YamlSchemaLoader
 from src.adapters.slm.mapper import GroqMapper
 from src.adapters.storage.cache import NullCache, RedisCache
 from src.adapters.storage.correction_cache import (
     NullCorrectionCache,
     RedisCorrectionCache,
 )
-from src.adapters.parsers.schema_loader import YamlSchemaLoader
 from src.adapters.storage.job_store import InMemoryJobStore
 from src.domain.model.target_schema import TargetSchema
 from src.domain.service.mapping_service import MappingService
@@ -137,9 +137,7 @@ def create_app() -> FastAPI:
     job_store = InMemoryJobStore()
 
     # --- Routes ---
-    router = create_router(
-        mapping_service, job_store=job_store, schema_registry=schema_registry
-    )
+    router = create_router(mapping_service, job_store=job_store, schema_registry=schema_registry)
     app.include_router(router)
 
     @app.get("/health")

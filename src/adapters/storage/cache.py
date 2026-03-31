@@ -6,6 +6,7 @@ connection failures — cache is an optimization, not a requirement.
 NullCache: no-op fallback used when Redis is unavailable or in tests.
 """
 
+import contextlib
 from typing import cast
 
 import redis
@@ -18,7 +19,7 @@ KEY_PREFIX = "riskflow:mapping:"
 class RedisCache:
     """CachePort implementation backed by Redis."""
 
-    def __init__(self, client: redis.Redis) -> None:  # type: ignore[type-arg]
+    def __init__(self, client: redis.Redis) -> None:
         self._client = client
 
     def get_mapping(self, cache_key: str) -> MappingResult | None:
@@ -36,18 +37,14 @@ class RedisCache:
         except (ValueError, TypeError):
             return None
 
-    def set_mapping(
-        self, cache_key: str, result: MappingResult, ttl: int = 3600
-    ) -> None:
+    def set_mapping(self, cache_key: str, result: MappingResult, ttl: int = 3600) -> None:
         """Store a mapping result with TTL. Silently fails on error."""
-        try:
+        with contextlib.suppress(ConnectionError, redis.RedisError):
             self._client.setex(
                 f"{KEY_PREFIX}{cache_key}",
                 ttl,
                 result.model_dump_json(),
             )
-        except (ConnectionError, redis.RedisError):
-            pass
 
 
 class NullCache:
@@ -56,7 +53,5 @@ class NullCache:
     def get_mapping(self, cache_key: str) -> MappingResult | None:
         return None
 
-    def set_mapping(
-        self, cache_key: str, result: MappingResult, ttl: int = 3600
-    ) -> None:
+    def set_mapping(self, cache_key: str, result: MappingResult, ttl: int = 3600) -> None:
         pass

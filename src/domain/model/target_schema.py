@@ -16,7 +16,7 @@ import json
 from pydantic import BaseModel, model_validator
 
 
-class FieldType(str, enum.Enum):
+class FieldType(enum.StrEnum):
     STRING = "string"
     DATE = "date"
     FLOAT = "float"
@@ -47,7 +47,9 @@ class FieldDefinition(BaseModel):
             msg = f"not_empty constraint only applies to STRING fields, got {self.type.value}"
             raise ValueError(msg)
         if self.allowed_values is not None and self.type != FieldType.CURRENCY:
-            msg = f"allowed_values constraint only applies to CURRENCY fields, got {self.type.value}"
+            msg = (
+                f"allowed_values constraint only applies to CURRENCY fields, got {self.type.value}"
+            )
             raise ValueError(msg)
         return self
 
@@ -109,10 +111,7 @@ class TargetSchema(BaseModel):
         """Cross-field rules must reference existing, distinct fields of type DATE."""
         for rule in self.cross_field_rules:
             if rule.earlier == rule.later:
-                msg = (
-                    f"Cross-field rule has same field '{rule.earlier}' "
-                    f"as both earlier and later"
-                )
+                msg = f"Cross-field rule has same field '{rule.earlier}' as both earlier and later"
                 raise ValueError(msg)
             for field_ref in [rule.earlier, rule.later]:
                 if field_ref not in self.fields:

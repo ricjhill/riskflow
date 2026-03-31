@@ -1,0 +1,10 @@
+# Default owner for all files
+* @ricjhill
+
+# Critical paths — require explicit review
+src/domain/ @ricjhill
+.claude/ @ricjhill
+Dockerfile @ricjhill
+gui/Dockerfile @ricjhill
+pyproject.toml @ricjhill
+.github/workflows/ @ricjhill

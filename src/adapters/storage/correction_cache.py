@@ -5,6 +5,8 @@ RedisCorrectionCache: Redis hash per cedent — corrections:{cedent_id}
   with fields {source_header} and values {target_field}.
 """
 
+import contextlib
+
 import redis as redis_lib
 
 from src.domain.model.correction import Correction
@@ -36,7 +38,7 @@ class RedisCorrectionCache:
     errors — returns empty dict / silently drops writes.
     """
 
-    def __init__(self, client: redis_lib.Redis) -> None:  # type: ignore[type-arg]
+    def __init__(self, client: redis_lib.Redis) -> None:
         self._client = client
 
     def get_corrections(self, cedent_id: str, headers: list[str]) -> dict[str, str]:
@@ -49,13 +51,11 @@ class RedisCorrectionCache:
             return {}
         return {
             header: value.decode()
-            for header, value in zip(headers, values)
+            for header, value in zip(headers, values, strict=True)
             if value is not None
         }
 
     def set_correction(self, correction: Correction) -> None:
-        try:
+        with contextlib.suppress(ConnectionError, redis_lib.RedisError):
             key = f"{CORRECTION_KEY_PREFIX}{correction.cedent_id}"
             self._client.hset(key, correction.source_header, correction.target_field)
-        except (ConnectionError, redis_lib.RedisError):
-            pass

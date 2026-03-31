@@ -13,9 +13,7 @@ class PolarsIngestor:
     CSV files ignore sheet_name.
     """
 
-    def get_headers(
-        self, file_path: str, *, sheet_name: str | None = None
-    ) -> list[str]:
+    def get_headers(self, file_path: str, *, sheet_name: str | None = None) -> list[str]:
         """Extract column headers from a spreadsheet."""
         self._check_file_exists(file_path)
         if file_path.endswith(".csv"):

@@ -122,24 +122,19 @@ class MappingService:
             ColumnMapping(source_header=h, target_field=t, confidence=1.0)
             for h, t in corrections.items()
         ]
-        corrected_targets = {t for t in corrections.values()}
+        corrected_targets = set(corrections.values())
 
         uncorrected_headers = [h for h in headers if h not in corrections]
 
         if uncorrected_headers:
             uncorrected_preview = [
-                {k: v for k, v in row.items() if k in uncorrected_headers}
-                for row in preview
+                {k: v for k, v in row.items() if k in uncorrected_headers} for row in preview
             ]
-            slm_result = await self._mapper.map_headers(
-                uncorrected_headers, uncorrected_preview
-            )
+            slm_result = await self._mapper.map_headers(uncorrected_headers, uncorrected_preview)
             self._check_confidence(slm_result)
             # Filter SLM results to exclude targets already covered by corrections
             filtered_slm = [
-                m
-                for m in slm_result.mappings
-                if m.target_field not in corrected_targets
+                m for m in slm_result.mappings if m.target_field not in corrected_targets
             ]
             all_mappings = corrected_mappings + filtered_slm
             all_unmapped = slm_result.unmapped_headers

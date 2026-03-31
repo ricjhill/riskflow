@@ -19,7 +19,6 @@ import time
 
 import structlog
 from fastapi import APIRouter, BackgroundTasks, File, HTTPException, Query, UploadFile
-
 from pydantic import BaseModel
 
 from src.domain.model.correction import Correction
@@ -105,7 +104,7 @@ def create_router(
         return service
 
     @router.get("/schemas")
-    async def list_schemas() -> dict:
+    async def list_schemas() -> dict[str, object]:
         """List all available schema names."""
         return {"schemas": sorted(_registry.keys())}
 
@@ -121,7 +120,7 @@ def create_router(
         schema: str | None = Query(
             default=None, description="Schema name to use (from GET /schemas)"
         ),
-    ) -> dict:
+    ) -> dict[str, object]:
         """Upload a spreadsheet and map its headers to the target schema."""
         _validate_file(file)
         active_service = _resolve_service(schema)
@@ -151,9 +150,7 @@ def create_router(
             )
             return result.model_dump()
         except MappingConfidenceLowError as e:
-            logger.warning(
-                "mapping_low_confidence", filename=file.filename, error=str(e)
-            )
+            logger.warning("mapping_low_confidence", filename=file.filename, error=str(e))
             raise HTTPException(
                 status_code=422,
                 detail=_error_detail(
@@ -163,9 +160,7 @@ def create_router(
                 ),
             ) from e
         except SchemaValidationError as e:
-            logger.warning(
-                "schema_validation_error", filename=file.filename, error=str(e)
-            )
+            logger.warning("schema_validation_error", filename=file.filename, error=str(e))
             raise HTTPException(
                 status_code=422,
                 detail=_error_detail(
@@ -237,7 +232,7 @@ def create_router(
                 os.remove(temp_path)
 
     @router.post("/sheets")
-    async def list_sheets(file: UploadFile = File(...)) -> dict:
+    async def list_sheets(file: UploadFile = File(...)) -> dict[str, object]:
         """Upload a file and return its sheet names (Excel only)."""
         _validate_file(file)
         temp_path = _save_temp_file(file)
@@ -249,14 +244,12 @@ def create_router(
                 os.remove(temp_path)
 
     @router.post("/corrections", status_code=201)
-    async def submit_corrections(request: CorrectionRequest) -> dict:
+    async def submit_corrections(request: CorrectionRequest) -> dict[str, object]:
         """Submit human-verified mapping corrections for a cedent."""
         if not request.cedent_id.strip():
             raise HTTPException(status_code=400, detail="cedent_id must not be empty")
         if not request.corrections:
-            raise HTTPException(
-                status_code=400, detail="corrections list must not be empty"
-            )
+            raise HTTPException(status_code=400, detail="corrections list must not be empty")
 
         for item in request.corrections:
             correction = Correction(
@@ -293,7 +286,7 @@ def create_router(
                 default=None,
                 description="Sheet name for multi-sheet Excel files",
             ),
-        ) -> dict:
+        ) -> dict[str, object]:
             """Accept a file for async processing, return job ID immediately."""
             _validate_file(file)
 
@@ -315,7 +308,7 @@ def create_router(
             return {"job_id": job.id}
 
         @router.get("/jobs/{job_id}")
-        async def get_job_status(job_id: str) -> dict:
+        async def get_job_status(job_id: str) -> dict[str, object]:
             """Get the status and result of an async job."""
             job = job_store.get(job_id)
             if job is None:

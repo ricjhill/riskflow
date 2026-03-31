@@ -13,6 +13,9 @@ RUN uv sync --frozen
 
 COPY . .
 
+RUN useradd --create-home --shell /bin/bash riskflow
+USER riskflow
+
 EXPOSE 8501
 
 CMD ["uv", "run", "streamlit", "run", "gui/app.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.headless=true"]
