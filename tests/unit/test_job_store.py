@@ -1,6 +1,5 @@
 """Tests for InMemoryJobStore adapter."""
 
-import pytest
 
 from src.adapters.storage.job_store import InMemoryJobStore
 from src.domain.model.job import Job, JobStatus

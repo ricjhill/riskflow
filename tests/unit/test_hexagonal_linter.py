@@ -6,9 +6,8 @@ and produces agent-readable error messages with fix suggestions.
 
 from pathlib import Path
 
-import pytest
 
-from tools.hexagonal_linter import check_file, LAYER_RULES
+from tools.hexagonal_linter import check_file
 
 
 class TestLayerDetection:

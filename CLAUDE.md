@@ -30,8 +30,11 @@ src/
     parsers/         # Polars-based Excel/CSV readers, YAML schema loader
 tests/
   unit/              # Domain and service tests — no I/O
-  integration/       # Wiring tests — full pipeline with mocked SLM
+  integration/       # Wiring tests — full pipeline with mocked SLM + testcontainers Redis
   e2e/               # Real Groq API tests — needs GROQ_API_KEY
+  benchmark/         # Performance guardrails, pytest-benchmark suite, TTFB + memory tests
+  contract/          # Consumer-driven contract tests for API response shapes
+  load/              # Locust load tests (locustfile.py for manual, test_locust_ci.py for CI)
   fixtures/          # Sample bordereaux CSV for tests
 schemas/
   default.yaml       # Default 6-field reinsurance target schema

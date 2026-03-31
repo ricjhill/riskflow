@@ -7,7 +7,7 @@ target schemas from config files.
 import pytest
 
 from src.domain.model.errors import InvalidSchemaError, RiskFlowError
-from src.domain.model.target_schema import DEFAULT_TARGET_SCHEMA, FieldType, TargetSchema
+from src.domain.model.target_schema import DEFAULT_TARGET_SCHEMA, TargetSchema
 from src.adapters.parsers.schema_loader import YamlSchemaLoader
 from src.ports.output.schema_loader import SchemaLoaderPort
 

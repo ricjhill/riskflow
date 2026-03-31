@@ -46,7 +46,7 @@ markers = [
     "perf_guardrail: performance regression guardrail tests with time budgets.",
     "contract: consumer-driven contract tests for internal API boundaries.",
     "container: tests requiring Docker (testcontainers). Skipped when Docker unavailable.",
-    "load: load/stress tests using Locust runner. Run separately from CI.",
+    "load: load/stress tests using Locust runner. test_locust_ci.py runs in CI; locustfile.py is manual.",
 ]
 # pytest-xdist: parallel test execution
 # Usage: uv run pytest -n auto tests/unit/    (auto-detect CPU cores)

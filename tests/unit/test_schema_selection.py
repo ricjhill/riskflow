@@ -9,9 +9,8 @@ Security: only schema names are accepted, not file paths. Path
 traversal attempts are rejected.
 """
 
-import os
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient

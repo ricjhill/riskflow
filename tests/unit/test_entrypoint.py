@@ -8,7 +8,6 @@ or Groq connections.
 import os
 from unittest.mock import MagicMock, patch
 
-import pytest
 from fastapi.testclient import TestClient
 
 
