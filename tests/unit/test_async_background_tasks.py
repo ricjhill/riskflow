@@ -260,4 +260,4 @@ class TestAsyncUploadIntegration:
         assert get_resp.status_code == 200
         body = get_resp.json()
         # BackgroundTasks runs synchronously in TestClient — no polling needed
-        assert body["status"] in ("complete", "failed")
+        assert body["status"] == "complete"
