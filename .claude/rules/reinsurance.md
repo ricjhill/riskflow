@@ -7,7 +7,7 @@ paths:
 # Reinsurance Domain Rules
 
 ## Target Schema
-The default schema maps to 6 fields: `Policy_ID`, `Inception_Date`, `Expiry_Date`, `Sum_Insured`, `Gross_Premium`, `Currency`. Custom schemas can define different fields via YAML in `schemas/`. The active schema is loaded from `schemas/default.yaml` (or `SCHEMA_PATH` env var) at startup.
+The default schema maps to 6 fields: `Policy_ID`, `Inception_Date`, `Expiry_Date`, `Sum_Insured`, `Gross_Premium`, `Currency`. Custom schemas can define different fields via YAML in `schemas/`. The active schema is loaded from `schemas/standard_reinsurance.yaml` (or `SCHEMA_PATH` env var) at startup.
 
 ## Validation
 - Field constraints (non_negative, not_empty, allowed_values) are defined per field in the schema YAML

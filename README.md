@@ -160,7 +160,7 @@ src/
 
 ## Target Schema
 
-The default target schema (`schemas/default.yaml`) maps Bordereaux data to:
+The default target schema (`schemas/standard_reinsurance.yaml`) maps Bordereaux data to:
 
 | Field | Type | Constraints |
 |-------|------|------------|

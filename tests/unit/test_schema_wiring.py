@@ -5,7 +5,7 @@ target schema from a YAML file at startup instead of relying solely
 on the hardcoded DEFAULT_TARGET_SCHEMA.
 
 Env var SCHEMA_PATH controls which file is loaded.
-Falls back to schemas/default.yaml when unset.
+Falls back to schemas/standard_reinsurance.yaml when unset.
 """
 
 import os
@@ -46,7 +46,7 @@ fields:
             assert response.status_code == 200
 
     def test_falls_back_to_default_schema_when_no_env(self) -> None:
-        """When SCHEMA_PATH is not set, loads schemas/default.yaml."""
+        """When SCHEMA_PATH is not set, loads schemas/standard_reinsurance.yaml."""
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("SCHEMA_PATH", None)
             from src.entrypoint.main import create_app

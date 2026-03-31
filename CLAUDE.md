@@ -37,7 +37,7 @@ tests/
   load/              # Locust load tests (locustfile.py for manual, test_locust_ci.py for CI)
   fixtures/          # Sample bordereaux CSV for tests
 schemas/
-  default.yaml       # Default 6-field reinsurance target schema
+  standard_reinsurance.yaml  # Default 6-field reinsurance target schema
   marine_cargo.yaml  # 8-field marine cargo schema (demo + testing)
 gui/
   app.py             # Streamlit dashboard (3 tabs: mapping, debugger, corrections)

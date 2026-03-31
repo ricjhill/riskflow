@@ -31,7 +31,7 @@ Check each claim in CLAUDE.md against reality:
 
 - Do the "Getting Started" commands reference files that exist? (`cp .env.example .env` — does `.env.example` exist?)
 - Does the architecture diagram list the same components as the actual code?
-- Does the target schema table match the fields in `schemas/default.yaml` and `src/domain/model/target_schema.py:DEFAULT_TARGET_SCHEMA`?
+- Does the target schema table match the fields in `schemas/standard_reinsurance.yaml` and `src/domain/model/target_schema.py:DEFAULT_TARGET_SCHEMA`?
 - Does the TDD Cycle section match what CLAUDE.md says?
 
 ### 4. .env.example vs actual env var usage
@@ -63,7 +63,7 @@ Check each claim in CLAUDE.md against reality:
   - Are all routes in `routes.py` documented? Are there documented routes that don't exist?
   - Do query parameters match the actual function signatures?
   - Do error codes match `_error_detail()` calls in the route handlers?
-- Read `docs/reference/schema.md` — do field types and constraints match `src/domain/model/target_schema.py`? Does the default schema table match `schemas/default.yaml`?
+- Read `docs/reference/schema.md` — do field types and constraints match `src/domain/model/target_schema.py`? Does the default schema table match `schemas/standard_reinsurance.yaml`?
 - Read `docs/reference/errors.md` — does every error class in `src/domain/model/errors.py` appear? Do the HTTP status code mappings match `src/adapters/http/routes.py`?
 
 #### Explanation docs
