@@ -18,12 +18,11 @@ different memory pressures.
 import datetime
 import gc
 import hashlib
-import resource
 import tracemalloc
 
 import pytest
 
-from src.domain.model.record_factory import build_record_model, _build_cached
+from src.domain.model.record_factory import build_record_model, clear_record_model_cache
 from src.domain.model.schema import ColumnMapping, MappingResult
 from src.domain.model.target_schema import (
     DEFAULT_TARGET_SCHEMA,
@@ -35,7 +34,7 @@ from src.domain.model.target_schema import (
 MiB = 1024 * 1024
 
 
-def _tracemalloc_delta(func: object, *args: object) -> int:
+def _tracemalloc_delta(func: object) -> int:
     """Run func(), return peak memory growth in bytes.
 
     Forces GC before snapshots to reduce noise from garbage.
@@ -133,9 +132,9 @@ class TestMemoryEndurance:
                         ),
                     },
                 )
-                _build_cached.cache_clear()
+                clear_record_model_cache()
                 build_record_model(schema)
-            _build_cached.cache_clear()
+            clear_record_model_cache()
 
         growth = _tracemalloc_delta(build_many)
         assert growth < 50 * MiB, (
@@ -170,11 +169,12 @@ class TestMemoryEndurance:
         )
 
     def test_rss_stable_under_sustained_validation(self) -> None:
-        """RSS must not grow more than 50 MiB over 5000 row validations.
+        """Current RSS must not grow more than 50 MiB over 5000 row validations.
 
         This is a safety net for native memory leaks (Pydantic-core Rust,
-        Polars) that tracemalloc cannot see. Uses resource.getrusage which
-        tracks the process's resident set size in KiB on Linux.
+        Polars) that tracemalloc cannot see. Reads VmRSS from /proc/self/status
+        which reports the *current* resident set size (not peak), making the
+        before/after delta meaningful even when run inside a larger pytest session.
         """
         model = build_record_model(DEFAULT_TARGET_SCHEMA)
         base_row = {
@@ -187,15 +187,29 @@ class TestMemoryEndurance:
         }
 
         gc.collect()
-        rss_before = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss  # KiB on Linux
+        rss_before = _read_vmrss_kib()
 
         for _ in range(5000):
             model.model_validate(base_row)
 
         gc.collect()
-        rss_after = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        rss_after = _read_vmrss_kib()
 
         growth_mib = (rss_after - rss_before) / 1024  # KiB → MiB
         assert growth_mib < 50, (
             f"RSS grew by {growth_mib:.1f} MiB over 5000 validations (budget: 50 MiB)"
         )
+
+
+def _read_vmrss_kib() -> int:
+    """Read current VmRSS from /proc/self/status in KiB.
+
+    Unlike resource.getrusage(RUSAGE_SELF).ru_maxrss which reports
+    the *peak* RSS (monotonically increasing), VmRSS reports the
+    *current* resident set size and can decrease after GC.
+    """
+    with open("/proc/self/status") as f:
+        for line in f:
+            if line.startswith("VmRSS:"):
+                return int(line.split()[1])  # "VmRSS:   12345 kB" → 12345
+    return 0

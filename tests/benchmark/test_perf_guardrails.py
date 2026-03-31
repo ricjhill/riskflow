@@ -118,9 +118,9 @@ class TestRecordModelBuildPerformance:
     def test_20_field_schema_under_100ms(self) -> None:
         schema = self._make_large_schema(20)
         # Clear the LRU cache to force a fresh build
-        from src.domain.model.record_factory import _build_cached
+        from src.domain.model.record_factory import clear_record_model_cache
 
-        _build_cached.cache_clear()
+        clear_record_model_cache()
 
         with Timer() as t:
             build_record_model(schema)
