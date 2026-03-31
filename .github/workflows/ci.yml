@@ -164,6 +164,10 @@ jobs:
             fi
             sleep 0.5
           done
+          if [ "$STATUS" = "pending" ] || [ "$STATUS" = "processing" ]; then
+            echo "FAIL: GET /jobs/$JOB_ID — timed out waiting for terminal state (last=$STATUS)"
+            exit 1
+          fi
 
           # 7. Corrections — store a human-verified mapping
           CORR=$(curl -s -o /dev/null -w '%{http_code}' \
