@@ -57,9 +57,13 @@ slm_hints:
     target: Vessel_Name
   - source_alias: Departure
     target: Voyage_Date
+  - source_alias: Sailing Date
+    target: Voyage_Date
   - source_alias: ETA
     target: Arrival_Date
   - source_alias: Cargo Value
+    target: Cargo_Value
+  - source_alias: Sum Insured
     target: Cargo_Value
   - source_alias: GWP
     target: Premium
@@ -67,11 +71,15 @@ slm_hints:
     target: Currency
   - source_alias: Loading Port
     target: Port_Of_Loading
+  - source_alias: Origin
+    target: Port_Of_Loading
   - source_alias: Destination
+    target: Port_Of_Discharge
+  - source_alias: Discharge Port
     target: Port_Of_Discharge
 ```
 
-This schema has 8 fields (including one optional: Port_Of_Discharge), a cross-field date ordering rule, extended currencies (SGD, HKD for Asia-Pacific marine), and 9 SLM hints covering shipping terminology.
+This schema has 8 fields (including one optional: Port_Of_Discharge), a cross-field date ordering rule, extended currencies (SGD, HKD for Asia-Pacific marine), and 13 SLM hints covering shipping terminology.
 
 ### 2. Restart the application
 

@@ -2,15 +2,18 @@
 
 ## Overview
 
-RiskFlow uses a three-tier testing strategy aligned with the hexagonal architecture. Each tier serves a distinct purpose, runs at a different stage of the pipeline, and catches a different class of defect.
+RiskFlow uses a multi-tier testing strategy aligned with the hexagonal architecture. Each tier serves a distinct purpose, runs at a different stage of the pipeline, and catches a different class of defect.
 
 | Tier | Marker | Count | What it tests | External deps | When it runs |
 |------|--------|-------|---------------|---------------|-------------|
-| Unit | `@pytest.mark.unit` | 431 | Isolated components with all deps mocked | None | Every PR, every push to main |
-| Integration | `@pytest.mark.integration` | 25 | Full pipeline through TestClient, SLM mocked | None | Every PR, every push to main |
+| Unit | `@pytest.mark.unit` | 456 | Isolated components with all deps mocked | None | Every PR, every push to main |
+| Integration | `@pytest.mark.integration` | 39 | Full pipeline through TestClient, SLM mocked + testcontainers Redis | Docker (optional) | Every PR, every push to main |
 | E2E | `@pytest.mark.e2e` | 5 | Real Groq API, real parsing, nothing mocked | Groq API | Push to main only |
+| Contract | `@pytest.mark.contract` | 11 | API response shape verification (provider + consumer) | None | Every PR, every push to main |
+| Benchmark | `@pytest.mark.perf_guardrail` | 28 | Performance guardrails, TTFB, memory endurance | None | Every PR, every push to main |
+| Load | `@pytest.mark.load` | 1 | Locust CI assertions (error rate, P95 latency) | None | Every PR |
 
-**Total: 461 tests**
+**Total: 540 tests**
 
 ---
 
@@ -154,8 +157,11 @@ Triggers on every PR targeting main and every push to main.
 PR opened/updated
   ↓
 quality job
-  ├── Unit tests (376) → reports/unit.xml
-  ├── Integration tests (25) → reports/integration.xml
+  ├── Unit tests (456) → reports/unit.xml
+  ├── Integration tests (39) → reports/integration.xml
+  ├── Contract tests (11) → reports/contract.xml
+  ├── Performance guardrails (28) → reports/benchmark.xml
+  ├── Load test assertions (1) → reports/load.xml
   ├── mypy type check
   ├── ruff lint + format check
   ├── Hexagonal architecture linter (AST-based)
