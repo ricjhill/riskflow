@@ -2,7 +2,6 @@
 
 from unittest.mock import MagicMock
 
-import pytest
 import redis
 
 from src.adapters.storage.correction_cache import (

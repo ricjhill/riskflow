@@ -5,21 +5,14 @@ GET /jobs/{job_id} → returns job status and result when complete
 """
 
 import io
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
-import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from src.adapters.http.routes import create_router
 from src.adapters.storage.job_store import InMemoryJobStore
-from src.domain.model.job import Job, JobStatus
-from src.domain.model.schema import (
-    ColumnMapping,
-    ConfidenceReport,
-    MappingResult,
-    ProcessingResult,
-)
+from src.domain.model.job import Job
 
 
 def _create_test_app(

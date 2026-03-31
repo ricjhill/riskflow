@@ -7,13 +7,12 @@ stale mappings from schema A.
 """
 
 import hashlib
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from src.domain.model.schema import ColumnMapping, MappingResult
 from src.domain.model.target_schema import (
-    DEFAULT_TARGET_SCHEMA,
     FieldDefinition,
     FieldType,
     TargetSchema,

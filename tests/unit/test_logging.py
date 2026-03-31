@@ -6,7 +6,6 @@ key operations produce structured log events at adapter boundaries.
 
 import io
 import json
-import logging
 from unittest.mock import AsyncMock, patch
 
 import pytest
