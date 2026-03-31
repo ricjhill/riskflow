@@ -114,8 +114,38 @@ class TestDateCoercionInvalidInput:
     )
     def test_rejects_invalid_date_string(self, bad_value: str) -> None:
         Model = build_record_model(_date_schema())
-        with pytest.raises((ValidationError, ValueError)):
+        with pytest.raises((ValidationError, ValueError), match="(?i)date|empty"):
             Model.model_validate({"Start": bad_value})
+
+    def test_non_string_non_date_falls_through_to_pydantic(self) -> None:
+        """An integer like 20250115 is not a date — coerce_date passes it
+        through unchanged and Pydantic's type check rejects it."""
+        Model = build_record_model(_date_schema())
+        with pytest.raises(ValidationError, match="Start"):
+            Model.model_validate({"Start": 20250115})
+
+
+class TestDateCoercionLenientBehavior:
+    """Document dateutil's known lenient behavior.
+
+    dateutil accepts partial date strings and fills in missing components
+    from today's date. These tests document this behavior so future changes
+    can make informed decisions about tightening validation.
+    """
+
+    def test_partial_month_year_produces_a_date(self) -> None:
+        """'Jan 2025' is accepted by dateutil (fills in day). This is lenient
+        but documenting the behavior prevents surprise regressions."""
+        Model = build_record_model(_date_schema())
+        record = Model.model_validate({"Start": "Jan 2025"})
+        assert record.Start.year == 2025  # type: ignore[attr-defined]
+        assert record.Start.month == 1  # type: ignore[attr-defined]
+
+    def test_bare_iso_no_separators_produces_a_date(self) -> None:
+        """'20250115' is accepted by dateutil as a compact ISO date."""
+        Model = build_record_model(_date_schema())
+        record = Model.model_validate({"Start": "20250115"})
+        assert record.Start == datetime.date(2025, 1, 15)  # type: ignore[attr-defined]
 
 
 class TestDateCoercionWithCrossFieldRules:

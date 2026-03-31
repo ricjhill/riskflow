@@ -1,13 +1,10 @@
 """Domain models for reinsurance data mapping."""
 
-import datetime
-from typing import Annotated, Literal
+from typing import Literal
 
-from pydantic import BaseModel, BeforeValidator, field_validator, model_validator
+from pydantic import BaseModel, field_validator, model_validator
 
-from src.domain.model.record_factory import coerce_date
-
-FlexibleDate = Annotated[datetime.date, BeforeValidator(coerce_date)]
+from src.domain.model.record_factory import FlexibleDate
 
 
 class RiskRecord(BaseModel):
