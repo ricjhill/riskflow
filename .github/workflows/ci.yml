@@ -32,6 +32,16 @@ jobs:
       - name: Run integration tests
         run: uv run pytest -x -v tests/integration/ --junitxml=reports/integration.xml
 
+      - name: Run contract tests
+        run: uv run pytest -x -v tests/contract/ --junitxml=reports/contract.xml
+
+      - name: Run performance guardrails
+        run: uv run pytest -x -v tests/benchmark/ --benchmark-disable -p no:xdist --junitxml=reports/benchmark.xml
+
+      - name: Run load test assertions
+        run: uv run pytest -x -v tests/load/test_locust_ci.py --junitxml=reports/load.xml
+        timeout-minutes: 5
+
       - name: Type check
         run: uv run mypy src/
 

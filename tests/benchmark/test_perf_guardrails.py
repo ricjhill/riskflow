@@ -21,7 +21,6 @@ flaky failures on slow CI runners while still catching O(n^2) regressions.
 import csv
 import datetime
 import hashlib
-import time
 from pathlib import Path
 
 import pytest
@@ -39,22 +38,7 @@ from src.domain.model.target_schema import (
     TargetSchema,
 )
 
-
-# ---------------------------------------------------------------------------
-# Helper: timing context manager
-# ---------------------------------------------------------------------------
-class Timer:
-    """Measure wall-clock time for a code block."""
-
-    def __init__(self) -> None:
-        self.elapsed_ms: float = 0.0
-
-    def __enter__(self) -> "Timer":
-        self._start = time.perf_counter()
-        return self
-
-    def __exit__(self, *args: object) -> None:
-        self.elapsed_ms = (time.perf_counter() - self._start) * 1000
+from tests.benchmark.conftest import Timer
 
 
 # ---------------------------------------------------------------------------
