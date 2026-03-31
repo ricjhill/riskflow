@@ -26,7 +26,7 @@ from typing import Any
 
 import pytest
 
-from src.domain.model.record_factory import build_record_model, _build_cached
+from src.domain.model.record_factory import build_record_model, clear_record_model_cache
 from src.domain.model.schema import (
     ColumnMapping,
     ConfidenceReport,
@@ -94,7 +94,7 @@ def test_model_build_cold(
     )
 
     def build() -> None:
-        _build_cached.cache_clear()
+        clear_record_model_cache()
         build_record_model(schema)
 
     benchmark(build)

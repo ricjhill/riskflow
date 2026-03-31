@@ -47,6 +47,15 @@ def build_record_model(schema: TargetSchema) -> type[BaseModel]:
     return _build_cached(schema.fingerprint, schema.model_dump_json())
 
 
+def clear_record_model_cache() -> None:
+    """Clear the LRU cache for dynamic record models.
+
+    Exposed as a public function so tests can force cold builds
+    without importing the private ``_build_cached`` symbol.
+    """
+    _build_cached.cache_clear()
+
+
 def _build_model(schema: TargetSchema) -> type[BaseModel]:
     """Internal: construct the pydantic model from schema definition."""
     # Build field definitions for create_model
