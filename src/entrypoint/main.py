@@ -35,7 +35,7 @@ from src.ports.output.correction_cache import CorrectionCachePort
 from src.ports.output.repo import CachePort
 
 SCHEMAS_DIR = "schemas"
-DEFAULT_SCHEMA_FILE = "schemas/default.yaml"
+DEFAULT_SCHEMA_FILE = "schemas/standard_reinsurance.yaml"
 
 
 def configure_logging() -> None:

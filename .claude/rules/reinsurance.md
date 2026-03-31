@@ -11,7 +11,7 @@ The default schema maps to 6 fields: `Policy_ID`, `Inception_Date`, `Expiry_Date
 
 ## Validation
 - Field constraints (non_negative, not_empty, allowed_values) are defined per field in the schema YAML
-- Dates: ISO 8601 (YYYY-MM-DD)
+- Dates: flexible parsing via `coerce_date()` — accepts ISO 8601, DD-Mon-YYYY, DD/MM/YYYY, YYYY/MM/DD, verbose formats. Uses `dayfirst=True` (London market convention)
 - Cross-field rules (e.g., Expiry_Date must not precede Inception_Date) are defined in the schema
 - Validation uses the dynamic model from `build_record_model(schema)`, not hardcoded classes
 
