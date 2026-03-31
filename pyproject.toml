@@ -34,6 +34,7 @@ dev = [
     "streamlit>=1.55.0",
     "testcontainers>=4.14.2",
     "types-openpyxl>=3.1.5.20260322",
+    "types-python-dateutil>=2.9.0.20260323",
     "types-pyyaml>=6.0.12.20250915",
 ]
 

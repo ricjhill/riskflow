@@ -5,6 +5,8 @@ from a TargetSchema definition. The generated model has:
 - Typed fields matching the schema (str, float, date, str for currency)
 - field_validator functions for constraints (non_negative, not_empty, allowed_values)
 - model_validator functions for cross-field rules (date ordering)
+- BeforeValidator on date fields to coerce common formats (DD-Mon-YYYY,
+  DD/MM/YYYY, etc.) before Pydantic's strict ISO parser runs
 
 The model is cached by schema fingerprint — calling build_record_model
 with the same schema returns the same class instance (no regeneration).
@@ -12,11 +14,39 @@ with the same schema returns the same class instance (no regeneration).
 
 import datetime
 import functools
-from typing import Any
+from typing import Annotated, Any
 
-from pydantic import BaseModel, create_model, field_validator, model_validator
+from dateutil import parser as dateutil_parser
+from pydantic import BaseModel, BeforeValidator, create_model, field_validator, model_validator
 
 from src.domain.model.target_schema import FieldDefinition, FieldType, TargetSchema
+
+
+def coerce_date(value: Any) -> Any:
+    """Coerce common date formats to datetime.date.
+
+    Handles DD-Mon-YYYY, DD/MM/YYYY, YYYY/MM/DD, verbose formats, and
+    datetime objects. Passes through datetime.date unchanged. Uses
+    dayfirst=True since reinsurance is heavily London-market oriented.
+    """
+    if isinstance(value, datetime.date) and not isinstance(value, datetime.datetime):
+        return value
+    if isinstance(value, datetime.datetime):
+        return value.date()
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("Date string must not be empty")
+        try:
+            return dateutil_parser.parse(stripped, dayfirst=True).date()
+        except (ValueError, OverflowError) as e:
+            msg = f"Could not parse date: '{value}'"
+            raise ValueError(msg) from e
+    return value
+
+
+# Annotated type for date fields with flexible parsing
+FlexibleDate = Annotated[datetime.date, BeforeValidator(coerce_date)]
 
 # Type mapping from schema FieldType to Python types
 _TYPE_MAP: dict[FieldType, type] = {
@@ -61,11 +91,18 @@ def _build_model(schema: TargetSchema) -> type[BaseModel]:
     # Build field definitions for create_model
     field_definitions: dict[str, Any] = {}
     for name, defn in schema.fields.items():
-        python_type = _TYPE_MAP[defn.type]
-        if defn.required:
-            field_definitions[name] = (python_type, ...)
+        if defn.type == FieldType.DATE:
+            # Use FlexibleDate for date fields to coerce common formats
+            if defn.required:
+                field_definitions[name] = (FlexibleDate, ...)
+            else:
+                field_definitions[name] = (FlexibleDate | None, None)
         else:
-            field_definitions[name] = (python_type | None, None)
+            python_type = _TYPE_MAP[defn.type]
+            if defn.required:
+                field_definitions[name] = (python_type, ...)
+            else:
+                field_definitions[name] = (python_type | None, None)
 
     # Create the base model
     Model = create_model(f"DynamicRecord_{schema.name}", **field_definitions)

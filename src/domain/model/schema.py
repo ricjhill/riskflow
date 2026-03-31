@@ -1,17 +1,21 @@
 """Domain models for reinsurance data mapping."""
 
 import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, BeforeValidator, field_validator, model_validator
+
+from src.domain.model.record_factory import coerce_date
+
+FlexibleDate = Annotated[datetime.date, BeforeValidator(coerce_date)]
 
 
 class RiskRecord(BaseModel):
     """A single validated reinsurance risk record."""
 
     Policy_ID: str
-    Inception_Date: datetime.date
-    Expiry_Date: datetime.date
+    Inception_Date: FlexibleDate
+    Expiry_Date: FlexibleDate
     Sum_Insured: float
     Gross_Premium: float
     Currency: Literal["USD", "GBP", "EUR", "JPY"]
