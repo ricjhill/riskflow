@@ -178,6 +178,14 @@ class TestPostSessions:
         )
         assert resp.status_code == 400
 
+    def test_empty_csv_returns_400(self, client: TestClient) -> None:
+        """Empty file should return 400, not 500."""
+        resp = client.post(
+            "/sessions",
+            files={"file": ("empty.csv", io.BytesIO(b""), "text/csv")},
+        )
+        assert resp.status_code == 400
+
     def test_unknown_schema_returns_404(self, client: TestClient) -> None:
         resp = client.post(
             "/sessions?schema=nonexistent",
@@ -306,6 +314,26 @@ class TestPutSessionMappings:
         )
         assert resp.status_code == 404
 
+    def test_null_mappings_returns_422(self, client: TestClient) -> None:
+        data = _upload_csv(client)
+        session_id = data["id"]
+        resp = client.put(
+            f"/sessions/{session_id}/mappings",
+            json={"mappings": None, "unmapped_headers": []},
+        )
+        assert resp.status_code == 422
+
+    def test_missing_mappings_key_defaults_to_empty_returns_200(self, client: TestClient) -> None:
+        data = _upload_csv(client)
+        session_id = data["id"]
+        resp = client.put(
+            f"/sessions/{session_id}/mappings",
+            json={"unmapped_headers": []},
+        )
+        # Missing "mappings" key defaults to [] via body.get("mappings", [])
+        # which is valid (empty mapping list)
+        assert resp.status_code == 200
+
     def test_update_persisted_to_store(self, client: TestClient, session_store: MagicMock) -> None:
         data = _upload_csv(client)
         session_id = data["id"]
@@ -413,3 +441,29 @@ class TestDeleteSession:
         client.delete(f"/sessions/{session_id}")
         resp = client.get(f"/sessions/{session_id}")
         assert resp.status_code == 404
+
+    def test_delete_succeeds_when_temp_file_already_gone(
+        self, client: TestClient, session_store: MagicMock
+    ) -> None:
+        """DELETE still returns 204 and removes session even if temp file was already deleted."""
+        data = _upload_csv(client)
+        session_id = data["id"]
+        # Remove the temp file before DELETE
+        saved_session = session_store.save.call_args[0][0]
+        os.remove(saved_session.file_path)
+
+        resp = client.delete(f"/sessions/{session_id}")
+        assert resp.status_code == 204
+        session_store.delete.assert_called_once_with(session_id)
+
+    def test_delete_succeeds_when_file_removal_fails(
+        self, client: TestClient, session_store: MagicMock
+    ) -> None:
+        """DELETE still returns 204 even if os.remove raises OSError."""
+        data = _upload_csv(client)
+        session_id = data["id"]
+
+        with patch("src.adapters.http.routes.os.remove", side_effect=OSError("permission denied")):
+            resp = client.delete(f"/sessions/{session_id}")
+        assert resp.status_code == 204
+        session_store.delete.assert_called_once_with(session_id)

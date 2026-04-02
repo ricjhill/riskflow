@@ -4,6 +4,8 @@ from pathlib import Path
 
 import polars as pl
 
+from src.domain.model.errors import InvalidCedentDataError
+
 
 class PolarsIngestor:
     """Reads CSV and Excel files using Polars.
@@ -16,10 +18,14 @@ class PolarsIngestor:
     def get_headers(self, file_path: str, *, sheet_name: str | None = None) -> list[str]:
         """Extract column headers from a spreadsheet."""
         self._check_file_exists(file_path)
-        if file_path.endswith(".csv"):
-            df = pl.read_csv(file_path, n_rows=0)
-        else:
-            df = self._read_excel(file_path, sheet_name)
+        try:
+            if file_path.endswith(".csv"):
+                df = pl.read_csv(file_path, n_rows=0)
+            else:
+                df = self._read_excel(file_path, sheet_name)
+        except pl.exceptions.NoDataError as e:
+            msg = "File is empty or contains no data"
+            raise InvalidCedentDataError(msg) from e
         return df.columns
 
     def get_preview(
@@ -27,11 +33,15 @@ class PolarsIngestor:
     ) -> list[dict[str, object]]:
         """Return first n rows as a list of dicts."""
         self._check_file_exists(file_path)
-        if file_path.endswith(".csv"):
-            df = pl.read_csv(file_path, n_rows=n)
-        else:
-            df = self._read_excel(file_path, sheet_name)
-            df = df.head(n)
+        try:
+            if file_path.endswith(".csv"):
+                df = pl.read_csv(file_path, n_rows=n)
+            else:
+                df = self._read_excel(file_path, sheet_name)
+                df = df.head(n)
+        except pl.exceptions.NoDataError as e:
+            msg = "File is empty or contains no data"
+            raise InvalidCedentDataError(msg) from e
         return df.to_dicts()
 
     def _read_excel(self, file_path: str, sheet_name: str | None) -> pl.DataFrame:

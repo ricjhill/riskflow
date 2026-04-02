@@ -458,6 +458,17 @@ def create_router(
                 )
                 result: dict[str, object] = session.model_dump()
                 return result
+            except (InvalidCedentDataError, ValueError) as e:
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+                raise HTTPException(
+                    status_code=400,
+                    detail=_error_detail(
+                        "INVALID_DATA",
+                        str(e),
+                        "Ensure the file is a valid CSV or Excel spreadsheet with headers in the first row.",
+                    ),
+                ) from e
             except SLMUnavailableError as e:
                 if os.path.exists(temp_path):
                     os.remove(temp_path)
@@ -578,8 +589,15 @@ def create_router(
             if session is None:
                 raise HTTPException(status_code=404, detail="Session not found")
 
-            if os.path.exists(session.file_path):
-                os.remove(session.file_path)
+            try:
+                if os.path.exists(session.file_path):
+                    os.remove(session.file_path)
+            except OSError:
+                logger.warning(
+                    "session_file_cleanup_failed",
+                    session_id=session_id,
+                    file_path=session.file_path,
+                )
             session_store.delete(session_id)
 
             logger.info("session_deleted", session_id=session_id)
