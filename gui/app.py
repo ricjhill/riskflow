@@ -484,6 +484,7 @@ def _reset_flow_session() -> None:
     st.session_state.flow_session_id = None
     st.session_state.flow_session_data = None
     st.session_state.flow_step = "upload"
+    st.session_state.flow_custom_field_types = {}
 
 
 with tab4:
@@ -575,6 +576,49 @@ with tab4:
                 current_mappings=session.get("mappings", []),
             )
 
+            # Add custom field
+            st.divider()
+            with st.expander("Add Custom Target Field"):
+                add_col1, add_col2, add_col3 = st.columns([2, 1, 1])
+                with add_col1:
+                    new_field_name = st.text_input(
+                        "Field Name",
+                        placeholder="e.g. Broker_Notes",
+                        key="flow_new_field_name",
+                    )
+                with add_col2:
+                    new_field_type = st.selectbox(
+                        "Type",
+                        ["string", "date", "float", "currency"],
+                        key="flow_new_field_type",
+                    )
+                with add_col3:
+                    st.markdown("")  # spacer
+                    if st.button("Add Field", key="flow_add_field"):
+                        if not new_field_name or not new_field_name.strip():
+                            st.error("Field name is required.")
+                        elif new_field_name in session.get("target_fields", []):
+                            st.error(f"Field '{new_field_name}' already exists.")
+                        else:
+                            try:
+                                # Store the type in session state for schema creation later
+                                if "flow_custom_field_types" not in st.session_state:
+                                    st.session_state.flow_custom_field_types = {}
+                                st.session_state.flow_custom_field_types[new_field_name] = (
+                                    new_field_type
+                                )
+
+                                updated = client.add_target_fields(
+                                    st.session_state.flow_session_id,
+                                    fields=[new_field_name],
+                                )
+                                st.session_state.flow_session_data = updated
+                                st.rerun()
+                            except httpx.HTTPStatusError as e:
+                                _show_api_error(e)
+                            except Exception as e:
+                                st.error(f"Error: {e}")
+
             btn_col1, btn_col2, btn_col3 = st.columns([1, 1, 1])
 
             with btn_col1:
@@ -657,6 +701,56 @@ with tab4:
                 st.subheader(f"Validation Errors ({len(errors)})")
                 for err in errors:
                     st.error(f"Row {err['row']}: {err['error']}")
+
+            # Save as new schema
+            custom_types = st.session_state.get("flow_custom_field_types", {})
+            if custom_types:
+                st.divider()
+                st.subheader("Save as New Schema")
+                st.caption(
+                    f"This session added {len(custom_types)} custom field(s): "
+                    f"{', '.join(custom_types.keys())}. "
+                    "Save the full mapping as a reusable schema."
+                )
+                schema_name_input = st.text_input(
+                    "Schema Name",
+                    placeholder="e.g. marine_with_renewal",
+                    key="flow_schema_name",
+                )
+                if st.button("Save Schema", key="flow_save_schema"):
+                    if not schema_name_input or not schema_name_input.strip():
+                        st.error("Schema name is required.")
+                    else:
+                        try:
+                            # Build schema body from original + custom fields
+                            # Get original schema fields via the API
+                            original_schema_name = session.get("schema_name", "")
+                            original_fields = {}
+                            if original_schema_name:
+                                try:
+                                    schema_data = client.get_schema(original_schema_name)
+                                    original_fields = schema_data.get("fields", {})
+                                except Exception:
+                                    pass
+
+                            # Add custom fields with user-selected types
+                            all_fields = dict(original_fields)
+                            for fname, ftype in custom_types.items():
+                                all_fields[fname] = {"type": ftype}
+
+                            schema_body = {
+                                "name": schema_name_input.strip(),
+                                "fields": all_fields,
+                            }
+                            result_schema = client.create_schema(schema_body)
+                            st.success(
+                                f"Schema '{result_schema['name']}' saved. "
+                                "It will appear in the schema dropdown on your next session."
+                            )
+                        except httpx.HTTPStatusError as e:
+                            _show_api_error(e)
+                        except Exception as e:
+                            st.error(f"Error: {e}")
 
             st.divider()
             if st.button("New Session", type="primary", key="flow_new"):

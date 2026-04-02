@@ -154,6 +154,52 @@ class TestUpdateMappings:
             session.update_mappings(mappings=[], unmapped_headers=[])
 
 
+class TestExtendTargetFields:
+    """extend_target_fields appends new fields, deduplicates, and validates."""
+
+    @pytest.fixture()
+    def session(self) -> MappingSession:
+        return MappingSession.create(
+            schema_name="s",
+            file_path="/tmp/test.csv",
+            sheet_name=None,
+            source_headers=["A", "B"],
+            target_fields=["Field_1", "Field_2"],
+            mappings=[],
+            unmapped_headers=["A", "B"],
+            preview_rows=[],
+        )
+
+    def test_appends_new_fields(self, session: MappingSession) -> None:
+        session.extend_target_fields(fields=["Field_3", "Field_4"])
+        assert "Field_3" in session.target_fields
+        assert "Field_4" in session.target_fields
+        assert len(session.target_fields) == 4
+
+    def test_deduplicates_existing_fields(self, session: MappingSession) -> None:
+        session.extend_target_fields(fields=["Field_1", "Field_3"])
+        assert session.target_fields.count("Field_1") == 1
+        assert "Field_3" in session.target_fields
+        assert len(session.target_fields) == 3
+
+    def test_rejects_empty_field_names(self, session: MappingSession) -> None:
+        with pytest.raises(ValueError, match="empty"):
+            session.extend_target_fields(fields=[""])
+
+    def test_rejects_whitespace_only_field_names(self, session: MappingSession) -> None:
+        with pytest.raises(ValueError, match="empty"):
+            session.extend_target_fields(fields=["  "])
+
+    def test_rejects_on_finalised_session(self, session: MappingSession) -> None:
+        session.finalise(result={})
+        with pytest.raises(ValueError, match="FINALISED"):
+            session.extend_target_fields(fields=["New"])
+
+    def test_rejects_empty_list(self, session: MappingSession) -> None:
+        with pytest.raises(ValueError, match="at least one"):
+            session.extend_target_fields(fields=[])
+
+
 class TestFinalise:
     """finalise transitions CREATED → FINALISED and stores the result."""
 

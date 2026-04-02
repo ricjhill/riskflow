@@ -75,6 +75,27 @@ class TestListSchemas:
         mock_response.raise_for_status.assert_called_once()
 
 
+class TestGetSchema:
+    """GET /schemas/{name}."""
+
+    @patch("gui.api_client.httpx.get")
+    def test_gets_correct_url(self, mock_get: MagicMock, client: RiskFlowClient) -> None:
+        mock_get.return_value = MagicMock(
+            json=lambda: {"name": "marine", "fields": {}},
+            raise_for_status=MagicMock(),
+        )
+        result = client.get_schema("marine")
+        assert mock_get.call_args[0][0] == "http://test:8000/schemas/marine"
+        assert result["name"] == "marine"
+
+    @patch("gui.api_client.httpx.get")
+    def test_calls_raise_for_status(self, mock_get: MagicMock, client: RiskFlowClient) -> None:
+        mock_response = MagicMock()
+        mock_get.return_value = mock_response
+        client.get_schema("x")
+        mock_response.raise_for_status.assert_called_once()
+
+
 class TestUpload:
     """POST /upload."""
 
@@ -310,6 +331,66 @@ class TestFinaliseSession:
         mock_response = MagicMock()
         mock_post.return_value = mock_response
         client.finalise_session("abc")
+        mock_response.raise_for_status.assert_called_once()
+
+
+class TestAddTargetFields:
+    """PATCH /sessions/{id}/target-fields — add custom target fields."""
+
+    @patch("gui.api_client.httpx.patch")
+    def test_patches_correct_url(self, mock_patch: MagicMock, client: RiskFlowClient) -> None:
+        mock_patch.return_value = MagicMock(
+            json=lambda: {"id": "abc", "target_fields": ["A", "B"]},
+            raise_for_status=MagicMock(),
+        )
+        client.add_target_fields("abc", fields=["B"])
+        assert mock_patch.call_args[0][0] == "http://test:8000/sessions/abc/target-fields"
+
+    @patch("gui.api_client.httpx.patch")
+    def test_sends_fields_in_body(self, mock_patch: MagicMock, client: RiskFlowClient) -> None:
+        mock_patch.return_value = MagicMock(
+            json=lambda: {"id": "abc"},
+            raise_for_status=MagicMock(),
+        )
+        client.add_target_fields("abc", fields=["New_Field"])
+        body = mock_patch.call_args[1]["json"]
+        assert body == {"fields": ["New_Field"]}
+
+    @patch("gui.api_client.httpx.patch")
+    def test_calls_raise_for_status(self, mock_patch: MagicMock, client: RiskFlowClient) -> None:
+        mock_response = MagicMock()
+        mock_patch.return_value = mock_response
+        client.add_target_fields("abc", fields=["X"])
+        mock_response.raise_for_status.assert_called_once()
+
+
+class TestCreateSchema:
+    """POST /schemas — create a runtime schema."""
+
+    @patch("gui.api_client.httpx.post")
+    def test_posts_correct_url(self, mock_post: MagicMock, client: RiskFlowClient) -> None:
+        mock_post.return_value = MagicMock(
+            json=lambda: {"name": "custom", "fingerprint": "abc123"},
+            raise_for_status=MagicMock(),
+        )
+        client.create_schema({"name": "custom", "fields": {}})
+        assert mock_post.call_args[0][0] == "http://test:8000/schemas"
+
+    @patch("gui.api_client.httpx.post")
+    def test_sends_schema_body(self, mock_post: MagicMock, client: RiskFlowClient) -> None:
+        mock_post.return_value = MagicMock(
+            json=lambda: {"name": "custom"},
+            raise_for_status=MagicMock(),
+        )
+        body = {"name": "custom", "fields": {"ID": {"type": "string"}}}
+        client.create_schema(body)
+        assert mock_post.call_args[1]["json"] == body
+
+    @patch("gui.api_client.httpx.post")
+    def test_calls_raise_for_status(self, mock_post: MagicMock, client: RiskFlowClient) -> None:
+        mock_response = MagicMock()
+        mock_post.return_value = mock_response
+        client.create_schema({"name": "x", "fields": {}})
         mock_response.raise_for_status.assert_called_once()
 
 

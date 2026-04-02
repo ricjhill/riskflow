@@ -26,6 +26,12 @@ class RiskFlowClient:
         r.raise_for_status()
         return r.json()["schemas"]
 
+    def get_schema(self, name: str) -> dict:
+        """GET /schemas/{name} → full schema definition."""
+        r = httpx.get(f"{self.base_url}/schemas/{name}", timeout=5)
+        r.raise_for_status()
+        return r.json()
+
     def upload(
         self,
         file_bytes: bytes,
@@ -123,6 +129,26 @@ class RiskFlowClient:
         r = httpx.post(
             f"{self.base_url}/sessions/{session_id}/finalise",
             timeout=30,
+        )
+        r.raise_for_status()
+        return r.json()
+
+    def add_target_fields(self, session_id: str, *, fields: list[str]) -> dict:
+        """PATCH /sessions/{id}/target-fields → updated session dict."""
+        r = httpx.patch(
+            f"{self.base_url}/sessions/{session_id}/target-fields",
+            json={"fields": fields},
+            timeout=10,
+        )
+        r.raise_for_status()
+        return r.json()
+
+    def create_schema(self, schema_body: dict) -> dict:
+        """POST /schemas → {"name": ..., "fingerprint": ...}."""
+        r = httpx.post(
+            f"{self.base_url}/schemas",
+            json=schema_body,
+            timeout=10,
         )
         r.raise_for_status()
         return r.json()

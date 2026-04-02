@@ -91,6 +91,28 @@ class MappingSession(BaseModel):
         self.mappings = mappings
         self.unmapped_headers = unmapped_headers
 
+    def extend_target_fields(self, *, fields: list[str]) -> None:
+        """Append new target fields to the session.
+
+        Deduplicates against existing fields. Rejects empty names
+        and empty lists. Cannot extend a finalised session.
+        """
+        if self.status == SessionStatus.FINALISED:
+            msg = "Cannot extend target fields on a FINALISED session"
+            raise ValueError(msg)
+        if not fields:
+            msg = "Must provide at least one field"
+            raise ValueError(msg)
+        for f in fields:
+            if not f or not f.strip():
+                msg = "Field names must not be empty"
+                raise ValueError(msg)
+        existing = set(self.target_fields)
+        for f in fields:
+            if f not in existing:
+                self.target_fields.append(f)
+                existing.add(f)
+
     def finalise(self, *, result: dict[str, object]) -> None:
         """Transition CREATED → FINALISED and store the processing result."""
         if self.status == SessionStatus.FINALISED:
