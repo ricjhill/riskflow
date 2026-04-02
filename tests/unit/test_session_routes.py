@@ -405,6 +405,67 @@ class TestFinaliseSession:
         assert body["message"] == "Internal server error"
 
 
+class TestPatchTargetFields:
+    """PATCH /sessions/{id}/target-fields — add custom target fields."""
+
+    def test_returns_200_with_updated_fields(self, client: TestClient) -> None:
+        data = _upload_csv(client)
+        session_id = data["id"]
+        resp = client.patch(
+            f"/sessions/{session_id}/target-fields",
+            json={"fields": ["Custom_Field"]},
+        )
+        assert resp.status_code == 200
+        assert "Custom_Field" in resp.json()["target_fields"]
+
+    def test_deduplicates_existing_fields(self, client: TestClient) -> None:
+        data = _upload_csv(client)
+        session_id = data["id"]
+        existing = data["target_fields"]
+        resp = client.patch(
+            f"/sessions/{session_id}/target-fields",
+            json={"fields": [existing[0], "Brand_New"]},
+        )
+        body = resp.json()
+        assert body["target_fields"].count(existing[0]) == 1
+        assert "Brand_New" in body["target_fields"]
+
+    def test_unknown_session_returns_404(self, client: TestClient) -> None:
+        resp = client.patch(
+            "/sessions/nonexistent/target-fields",
+            json={"fields": ["X"]},
+        )
+        assert resp.status_code == 404
+
+    def test_empty_fields_returns_422(self, client: TestClient) -> None:
+        data = _upload_csv(client)
+        session_id = data["id"]
+        resp = client.patch(
+            f"/sessions/{session_id}/target-fields",
+            json={"fields": []},
+        )
+        assert resp.status_code == 422
+
+    def test_empty_field_name_returns_422(self, client: TestClient) -> None:
+        data = _upload_csv(client)
+        session_id = data["id"]
+        resp = client.patch(
+            f"/sessions/{session_id}/target-fields",
+            json={"fields": [""]},
+        )
+        assert resp.status_code == 422
+
+    def test_persisted_to_store(self, client: TestClient, session_store: MagicMock) -> None:
+        data = _upload_csv(client)
+        session_id = data["id"]
+        client.patch(
+            f"/sessions/{session_id}/target-fields",
+            json={"fields": ["New_Field"]},
+        )
+        # save called twice: create + patch
+        assert session_store.save.call_count == 2
+
+
 class TestDeleteSession:
     """DELETE /sessions/{id} — cleanup temp file + session store."""
 

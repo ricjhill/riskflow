@@ -537,6 +537,42 @@ def create_router(
             result: dict[str, object] = session.model_dump()
             return result
 
+        @router.patch("/sessions/{session_id}/target-fields")
+        async def extend_target_fields(
+            session_id: str, body: dict[str, object]
+        ) -> dict[str, object]:
+            """Add custom target fields to a session."""
+            session = session_store.get(session_id)
+            if session is None:
+                raise HTTPException(status_code=404, detail="Session not found")
+
+            raw_fields = body.get("fields", [])
+            if not isinstance(raw_fields, list):
+                raise HTTPException(
+                    status_code=422,
+                    detail=_error_detail(
+                        "INVALID_FIELDS",
+                        "fields must be a list of strings",
+                        "Provide a JSON object with a 'fields' key containing a list of field names.",
+                    ),
+                )
+
+            try:
+                session.extend_target_fields(fields=[str(f) for f in raw_fields])
+            except ValueError as e:
+                raise HTTPException(
+                    status_code=422,
+                    detail=_error_detail(
+                        "INVALID_FIELDS",
+                        str(e),
+                        "Provide at least one non-empty field name.",
+                    ),
+                ) from e
+
+            session_store.save(session)
+            result: dict[str, object] = session.model_dump()
+            return result
+
         @router.post("/sessions/{session_id}/finalise")
         async def finalise_session(session_id: str) -> dict[str, object]:
             """Validate rows with the session's current mapping."""
