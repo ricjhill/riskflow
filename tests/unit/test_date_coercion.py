@@ -50,6 +50,11 @@ class TestDateCoercionFormats:
         [
             # ISO 8601 — already works, must not break
             ("2025-01-15", datetime.date(2025, 1, 15)),
+            # ISO 8601 where both month and day are valid months (1-12).
+            # Without ISO-first parsing, dayfirst=True swaps these:
+            # "2024-04-02" becomes Feb 4 instead of April 2.
+            ("2024-04-02", datetime.date(2024, 4, 2)),
+            ("2024-09-06", datetime.date(2024, 9, 6)),
             # DD-Mon-YYYY — the format that triggered this feature
             ("01-Jan-2025", datetime.date(2025, 1, 1)),
             ("15-Feb-2025", datetime.date(2025, 2, 15)),
@@ -68,6 +73,8 @@ class TestDateCoercionFormats:
         ],
         ids=[
             "iso-8601",
+            "iso-ambiguous-april",
+            "iso-ambiguous-september",
             "dd-mon-yyyy-jan",
             "dd-mon-yyyy-feb",
             "dd-mon-yyyy-dec",
