@@ -16,6 +16,24 @@ def client() -> RiskFlowClient:
     return RiskFlowClient(base_url="http://test:8000")
 
 
+class TestConstructor:
+    """Base URL trailing slash is stripped."""
+
+    def test_trailing_slash_stripped(self) -> None:
+        c = RiskFlowClient(base_url="http://test:8000/")
+        assert c.base_url == "http://test:8000"
+
+    @patch("gui.api_client.httpx.get")
+    def test_trailing_slash_produces_correct_url(self, mock_get: MagicMock) -> None:
+        mock_get.return_value = MagicMock(
+            json=lambda: {"status": "ok"},
+            raise_for_status=MagicMock(),
+        )
+        c = RiskFlowClient(base_url="http://test:8000/")
+        c.health()
+        assert mock_get.call_args[0][0] == "http://test:8000/health"
+
+
 class TestHealth:
     """GET /health."""
 
@@ -29,6 +47,13 @@ class TestHealth:
         assert mock_get.call_args[0][0] == "http://test:8000/health"
         assert result == {"status": "ok"}
 
+    @patch("gui.api_client.httpx.get")
+    def test_calls_raise_for_status(self, mock_get: MagicMock, client: RiskFlowClient) -> None:
+        mock_response = MagicMock()
+        mock_get.return_value = mock_response
+        client.health()
+        mock_response.raise_for_status.assert_called_once()
+
 
 class TestListSchemas:
     """GET /schemas."""
@@ -41,6 +66,13 @@ class TestListSchemas:
         )
         result = client.list_schemas()
         assert result == ["standard_reinsurance", "marine_cargo"]
+
+    @patch("gui.api_client.httpx.get")
+    def test_calls_raise_for_status(self, mock_get: MagicMock, client: RiskFlowClient) -> None:
+        mock_response = MagicMock()
+        mock_get.return_value = mock_response
+        client.list_schemas()
+        mock_response.raise_for_status.assert_called_once()
 
 
 class TestUpload:
@@ -57,6 +89,13 @@ class TestUpload:
         assert mock_post.call_args[1]["params"]["schema"] == "marine_cargo"
         assert result["valid_records"] == []
 
+    @patch("gui.api_client.httpx.post")
+    def test_calls_raise_for_status(self, mock_post: MagicMock, client: RiskFlowClient) -> None:
+        mock_response = MagicMock()
+        mock_post.return_value = mock_response
+        client.upload(b"csv", "f.csv")
+        mock_response.raise_for_status.assert_called_once()
+
 
 class TestListSheets:
     """POST /sheets."""
@@ -69,6 +108,13 @@ class TestListSheets:
         )
         result = client.list_sheets(b"xlsx", "f.xlsx")
         assert result == ["Policies", "Claims"]
+
+    @patch("gui.api_client.httpx.post")
+    def test_calls_raise_for_status(self, mock_post: MagicMock, client: RiskFlowClient) -> None:
+        mock_response = MagicMock()
+        mock_post.return_value = mock_response
+        client.list_sheets(b"xlsx", "f.xlsx")
+        mock_response.raise_for_status.assert_called_once()
 
 
 class TestSubmitCorrections:
@@ -84,6 +130,13 @@ class TestSubmitCorrections:
             "cedent-1", [{"source_header": "A", "target_field": "B"}]
         )
         assert result == 2
+
+    @patch("gui.api_client.httpx.post")
+    def test_calls_raise_for_status(self, mock_post: MagicMock, client: RiskFlowClient) -> None:
+        mock_response = MagicMock()
+        mock_post.return_value = mock_response
+        client.submit_corrections("c", [{"source_header": "A", "target_field": "B"}])
+        mock_response.raise_for_status.assert_called_once()
 
 
 class TestCreateSession:
@@ -141,6 +194,19 @@ class TestCreateSession:
         assert result == expected
 
     @patch("gui.api_client.httpx.post")
+    def test_no_optional_params_sends_empty_params(
+        self, mock_post: MagicMock, client: RiskFlowClient
+    ) -> None:
+        mock_post.return_value = MagicMock(
+            json=lambda: {"id": "abc"},
+            raise_for_status=MagicMock(),
+        )
+        client.create_session(b"data", "f.csv")
+        params = mock_post.call_args[1]["params"]
+        assert "schema" not in params
+        assert "sheet_name" not in params
+
+    @patch("gui.api_client.httpx.post")
     def test_calls_raise_for_status(self, mock_post: MagicMock, client: RiskFlowClient) -> None:
         mock_response = MagicMock()
         mock_post.return_value = mock_response
@@ -168,6 +234,13 @@ class TestGetSession:
             raise_for_status=MagicMock(),
         )
         assert client.get_session("abc") == expected
+
+    @patch("gui.api_client.httpx.get")
+    def test_calls_raise_for_status(self, mock_get: MagicMock, client: RiskFlowClient) -> None:
+        mock_response = MagicMock()
+        mock_get.return_value = mock_response
+        client.get_session("abc")
+        mock_response.raise_for_status.assert_called_once()
 
 
 class TestUpdateMappings:
@@ -203,6 +276,13 @@ class TestUpdateMappings:
         )
         assert client.update_mappings("abc", mappings=[], unmapped_headers=[]) == expected
 
+    @patch("gui.api_client.httpx.put")
+    def test_calls_raise_for_status(self, mock_put: MagicMock, client: RiskFlowClient) -> None:
+        mock_response = MagicMock()
+        mock_put.return_value = mock_response
+        client.update_mappings("abc", mappings=[], unmapped_headers=[])
+        mock_response.raise_for_status.assert_called_once()
+
 
 class TestFinaliseSession:
     """POST /sessions/{id}/finalise — validate rows with user's mapping."""
@@ -224,6 +304,13 @@ class TestFinaliseSession:
             raise_for_status=MagicMock(),
         )
         assert client.finalise_session("abc") == expected
+
+    @patch("gui.api_client.httpx.post")
+    def test_calls_raise_for_status(self, mock_post: MagicMock, client: RiskFlowClient) -> None:
+        mock_response = MagicMock()
+        mock_post.return_value = mock_response
+        client.finalise_session("abc")
+        mock_response.raise_for_status.assert_called_once()
 
 
 class TestDeleteSession:
