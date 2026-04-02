@@ -287,3 +287,44 @@ class TestPutSessionMappings:
         )
         # save called twice: once for create, once for update
         assert session_store.save.call_count == 2
+
+
+class TestFinaliseSession:
+    """POST /sessions/{id}/finalise — validate rows with user's mapping."""
+
+    def test_returns_200_with_result(self, client: TestClient) -> None:
+        data = _upload_csv(client)
+        session_id = data["id"]
+        resp = client.post(f"/sessions/{session_id}/finalise")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == "finalised"
+        assert body["result"] is not None
+        # Result should contain ProcessingResult fields
+        result = body["result"]
+        assert "mapping" in result
+        assert "valid_records" in result
+        assert "errors" in result
+
+    def test_unknown_session_returns_404(self, client: TestClient) -> None:
+        resp = client.post("/sessions/nonexistent/finalise")
+        assert resp.status_code == 404
+
+    def test_finalise_twice_returns_409(self, client: TestClient) -> None:
+        data = _upload_csv(client)
+        session_id = data["id"]
+        resp1 = client.post(f"/sessions/{session_id}/finalise")
+        assert resp1.status_code == 200
+        resp2 = client.post(f"/sessions/{session_id}/finalise")
+        assert resp2.status_code == 409
+
+    def test_finalise_persisted_to_store(
+        self, client: TestClient, session_store: MagicMock
+    ) -> None:
+        data = _upload_csv(client)
+        session_id = data["id"]
+        client.post(f"/sessions/{session_id}/finalise")
+        # save called twice: create + finalise
+        assert session_store.save.call_count == 2
+        final_save = session_store.save.call_args[0][0]
+        assert final_save.status == SessionStatus.FINALISED
