@@ -27,3 +27,11 @@ class InvalidSchemaError(RiskFlowError):
 
 class InvalidCorrectionError(RiskFlowError):
     """Raised when a correction references a target field not in the active schema."""
+
+
+class SchemaAlreadyExistsError(RiskFlowError):
+    """Raised when creating a schema with a name that already exists."""
+
+
+class ProtectedSchemaError(RiskFlowError):
+    """Raised when attempting to delete a built-in (bootstrap) schema."""
