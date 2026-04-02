@@ -14,12 +14,15 @@ with the same schema returns the same class instance (no regeneration).
 
 import datetime
 import functools
+import re
 from typing import Annotated, Any
 
 from dateutil import parser as dateutil_parser
 from pydantic import BaseModel, BeforeValidator, create_model, field_validator, model_validator
 
 from src.domain.model.target_schema import FieldDefinition, FieldType, TargetSchema
+
+_YYYY_SLASH_RE = re.compile(r"^(\d{4})/(\d{1,2})/(\d{1,2})$")
 
 
 def coerce_date(value: Any) -> Any:
@@ -46,6 +49,17 @@ def coerce_date(value: Any) -> Any:
             return datetime.date.fromisoformat(stripped)
         except ValueError:
             pass
+        # Try YYYY/MM/DD — unambiguous year-first with slashes
+        _yyyy_slash = _YYYY_SLASH_RE.match(stripped)
+        if _yyyy_slash:
+            try:
+                return datetime.date(
+                    int(_yyyy_slash.group(1)),
+                    int(_yyyy_slash.group(2)),
+                    int(_yyyy_slash.group(3)),
+                )
+            except ValueError:
+                pass
         # Fall back to dateutil with dayfirst=True for broker formats
         try:
             return dateutil_parser.parse(stripped, dayfirst=True).date()

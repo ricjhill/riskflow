@@ -228,6 +228,34 @@ class TestReinsuranceExcelFixture:
         assert "Risk Location" in unmapped
         assert "Broker" in unmapped
 
+    def test_yyyy_slash_row_parsed_correctly(self, reinsurance_client: TestClient) -> None:
+        """Row 10 uses YYYY/MM/DD format (2025/07/01). Must parse as July 1,
+        not January 7 (the dateutil dayfirst=True misparsing)."""
+
+        xlsx_path = FIXTURES / "reinsurance_bordereaux_messy.xlsx"
+        with open(xlsx_path, "rb") as f:
+            resp = reinsurance_client.post(
+                "/upload",
+                files={
+                    "file": (
+                        "messy.xlsx",
+                        f,
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    )
+                },
+            )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert len(body["valid_records"]) >= 10, (
+            f"Expected at least 10 valid records but got {len(body['valid_records'])}"
+        )
+        # Row 10 (index 9) has Inception_Date=2025/07/01, Expiry_Date=2026/06/30
+        row10 = body["valid_records"][9]
+        assert row10["Inception_Date"] == "2025-07-01", (
+            f"Expected July 1 but got {row10['Inception_Date']}"
+        )
+
     def test_confidence_report_present(self, reinsurance_client: TestClient) -> None:
         """Confidence report should have reasonable values."""
         xlsx_path = FIXTURES / "reinsurance_bordereaux_messy.xlsx"

@@ -7,6 +7,7 @@ import structlog
 from pydantic import ValidationError
 
 from src.domain.model.correction import Correction
+from src.domain.model.date_format import detect_date_format, parse_date
 from src.domain.model.errors import InvalidCorrectionError, MappingConfidenceLowError
 from src.domain.model.record_factory import build_record_model
 from src.domain.model.schema import (
@@ -16,7 +17,7 @@ from src.domain.model.schema import (
     ProcessingResult,
     RowError,
 )
-from src.domain.model.target_schema import DEFAULT_TARGET_SCHEMA, TargetSchema
+from src.domain.model.target_schema import DEFAULT_TARGET_SCHEMA, FieldType, TargetSchema
 from src.ports.input.ingestor import IngestorPort
 from src.ports.output.correction_cache import CorrectionCachePort
 from src.ports.output.mapper import MapperPort
@@ -178,7 +179,30 @@ class MappingService:
         # Rename mapped columns
         df = df.rename({k: v for k, v in rename_map.items() if k in df.columns})
 
+        # Detect date formats from column samples before converting to dicts
+        date_field_names = {
+            name for name, defn in self._schema.fields.items() if defn.type == FieldType.DATE
+        }
+        # Map target field name → detected format hint
+        date_formats: dict[str, str | None] = {}
+        for field_name in date_field_names:
+            if field_name in df.columns:
+                sample = df[field_name].head(5).to_list()
+                str_samples = [str(v) for v in sample if v is not None]
+                date_formats[field_name] = detect_date_format(str_samples)
+
         rows = df.to_dicts()
+
+        # Pre-convert date columns using detected format hints
+        for row in rows:
+            for field_name, fmt in date_formats.items():
+                val = row.get(field_name)
+                if val is not None and isinstance(val, str) and val.strip():
+                    try:
+                        row[field_name] = parse_date(str(val), fmt)
+                    except ValueError:
+                        pass  # Let model_validate catch it with its own error
+
         valid_records: list[dict[str, object]] = []
         invalid_records: list[dict[str, object]] = []
         errors: list[RowError] = []
