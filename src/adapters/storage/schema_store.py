@@ -67,5 +67,5 @@ class RedisSchemaStore:
                 if cursor == 0:
                     break
             return sorted(names)
-        except (ConnectionError, redis_lib.RedisError):
+        except (ConnectionError, redis_lib.RedisError, ValueError, TypeError):
             return []

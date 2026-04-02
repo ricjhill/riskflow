@@ -133,11 +133,56 @@ def create_app() -> FastAPI:
         next(iter(schema_registry.values())),
     )
 
+    # --- Schema store for runtime schemas ---
+    schema_store = _create_schema_store(redis_client)
+
+    # Load runtime schemas from Redis and merge with YAML schemas
+    for runtime_name in schema_store.list_all():
+        if runtime_name not in schemas:
+            runtime_schema = schema_store.get(runtime_name)
+            if runtime_schema:
+                mapper = GroqMapper(client=groq_client, schema=runtime_schema)
+                schema_registry[runtime_name] = MappingService(
+                    ingestor=ingestor,
+                    mapper=mapper,
+                    cache=cache,
+                    schema=runtime_schema,
+                    correction_cache=correction_cache,
+                )
+                schemas[runtime_name] = runtime_schema
+                logger.info(
+                    "runtime_schema_loaded",
+                    schema_name=runtime_name,
+                    schema_fingerprint=runtime_schema.fingerprint,
+                )
+
+    # Track which schemas are built-in (from YAML, undeletable)
+    builtin_schema_names = set(_load_all_schemas().keys())
+
+    # Factory closure for creating MappingService at runtime
+    def _make_service(schema: TargetSchema) -> MappingService:
+        mapper = GroqMapper(client=groq_client, schema=schema)
+        return MappingService(
+            ingestor=ingestor,
+            mapper=mapper,
+            cache=cache,
+            schema=schema,
+            correction_cache=correction_cache,
+        )
+
     # --- Job store for async uploads ---
     job_store = InMemoryJobStore()
 
     # --- Routes ---
-    router = create_router(mapping_service, job_store=job_store, schema_registry=schema_registry)
+    router = create_router(
+        mapping_service,
+        job_store=job_store,
+        schema_registry=schema_registry,
+        schema_definitions=schemas,
+        builtin_schema_names=builtin_schema_names,
+        schema_store=schema_store,
+        service_factory=_make_service,
+    )
     app.include_router(router)
 
     @app.get("/health")
@@ -202,6 +247,17 @@ def _create_correction_cache(redis_client: Any) -> CorrectionCachePort:
     if redis_client:
         return RedisCorrectionCache(client=redis_client)
     return NullCorrectionCache()
+
+
+def _create_schema_store(redis_client: Any) -> Any:
+    """Create Redis schema store if client is available, otherwise NullSchemaStore."""
+    if redis_client:
+        from src.adapters.storage.schema_store import RedisSchemaStore
+
+        return RedisSchemaStore(client=redis_client)
+    from src.adapters.storage.schema_store import NullSchemaStore
+
+    return NullSchemaStore()
 
 
 def _create_groq_client() -> openai.AsyncOpenAI:
