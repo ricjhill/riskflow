@@ -16,6 +16,7 @@ import os
 import re
 import tempfile
 import time
+from collections.abc import Callable
 
 import structlog
 from fastapi import APIRouter, BackgroundTasks, File, HTTPException, Query, UploadFile
@@ -31,8 +32,10 @@ from src.domain.model.errors import (
     SLMUnavailableError,
 )
 from src.domain.model.job import Job
+from src.domain.model.target_schema import TargetSchema
 from src.domain.service.mapping_service import MappingService
 from src.ports.output.job_store import JobStorePort
+from src.ports.output.schema_store import SchemaStorePort
 
 logger = structlog.get_logger()
 
@@ -74,6 +77,10 @@ def create_router(
     mapping_service: MappingService,
     job_store: JobStorePort | None = None,
     schema_registry: dict[str, MappingService] | None = None,
+    schema_definitions: dict[str, TargetSchema] | None = None,
+    builtin_schema_names: set[str] | None = None,
+    schema_store: SchemaStorePort | None = None,
+    service_factory: Callable[[TargetSchema], MappingService] | None = None,
 ) -> APIRouter:
     """Create a FastAPI router wired to the given MappingService.
 
@@ -82,9 +89,19 @@ def create_router(
     job_store is optional — async endpoints are only available when provided.
     schema_registry maps schema names to MappingService instances. When
     ?schema= is provided, the named service is used instead of the default.
+
+    Schema CRUD parameters (all optional for backward compatibility):
+    - schema_definitions: parallel dict for GET /schemas/{name}
+    - builtin_schema_names: names that can't be deleted
+    - schema_store: persistence for runtime schemas
+    - service_factory: closure to build MappingService for new schemas
     """
     router = APIRouter()
     _registry = schema_registry or {}
+    _definitions: dict[str, TargetSchema] = dict(schema_definitions) if schema_definitions else {}
+    _builtins = builtin_schema_names or set()
+    _store = schema_store
+    _factory = service_factory
 
     def _resolve_service(schema_name: str | None) -> MappingService:
         """Resolve which MappingService to use based on ?schema= param."""
@@ -107,6 +124,93 @@ def create_router(
     async def list_schemas() -> dict[str, object]:
         """List all available schema names."""
         return {"schemas": sorted(_registry.keys())}
+
+    @router.get("/schemas/{name}")
+    async def get_schema(name: str) -> dict[str, object]:
+        """Return the full definition of a schema."""
+        schema = _definitions.get(name)
+        if schema is None:
+            raise HTTPException(
+                status_code=404,
+                detail=_error_detail(
+                    "SCHEMA_NOT_FOUND",
+                    f"Schema '{name}' not found.",
+                    "Use GET /schemas to list available schemas.",
+                ),
+            )
+        result: dict[str, object] = schema.model_dump()
+        return result
+
+    @router.post("/schemas", status_code=201)
+    async def create_schema(body: dict[str, object]) -> dict[str, object]:
+        """Create a new runtime schema from a JSON definition."""
+        from pydantic import ValidationError as PydanticValidationError
+
+        if not body:
+            raise HTTPException(status_code=422, detail="Request body must not be empty")
+
+        try:
+            schema = TargetSchema.model_validate(body)
+        except PydanticValidationError as e:
+            raise HTTPException(status_code=422, detail=str(e)) from e
+
+        if schema.name in _registry:
+            raise HTTPException(
+                status_code=409,
+                detail=_error_detail(
+                    "SCHEMA_ALREADY_EXISTS",
+                    f"Schema '{schema.name}' already exists.",
+                    "Use DELETE /schemas/{name} first, or choose a different name.",
+                ),
+            )
+
+        # Persist to store
+        if _store:
+            _store.save(schema)
+
+        # Create service and register
+        if _factory:
+            _registry[schema.name] = _factory(schema)
+        _definitions[schema.name] = schema
+
+        logger.info(
+            "schema_created",
+            schema_name=schema.name,
+            fingerprint=schema.fingerprint,
+            field_count=len(schema.fields),
+        )
+        return {"name": schema.name, "fingerprint": schema.fingerprint}
+
+    @router.delete("/schemas/{name}", status_code=204)
+    async def delete_schema(name: str) -> None:
+        """Delete a runtime schema. Built-in schemas cannot be deleted."""
+
+        if name in _builtins:
+            raise HTTPException(
+                status_code=403,
+                detail=_error_detail(
+                    "PROTECTED_SCHEMA",
+                    f"Schema '{name}' is a built-in schema and cannot be deleted.",
+                    "Only runtime schemas created via POST /schemas can be deleted.",
+                ),
+            )
+
+        if name not in _registry and name not in _definitions:
+            raise HTTPException(
+                status_code=404,
+                detail=_error_detail(
+                    "SCHEMA_NOT_FOUND",
+                    f"Schema '{name}' not found.",
+                    "Use GET /schemas to list available schemas.",
+                ),
+            )
+
+        _registry.pop(name, None)
+        _definitions.pop(name, None)
+        if _store:
+            _store.delete(name)
+
+        logger.info("schema_deleted", schema_name=name)
 
     @router.post("/upload")
     async def upload_file(
