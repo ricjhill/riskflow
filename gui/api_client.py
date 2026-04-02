@@ -63,9 +63,7 @@ class RiskFlowClient:
         r.raise_for_status()
         return r.json()["sheets"]
 
-    def submit_corrections(
-        self, cedent_id: str, corrections: list[dict[str, str]]
-    ) -> int:
+    def submit_corrections(self, cedent_id: str, corrections: list[dict[str, str]]) -> int:
         """POST /corrections → number of corrections stored."""
         r = httpx.post(
             f"{self.base_url}/corrections",
@@ -74,3 +72,26 @@ class RiskFlowClient:
         )
         r.raise_for_status()
         return r.json()["stored"]
+
+    def create_session(
+        self,
+        file_bytes: bytes,
+        filename: str,
+        *,
+        schema: str | None = None,
+        sheet_name: str | None = None,
+    ) -> dict:
+        """POST /sessions → session dict with SLM suggestions."""
+        params: dict[str, str] = {}
+        if schema:
+            params["schema"] = schema
+        if sheet_name:
+            params["sheet_name"] = sheet_name
+        r = httpx.post(
+            f"{self.base_url}/sessions",
+            files={"file": (filename, file_bytes)},
+            params=params,
+            timeout=30,
+        )
+        r.raise_for_status()
+        return r.json()
