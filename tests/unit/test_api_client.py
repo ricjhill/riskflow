@@ -16,6 +16,76 @@ def client() -> RiskFlowClient:
     return RiskFlowClient(base_url="http://test:8000")
 
 
+class TestHealth:
+    """GET /health."""
+
+    @patch("gui.api_client.httpx.get")
+    def test_gets_health_endpoint(self, mock_get: MagicMock, client: RiskFlowClient) -> None:
+        mock_get.return_value = MagicMock(
+            json=lambda: {"status": "ok"},
+            raise_for_status=MagicMock(),
+        )
+        result = client.health()
+        assert mock_get.call_args[0][0] == "http://test:8000/health"
+        assert result == {"status": "ok"}
+
+
+class TestListSchemas:
+    """GET /schemas."""
+
+    @patch("gui.api_client.httpx.get")
+    def test_returns_schema_names(self, mock_get: MagicMock, client: RiskFlowClient) -> None:
+        mock_get.return_value = MagicMock(
+            json=lambda: {"schemas": ["standard_reinsurance", "marine_cargo"]},
+            raise_for_status=MagicMock(),
+        )
+        result = client.list_schemas()
+        assert result == ["standard_reinsurance", "marine_cargo"]
+
+
+class TestUpload:
+    """POST /upload."""
+
+    @patch("gui.api_client.httpx.post")
+    def test_posts_to_upload(self, mock_post: MagicMock, client: RiskFlowClient) -> None:
+        mock_post.return_value = MagicMock(
+            json=lambda: {"mapping": {}, "valid_records": []},
+            raise_for_status=MagicMock(),
+        )
+        result = client.upload(b"csv", "f.csv", schema="marine_cargo")
+        assert mock_post.call_args[0][0] == "http://test:8000/upload"
+        assert mock_post.call_args[1]["params"]["schema"] == "marine_cargo"
+        assert result["valid_records"] == []
+
+
+class TestListSheets:
+    """POST /sheets."""
+
+    @patch("gui.api_client.httpx.post")
+    def test_returns_sheet_names(self, mock_post: MagicMock, client: RiskFlowClient) -> None:
+        mock_post.return_value = MagicMock(
+            json=lambda: {"sheets": ["Policies", "Claims"]},
+            raise_for_status=MagicMock(),
+        )
+        result = client.list_sheets(b"xlsx", "f.xlsx")
+        assert result == ["Policies", "Claims"]
+
+
+class TestSubmitCorrections:
+    """POST /corrections."""
+
+    @patch("gui.api_client.httpx.post")
+    def test_returns_stored_count(self, mock_post: MagicMock, client: RiskFlowClient) -> None:
+        mock_post.return_value = MagicMock(
+            json=lambda: {"stored": 2},
+            raise_for_status=MagicMock(),
+        )
+        result = client.submit_corrections(
+            "cedent-1", [{"source_header": "A", "target_field": "B"}]
+        )
+        assert result == 2
+
+
 class TestCreateSession:
     """POST /sessions — upload file, get session with SLM suggestions."""
 
