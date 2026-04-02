@@ -18,16 +18,20 @@ src/
     model/           # TargetSchema, FieldDefinition, record_factory, ColumnMapping,
                      # MappingResult, ProcessingResult, ConfidenceReport, RiskRecord,
                      # Correction, Job, RowError, DateOrderingRule, SLMHint, errors,
+                     # MappingSession (interactive mapping workflow),
                      # date_format (column-level date format detection and parsing)
     service/         # MappingService — orchestrates mapping, corrections, and row validation
   ports/
     input/           # IngestorPort (how data enters the domain)
     output/          # MapperPort (SLM calls), CachePort (Redis),
-                     # CorrectionCachePort, JobStorePort, SchemaLoaderPort
+                     # CorrectionCachePort, JobStorePort, SchemaLoaderPort,
+                     # MappingSessionStorePort, SchemaStorePort
   adapters/
-    http/            # FastAPI routes (/upload, /upload/async, /jobs, /sheets, /corrections, /schemas)
+    http/            # FastAPI routes (/upload, /upload/async, /jobs, /sheets,
+                     # /corrections, /schemas, /sessions)
     slm/             # Groq API implementation
-    storage/         # Redis cache, Redis correction cache, in-memory job store
+    storage/         # Redis cache, Redis correction cache, in-memory job store,
+                     # Redis session store, Redis schema store
     parsers/         # Polars-based Excel/CSV readers, YAML schema loader
 tests/
   unit/              # Domain and service tests — no I/O
@@ -38,8 +42,8 @@ tests/
   load/              # Locust load tests (locustfile.py for manual, test_locust_ci.py for CI)
   fixtures/          # Sample bordereaux CSV for tests
 schemas/
-  default.yaml       # Default 6-field reinsurance target schema
-  marine_cargo.yaml  # 8-field marine cargo schema (demo + testing)
+  standard_reinsurance.yaml  # Default 6-field reinsurance target schema
+  marine_cargo.yaml          # 8-field marine cargo schema (demo + testing)
 gui/
   app.py             # Streamlit dashboard (3 tabs: mapping, debugger, corrections)
   api_client.py      # Thin httpx wrapper — GUI talks to API via HTTP, not imports
