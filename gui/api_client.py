@@ -95,3 +95,39 @@ class RiskFlowClient:
         )
         r.raise_for_status()
         return r.json()
+
+    def get_session(self, session_id: str) -> dict:
+        """GET /sessions/{id} → current session state."""
+        r = httpx.get(f"{self.base_url}/sessions/{session_id}", timeout=5)
+        r.raise_for_status()
+        return r.json()
+
+    def update_mappings(
+        self,
+        session_id: str,
+        *,
+        mappings: list[dict],
+        unmapped_headers: list[str],
+    ) -> dict:
+        """PUT /sessions/{id}/mappings → updated session state."""
+        r = httpx.put(
+            f"{self.base_url}/sessions/{session_id}/mappings",
+            json={"mappings": mappings, "unmapped_headers": unmapped_headers},
+            timeout=10,
+        )
+        r.raise_for_status()
+        return r.json()
+
+    def finalise_session(self, session_id: str) -> dict:
+        """POST /sessions/{id}/finalise → session with ProcessingResult."""
+        r = httpx.post(
+            f"{self.base_url}/sessions/{session_id}/finalise",
+            timeout=30,
+        )
+        r.raise_for_status()
+        return r.json()
+
+    def delete_session(self, session_id: str) -> None:
+        """DELETE /sessions/{id} → cleanup session + temp file."""
+        r = httpx.delete(f"{self.base_url}/sessions/{session_id}", timeout=5)
+        r.raise_for_status()
