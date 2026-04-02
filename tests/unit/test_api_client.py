@@ -75,6 +75,27 @@ class TestListSchemas:
         mock_response.raise_for_status.assert_called_once()
 
 
+class TestGetSchema:
+    """GET /schemas/{name}."""
+
+    @patch("gui.api_client.httpx.get")
+    def test_gets_correct_url(self, mock_get: MagicMock, client: RiskFlowClient) -> None:
+        mock_get.return_value = MagicMock(
+            json=lambda: {"name": "marine", "fields": {}},
+            raise_for_status=MagicMock(),
+        )
+        result = client.get_schema("marine")
+        assert mock_get.call_args[0][0] == "http://test:8000/schemas/marine"
+        assert result["name"] == "marine"
+
+    @patch("gui.api_client.httpx.get")
+    def test_calls_raise_for_status(self, mock_get: MagicMock, client: RiskFlowClient) -> None:
+        mock_response = MagicMock()
+        mock_get.return_value = mock_response
+        client.get_schema("x")
+        mock_response.raise_for_status.assert_called_once()
+
+
 class TestUpload:
     """POST /upload."""
 

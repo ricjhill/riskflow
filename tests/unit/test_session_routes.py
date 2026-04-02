@@ -465,6 +465,43 @@ class TestPatchTargetFields:
         # save called twice: create + patch
         assert session_store.save.call_count == 2
 
+    def test_non_list_fields_returns_422(self, client: TestClient) -> None:
+        data = _upload_csv(client)
+        session_id = data["id"]
+        resp = client.patch(
+            f"/sessions/{session_id}/target-fields",
+            json={"fields": "not_a_list"},
+        )
+        assert resp.status_code == 422
+
+    def test_non_string_element_returns_422(self, client: TestClient) -> None:
+        data = _upload_csv(client)
+        session_id = data["id"]
+        resp = client.patch(
+            f"/sessions/{session_id}/target-fields",
+            json={"fields": [123]},
+        )
+        assert resp.status_code == 422
+
+    def test_whitespace_field_name_returns_422(self, client: TestClient) -> None:
+        data = _upload_csv(client)
+        session_id = data["id"]
+        resp = client.patch(
+            f"/sessions/{session_id}/target-fields",
+            json={"fields": ["  "]},
+        )
+        assert resp.status_code == 422
+
+    def test_finalised_session_returns_422(self, client: TestClient) -> None:
+        data = _upload_csv(client)
+        session_id = data["id"]
+        client.post(f"/sessions/{session_id}/finalise")
+        resp = client.patch(
+            f"/sessions/{session_id}/target-fields",
+            json={"fields": ["Late_Field"]},
+        )
+        assert resp.status_code == 422
+
 
 class TestDeleteSession:
     """DELETE /sessions/{id} — cleanup temp file + session store."""

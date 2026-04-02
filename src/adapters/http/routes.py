@@ -557,8 +557,20 @@ def create_router(
                     ),
                 )
 
+            # Validate all elements are strings
+            for f in raw_fields:
+                if not isinstance(f, str):
+                    raise HTTPException(
+                        status_code=422,
+                        detail=_error_detail(
+                            "INVALID_FIELDS",
+                            f"Field names must be strings, got {type(f).__name__}",
+                            "Provide a list of string field names.",
+                        ),
+                    )
+
             try:
-                session.extend_target_fields(fields=[str(f) for f in raw_fields])
+                session.extend_target_fields(fields=raw_fields)
             except ValueError as e:
                 raise HTTPException(
                     status_code=422,

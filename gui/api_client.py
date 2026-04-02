@@ -26,6 +26,12 @@ class RiskFlowClient:
         r.raise_for_status()
         return r.json()["schemas"]
 
+    def get_schema(self, name: str) -> dict:
+        """GET /schemas/{name} → full schema definition."""
+        r = httpx.get(f"{self.base_url}/schemas/{name}", timeout=5)
+        r.raise_for_status()
+        return r.json()
+
     def upload(
         self,
         file_bytes: bytes,

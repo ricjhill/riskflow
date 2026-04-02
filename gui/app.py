@@ -728,12 +728,8 @@ with tab4:
                             original_fields = {}
                             if original_schema_name:
                                 try:
-                                    schema_def = httpx.get(
-                                        f"{client.base_url}/schemas/{original_schema_name}",
-                                        timeout=5,
-                                    )
-                                    if schema_def.status_code == 200:
-                                        original_fields = schema_def.json().get("fields", {})
+                                    schema_data = client.get_schema(original_schema_name)
+                                    original_fields = schema_data.get("fields", {})
                                 except Exception:
                                     pass
 
