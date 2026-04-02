@@ -17,7 +17,8 @@ src/
   domain/
     model/           # TargetSchema, FieldDefinition, record_factory, ColumnMapping,
                      # MappingResult, ProcessingResult, ConfidenceReport, RiskRecord,
-                     # Correction, Job, RowError, DateOrderingRule, SLMHint, errors
+                     # Correction, Job, RowError, DateOrderingRule, SLMHint, errors,
+                     # date_format (column-level date format detection and parsing)
     service/         # MappingService — orchestrates mapping, corrections, and row validation
   ports/
     input/           # IngestorPort (how data enters the domain)
