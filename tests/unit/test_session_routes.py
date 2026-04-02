@@ -214,3 +214,76 @@ class TestGetSession:
         assert "source_headers" in body
         assert "target_fields" in body
         assert "preview_rows" in body
+
+
+class TestPutSessionMappings:
+    """PUT /sessions/{id}/mappings — user edits mappings."""
+
+    def test_valid_update_returns_200(self, client: TestClient) -> None:
+        data = _upload_csv(client)
+        session_id = data["id"]
+        resp = client.put(
+            f"/sessions/{session_id}/mappings",
+            json={
+                "mappings": [
+                    {"source_header": "id_col", "target_field": "ID", "confidence": 1.0},
+                ],
+                "unmapped_headers": ["amount_col", "extra_col"],
+            },
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert len(body["mappings"]) == 1
+        assert body["mappings"][0]["confidence"] == 1.0
+        assert body["unmapped_headers"] == ["amount_col", "extra_col"]
+
+    def test_invalid_target_returns_422(self, client: TestClient) -> None:
+        data = _upload_csv(client)
+        session_id = data["id"]
+        resp = client.put(
+            f"/sessions/{session_id}/mappings",
+            json={
+                "mappings": [
+                    {"source_header": "id_col", "target_field": "NONEXISTENT", "confidence": 1.0},
+                ],
+                "unmapped_headers": [],
+            },
+        )
+        assert resp.status_code == 422
+
+    def test_duplicate_targets_returns_422(self, client: TestClient) -> None:
+        data = _upload_csv(client)
+        session_id = data["id"]
+        resp = client.put(
+            f"/sessions/{session_id}/mappings",
+            json={
+                "mappings": [
+                    {"source_header": "id_col", "target_field": "ID", "confidence": 1.0},
+                    {"source_header": "amount_col", "target_field": "ID", "confidence": 1.0},
+                ],
+                "unmapped_headers": [],
+            },
+        )
+        assert resp.status_code == 422
+
+    def test_unknown_session_returns_404(self, client: TestClient) -> None:
+        resp = client.put(
+            "/sessions/nonexistent/mappings",
+            json={"mappings": [], "unmapped_headers": []},
+        )
+        assert resp.status_code == 404
+
+    def test_update_persisted_to_store(self, client: TestClient, session_store: MagicMock) -> None:
+        data = _upload_csv(client)
+        session_id = data["id"]
+        client.put(
+            f"/sessions/{session_id}/mappings",
+            json={
+                "mappings": [
+                    {"source_header": "id_col", "target_field": "ID", "confidence": 1.0},
+                ],
+                "unmapped_headers": [],
+            },
+        )
+        # save called twice: once for create, once for update
+        assert session_store.save.call_count == 2
