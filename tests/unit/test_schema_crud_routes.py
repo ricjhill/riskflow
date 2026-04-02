@@ -130,6 +130,18 @@ class TestPostSchema:
         resp = client.post("/schemas", json={"name": "bad"})
         assert resp.status_code == 422
 
+    @pytest.mark.parametrize(
+        "bad_name",
+        ["../etc/passwd", "schema with spaces", "schema;drop", ""],
+        ids=["path-traversal", "spaces", "semicolon", "empty"],
+    )
+    def test_rejects_invalid_name_in_body(self, client: TestClient, bad_name: str) -> None:
+        resp = client.post(
+            "/schemas",
+            json={"name": bad_name, "fields": {"X": {"type": "string"}}},
+        )
+        assert resp.status_code in (400, 422)
+
     def test_rejects_duplicate_name(self, client: TestClient) -> None:
         resp = client.post(
             "/schemas",

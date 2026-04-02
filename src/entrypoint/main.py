@@ -136,6 +136,10 @@ def create_app() -> FastAPI:
     # --- Schema store for runtime schemas ---
     schema_store = _create_schema_store(redis_client)
 
+    # Track which schemas are built-in (from YAML, undeletable)
+    # Must capture before merging Redis schemas
+    builtin_schema_names = set(schemas.keys())
+
     # Load runtime schemas from Redis and merge with YAML schemas
     for runtime_name in schema_store.list_all():
         if runtime_name not in schemas:
@@ -155,9 +159,6 @@ def create_app() -> FastAPI:
                     schema_name=runtime_name,
                     schema_fingerprint=runtime_schema.fingerprint,
                 )
-
-    # Track which schemas are built-in (from YAML, undeletable)
-    builtin_schema_names = set(_load_all_schemas().keys())
 
     # Factory closure for creating MappingService at runtime
     def _make_service(schema: TargetSchema) -> MappingService:

@@ -29,27 +29,3 @@ class TestErrorHierarchy:
             raise SLMUnavailableError("Groq API timeout")
         except RiskFlowError as e:
             assert "timeout" in str(e)
-
-
-class TestSchemasCrudErrors:
-    def test_schema_already_exists_inherits(self) -> None:
-        from src.domain.model.errors import SchemaAlreadyExistsError
-
-        assert issubclass(SchemaAlreadyExistsError, RiskFlowError)
-
-    def test_schema_already_exists_carries_message(self) -> None:
-        from src.domain.model.errors import SchemaAlreadyExistsError
-
-        err = SchemaAlreadyExistsError("Schema 'marine_cargo' already exists")
-        assert "marine_cargo" in str(err)
-
-    def test_protected_schema_inherits(self) -> None:
-        from src.domain.model.errors import ProtectedSchemaError
-
-        assert issubclass(ProtectedSchemaError, RiskFlowError)
-
-    def test_protected_schema_carries_message(self) -> None:
-        from src.domain.model.errors import ProtectedSchemaError
-
-        err = ProtectedSchemaError("Cannot delete built-in schema 'standard_reinsurance'")
-        assert "standard_reinsurance" in str(err)

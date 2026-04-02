@@ -128,6 +128,7 @@ def create_router(
     @router.get("/schemas/{name}")
     async def get_schema(name: str) -> dict[str, object]:
         """Return the full definition of a schema."""
+        _validate_schema_name(name)
         schema = _definitions.get(name)
         if schema is None:
             raise HTTPException(
@@ -147,14 +148,30 @@ def create_router(
         from pydantic import ValidationError as PydanticValidationError
 
         if not body:
-            raise HTTPException(status_code=422, detail="Request body must not be empty")
+            raise HTTPException(
+                status_code=422,
+                detail=_error_detail(
+                    "INVALID_SCHEMA",
+                    "Request body must not be empty.",
+                    "Provide a JSON object with 'name' and 'fields' keys.",
+                ),
+            )
 
         try:
             schema = TargetSchema.model_validate(body)
         except PydanticValidationError as e:
-            raise HTTPException(status_code=422, detail=str(e)) from e
+            raise HTTPException(
+                status_code=422,
+                detail=_error_detail(
+                    "INVALID_SCHEMA",
+                    str(e),
+                    "Check the schema format: name (string), fields (dict of field definitions).",
+                ),
+            ) from e
 
-        if schema.name in _registry:
+        _validate_schema_name(schema.name)
+
+        if schema.name in _registry or schema.name in _definitions:
             raise HTTPException(
                 status_code=409,
                 detail=_error_detail(
@@ -184,6 +201,7 @@ def create_router(
     @router.delete("/schemas/{name}", status_code=204)
     async def delete_schema(name: str) -> None:
         """Delete a runtime schema. Built-in schemas cannot be deleted."""
+        _validate_schema_name(name)
 
         if name in _builtins:
             raise HTTPException(
