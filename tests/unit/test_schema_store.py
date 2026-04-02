@@ -118,3 +118,63 @@ class TestRedisSchemaStoreGetSave:
         store = RedisSchemaStore(client=client)
 
         store.save(_make_schema())  # Should not raise
+
+
+class TestRedisSchemaStoreDeleteListAll:
+    def test_delete_calls_redis_delete(self) -> None:
+        from unittest.mock import MagicMock
+
+        from src.adapters.storage.schema_store import RedisSchemaStore
+
+        client = MagicMock()
+        store = RedisSchemaStore(client=client)
+        store.delete("my_schema")
+        client.delete.assert_called_once_with("riskflow:schema:my_schema")
+
+    def test_delete_graceful_on_connection_error(self) -> None:
+        from unittest.mock import MagicMock
+
+        import redis as redis_lib
+
+        from src.adapters.storage.schema_store import RedisSchemaStore
+
+        client = MagicMock()
+        client.delete.side_effect = redis_lib.ConnectionError("down")
+        store = RedisSchemaStore(client=client)
+        store.delete("any")  # Should not raise
+
+    def test_list_all_returns_names(self) -> None:
+        from unittest.mock import MagicMock
+
+        from src.adapters.storage.schema_store import RedisSchemaStore
+
+        client = MagicMock()
+        client.scan.return_value = (0, [b"riskflow:schema:alpha", b"riskflow:schema:beta"])
+        store = RedisSchemaStore(client=client)
+
+        result = store.list_all()
+        assert result == ["alpha", "beta"]
+
+    def test_list_all_returns_empty_on_no_schemas(self) -> None:
+        from unittest.mock import MagicMock
+
+        from src.adapters.storage.schema_store import RedisSchemaStore
+
+        client = MagicMock()
+        client.scan.return_value = (0, [])
+        store = RedisSchemaStore(client=client)
+
+        assert store.list_all() == []
+
+    def test_list_all_graceful_on_connection_error(self) -> None:
+        from unittest.mock import MagicMock
+
+        import redis as redis_lib
+
+        from src.adapters.storage.schema_store import RedisSchemaStore
+
+        client = MagicMock()
+        client.scan.side_effect = redis_lib.ConnectionError("down")
+        store = RedisSchemaStore(client=client)
+
+        assert store.list_all() == []
