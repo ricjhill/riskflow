@@ -3,7 +3,7 @@
 ## Current State
 
 RiskFlow is a well-structured hexagonal architecture monolith with:
-- **456 unit tests** (all passing, ~7.5s single-threaded, ~6.5s with xdist)
+- **695 unit tests** (all passing, ~12s single-threaded)
 - **Clean dependency direction**: domain → ports → adapters → entrypoint
 - **Full async pipeline**: FastAPI → MappingService → Groq SLM
 - **Graceful degradation**: Redis failures don't crash the system
@@ -196,7 +196,7 @@ The Python dataclass contracts migrate to Pact with minimal changes.
               ╱──────────────╲
              ╱   Guardrails   ╲   9 tests  — performance regression
             ╱──────────────────╲
-           ╱      456 Unit      ╲ 456 tests — all dependencies mocked
+           ╱      695 Unit      ╲ 695 tests — all dependencies mocked
           ╱──────────────────────╲
 ```
 
@@ -207,7 +207,7 @@ The Python dataclass contracts migrate to Pact with minimal changes.
 # Auto-detect cores (4 workers on 4-core machine)
 uv run pytest tests/unit/ -n auto --benchmark-disable
 
-# Result: 456 tests in 6.5s (vs 7.5s single-threaded)
+# Result: 695 tests in 6.5s (vs 7.5s single-threaded)
 ```
 
 **Benchmark isolation** (pytest-benchmark conflicts with xdist):

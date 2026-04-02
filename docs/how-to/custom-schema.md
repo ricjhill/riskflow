@@ -147,6 +147,41 @@ slm_hints:
 
 Tells the AI that "Ship" in the source data probably means "Vessel_Name". Improves mapping accuracy for domain-specific abbreviations.
 
+## Alternative: Create schemas via the API
+
+Instead of YAML files, you can create schemas at runtime via `POST /schemas`. No restart required.
+
+```bash
+curl -X POST http://localhost:8000/schemas \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "custom_marine",
+    "fields": {
+      "Vessel_Name": {"type": "string", "not_empty": true},
+      "Voyage_Date": {"type": "date"},
+      "Cargo_Value": {"type": "float", "non_negative": true}
+    }
+  }'
+```
+
+```json
+{"name": "custom_marine", "fingerprint": "a1b2c3..."}
+```
+
+Runtime schemas persist in Redis and appear in `GET /schemas` immediately. They can be deleted with `DELETE /schemas/{name}`. Built-in schemas (from YAML) are protected.
+
+## Alternative: Create schemas via the Flow Mapper GUI
+
+In the Flow Mapper tab (Tab 4), you can add custom fields during mapping and save the result as a new schema:
+
+1. Upload a file and review the SLM suggestions
+2. Expand "Add Custom Target Field" and add fields with a name and type
+3. Map source headers to the new fields
+4. Finalise the session
+5. Click "Save as New Schema" and enter a name
+
+The saved schema includes both the original schema's fields and your custom additions.
+
 ## What if the schema YAML is invalid?
 
 The application refuses to start. You'll see an error like:

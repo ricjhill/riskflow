@@ -2,7 +2,7 @@
 
 ## Default schema
 
-The default schema (`schemas/default.yaml`) defines 6 fields for standard reinsurance bordereaux:
+The default schema (`schemas/standard_reinsurance.yaml`) defines 6 fields for standard reinsurance bordereaux:
 
 | Field | Type | Required | Constraints |
 |-------|------|----------|-------------|

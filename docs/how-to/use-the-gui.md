@@ -80,6 +80,39 @@ Submit corrections when the AI maps a header incorrectly.
 
 After saving, upload a file with `?cedent_id=ACME-RE` (Tab 1) and the corrected headers will map with 100% confidence.
 
+## Tab 4: Flow Mapper
+
+Interactive mapping workflow — review AI suggestions, edit them, and finalise.
+
+### Step 1: Upload
+
+1. **Select a schema** from the dropdown
+2. **Upload a file** — CSV or Excel
+3. **Select a sheet** (Excel only)
+4. **Click "Create Session"** — the file is uploaded and the AI generates suggested mappings
+
+### Step 2: Review & Edit
+
+1. **Preview** — first few rows of the uploaded data
+2. **Column Mappings** — each source header has a dropdown with the AI's suggestion pre-selected. Change any mapping using the dropdown
+3. **Add Custom Target Field** — if a source header doesn't match any schema field, expand "Add Custom Target Field", enter a name and type, and click "Add Field". The new field appears in all dropdowns immediately
+4. **Save Changes** — saves your edits to the session without finalising
+5. **Finalise** — validates all rows with your mapping and moves to results
+6. **Start Over** — discards the session and returns to upload
+
+### Step 3: Results
+
+1. **Confidence metrics** — min and average confidence
+2. **Valid Records** — the cleaned, mapped data with "Download Clean CSV"
+3. **Validation Errors** — any rows that failed, with row numbers and messages
+4. **Save as New Schema** — if you added custom fields, save the full mapping (original + custom fields) as a reusable runtime schema. It appears in the schema dropdown for future sessions
+5. **New Session** — clean up and start fresh
+
+### When to use Tab 1 vs Tab 4
+
+- **Tab 1 (Mapping & Ingestion)** — quick one-shot mapping. Good when you trust the AI suggestions and want results immediately
+- **Tab 4 (Flow Mapper)** — interactive editing. Good when you need to review/correct AI suggestions, add custom fields, or build new schemas
+
 ## Troubleshooting
 
 | Problem | Fix |
