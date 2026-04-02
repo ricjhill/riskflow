@@ -27,12 +27,26 @@ All API errors return a structured JSON body with `error_code`, `message`, and `
 | *(plain text)* | File too large | File exceeds 10MB limit |
 | *(plain text)* | Empty cedent_id or corrections list | POST /corrections with blank cedent_id |
 
+### 403 Forbidden
+
+| Error Code | Trigger | Example |
+|-----------|---------|---------|
+| PROTECTED_SCHEMA | Cannot delete a built-in schema | DELETE /schemas/standard_reinsurance |
+
 ### 404 Not Found
 
 | Error Code | Trigger | Example |
 |-----------|---------|---------|
 | SCHEMA_NOT_FOUND | Schema name not in registry | `?schema=nonexistent` |
 | *(plain text)* | Job ID doesn't exist | GET /jobs/unknown-id |
+| *(plain text)* | Session ID doesn't exist | GET /sessions/unknown-id |
+
+### 409 Conflict
+
+| Error Code | Trigger | Example |
+|-----------|---------|---------|
+| SCHEMA_ALREADY_EXISTS | Schema name already in use | POST /schemas with existing name |
+| *(plain text)* | Session already finalised | POST /sessions/{id}/finalise twice |
 
 ### 422 Unprocessable Entity
 
@@ -41,6 +55,9 @@ All API errors return a structured JSON body with `error_code`, `message`, and `
 | LOW_CONFIDENCE | Any mapping below confidence threshold (0.6) | AI mapped "Amount" to "Sum_Insured" with 0.45 confidence |
 | SCHEMA_VALIDATION | A row fails schema validation | Row has Currency="DOLLARS" (not in allowed values) |
 | INVALID_CORRECTION | Correction references a field not in the schema | Correction with target_field="NonexistentField" |
+| INVALID_SCHEMA | Schema definition is malformed | POST /schemas with missing fields |
+| INVALID_MAPPING | Target field not in schema or duplicate targets | PUT /sessions/{id}/mappings with bad target |
+| INVALID_FIELDS | Empty/non-string field names or finalised session | PATCH /sessions/{id}/target-fields with empty list |
 
 ### 503 Service Unavailable
 

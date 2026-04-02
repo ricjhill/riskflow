@@ -194,6 +194,205 @@ Submit human-verified mapping corrections for a cedent.
 
 ---
 
+### GET /schemas/{name}
+
+Return the full definition of a target schema.
+
+**Parameters:**
+
+| Name | In | Type | Required | Description |
+|------|----|------|----------|-------------|
+| name | path | string | Yes | Schema name |
+
+**Response:** `200 OK`
+
+```json
+{
+  "name": "standard_reinsurance",
+  "fields": {
+    "Policy_ID": {"type": "string", "not_empty": true},
+    "Inception_Date": {"type": "date"},
+    "Sum_Insured": {"type": "float", "non_negative": true}
+  },
+  "cross_field_rules": [{"earlier": "Inception_Date", "later": "Expiry_Date"}],
+  "slm_hints": [{"source_alias": "GWP", "target": "Gross_Premium"}]
+}
+```
+
+**Errors:** `404 SCHEMA_NOT_FOUND`
+
+---
+
+### POST /schemas
+
+Create a runtime schema from a JSON definition. Persists to Redis.
+
+**Content-Type:** `application/json`
+
+**Request body:** Same format as GET /schemas/{name} response.
+
+**Response:** `201 Created`
+
+```json
+{"name": "custom_marine", "fingerprint": "a1b2c3..."}
+```
+
+**Errors:**
+
+| Status | Error Code | Cause |
+|--------|-----------|-------|
+| 409 | SCHEMA_ALREADY_EXISTS | Schema name already in use |
+| 422 | INVALID_SCHEMA | Invalid schema definition |
+
+---
+
+### DELETE /schemas/{name}
+
+Delete a runtime schema. Built-in schemas (loaded from YAML) cannot be deleted.
+
+**Response:** `204 No Content`
+
+**Errors:**
+
+| Status | Error Code | Cause |
+|--------|-----------|-------|
+| 403 | PROTECTED_SCHEMA | Cannot delete built-in schema |
+| 404 | SCHEMA_NOT_FOUND | Schema doesn't exist |
+
+---
+
+### POST /sessions
+
+Upload a file and create an interactive mapping session. Returns the session with SLM-suggested mappings and a preview of the data.
+
+**Content-Type:** `multipart/form-data`
+
+**Parameters:**
+
+| Name | In | Type | Required | Description |
+|------|----|------|----------|-------------|
+| file | body | File | Yes | CSV, XLSX, or XLS file (max 10MB) |
+| sheet_name | query | string | No | Sheet to process (Excel only) |
+| schema | query | string | No | Schema name (default: standard_reinsurance) |
+
+**Response:** `201 Created`
+
+```json
+{
+  "id": "a1b2c3d4-...",
+  "status": "created",
+  "schema_name": "standard_reinsurance",
+  "file_path": "/tmp/tmpXXXXXX.csv",
+  "sheet_name": null,
+  "source_headers": ["Policy No.", "Start Date", "GWP"],
+  "target_fields": ["Currency", "Expiry_Date", "Gross_Premium", "Inception_Date", "Policy_ID", "Sum_Insured"],
+  "mappings": [
+    {"source_header": "Policy No.", "target_field": "Policy_ID", "confidence": 0.95}
+  ],
+  "unmapped_headers": ["Broker Notes"],
+  "preview_rows": [{"Policy No.": "POL-001", "Start Date": "2024-01-15", "GWP": 125000}],
+  "result": null
+}
+```
+
+**Errors:**
+
+| Status | Error Code | Cause |
+|--------|-----------|-------|
+| 400 | INVALID_DATA | Empty file, unparseable content |
+| 404 | SCHEMA_NOT_FOUND | ?schema= value not in registry |
+| 503 | SLM_UNAVAILABLE | Groq API unreachable |
+
+---
+
+### GET /sessions/{session_id}
+
+Return the current state of a mapping session.
+
+**Response:** `200 OK` — same shape as POST /sessions response.
+
+**Errors:** `404` if session not found.
+
+---
+
+### PUT /sessions/{session_id}/mappings
+
+Replace the session's mappings with user-edited values.
+
+**Content-Type:** `application/json`
+
+**Request body:**
+
+```json
+{
+  "mappings": [
+    {"source_header": "Policy No.", "target_field": "Policy_ID", "confidence": 1.0},
+    {"source_header": "GWP", "target_field": "Gross_Premium", "confidence": 1.0}
+  ],
+  "unmapped_headers": ["Broker Notes"]
+}
+```
+
+**Response:** `200 OK` — updated session dict.
+
+**Errors:**
+
+| Status | Error Code | Cause |
+|--------|-----------|-------|
+| 404 | | Session not found |
+| 422 | INVALID_MAPPING | Invalid target field, duplicate targets |
+
+---
+
+### PATCH /sessions/{session_id}/target-fields
+
+Add custom target fields to a session. Enables mapping source headers to fields not in the original schema.
+
+**Content-Type:** `application/json`
+
+**Request body:**
+
+```json
+{"fields": ["Renewal_Date", "Broker_Notes"]}
+```
+
+**Response:** `200 OK` — updated session dict with new fields in `target_fields`.
+
+**Errors:**
+
+| Status | Error Code | Cause |
+|--------|-----------|-------|
+| 404 | | Session not found |
+| 422 | INVALID_FIELDS | Empty list, empty names, non-string values, finalised session |
+
+---
+
+### POST /sessions/{session_id}/finalise
+
+Validate all rows using the session's current mapping. Transitions session to FINALISED.
+
+**Response:** `200 OK` — session dict with `status: "finalised"` and `result` containing the ProcessingResult (same shape as POST /upload response).
+
+**Errors:**
+
+| Status | Error Code | Cause |
+|--------|-----------|-------|
+| 404 | | Session not found |
+| 409 | | Session already finalised |
+| 500 | INTERNAL_ERROR | Validation failed (e.g., temp file deleted) |
+
+---
+
+### DELETE /sessions/{session_id}
+
+Delete a session, clean up the temp file and Redis entry.
+
+**Response:** `204 No Content`
+
+**Errors:** `404` if session not found.
+
+---
+
 ## Error response format
 
 All errors (except 404) return a structured body:

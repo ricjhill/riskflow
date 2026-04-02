@@ -121,6 +121,20 @@ RiskFlow automates the mapping step. Upload a bordereaux spreadsheet, and RiskFl
 
 **How it works:** The cache key is based on the sorted headers + the schema fingerprint. Different schemas produce different cache keys, so switching schemas doesn't return stale results.
 
+### 9. Interactive Session-Based Mapping
+
+**What it does:** The Flow Mapper (GUI Tab 4) provides a multi-step interactive workflow: upload a file, review AI-suggested mappings, edit them via dropdowns, add custom target fields, and finalise. The result can be saved as a new reusable schema.
+
+**Business value:** Users can correct AI mistakes before validation, add fields not in the original schema (e.g., "Broker_Notes"), and build custom schemas visually — no YAML editing or API knowledge required.
+
+**How it works:** Sessions are persisted in Redis with a 1-hour TTL. The temp file from upload is kept alive so finalise can re-read it. Custom fields are added via PATCH /sessions/{id}/target-fields. New schemas are saved via POST /schemas and appear in the dropdown for future sessions.
+
+### 10. Runtime Schema Management
+
+**What it does:** Schemas can be created, viewed, and deleted at runtime via the API (POST/GET/DELETE /schemas). They persist in Redis alongside the YAML-loaded schemas.
+
+**Business value:** New cedent schemas can be created by data teams without restarting the service or editing YAML files. Built-in schemas (from YAML) are protected from deletion.
+
 ## Acceptance Testing Checklist
 
 For testers validating RiskFlow, here are the key scenarios to verify:
@@ -140,6 +154,11 @@ For testers validating RiskFlow, here are the key scenarios to verify:
 | 11 | Use ?schema=nonexistent | 404 error: "Schema not found" |
 | 12 | GET /schemas | Returns list of available schema names |
 | 13 | POST /upload/async then GET /jobs/{id} | Job progresses from PENDING → PROCESSING → COMPLETE |
+| 14 | POST /sessions → GET → PUT mappings → POST finalise | Interactive session workflow completes |
+| 15 | PATCH /sessions/{id}/target-fields with custom field | Custom field appears in target_fields |
+| 16 | POST /schemas with new schema body | Schema created, appears in GET /schemas |
+| 17 | DELETE /schemas/{builtin_name} | 403: built-in schemas are protected |
+| 18 | Flow Mapper: add field → map → finalise → save schema | Full interactive schema creation |
 
 ## Architecture (Non-Technical Summary)
 

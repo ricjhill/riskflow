@@ -6,14 +6,14 @@ RiskFlow uses a multi-tier testing strategy aligned with the hexagonal architect
 
 | Tier | Marker | Count | What it tests | External deps | When it runs |
 |------|--------|-------|---------------|---------------|-------------|
-| Unit | `@pytest.mark.unit` | 456 | Isolated components with all deps mocked | None | Every PR, every push to main |
-| Integration | `@pytest.mark.integration` | 39 | Full pipeline through TestClient, SLM mocked + testcontainers Redis | Docker (optional) | Every PR, every push to main |
+| Unit | `@pytest.mark.unit` | 695 | Isolated components with all deps mocked | None | Every PR, every push to main |
+| Integration | `@pytest.mark.integration` | 50 | Full pipeline through TestClient, SLM mocked + testcontainers Redis | Docker (optional) | Every PR, every push to main |
 | E2E | `@pytest.mark.e2e` | 5 | Real Groq API, real parsing, nothing mocked | Groq API | Push to main only |
 | Contract | `@pytest.mark.contract` | 11 | API response shape verification (provider + consumer) | None | Every PR, every push to main |
 | Benchmark | `@pytest.mark.perf_guardrail` | 28 | Performance guardrails, TTFB, memory endurance | None | Every PR, every push to main |
 | Load | `@pytest.mark.load` | 1 | Locust CI assertions (error rate, P95 latency) | None | Every PR |
 
-**Total: 540 tests**
+**Total: 790 tests**
 
 ---
 

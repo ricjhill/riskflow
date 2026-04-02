@@ -112,7 +112,7 @@ graph LR
 
     subgraph Domain
         Service[MappingService]
-        Session[MappingSession<br>CREATED → FINALISED]
+        Session[MappingSession<br>CREATED to FINALISED]
         Models[TargetSchema<br>ColumnMapping<br>MappingResult<br>ConfidenceReport<br>Correction]
         RecordFactory[record_factory<br>Dynamic pydantic models]
         DateFormat[date_format<br>Column-level detection]
@@ -120,15 +120,8 @@ graph LR
     end
 
     GUI -->|HTTP| HTTP
-    Client -->|POST /upload| HTTP
-    Client -->|POST /corrections| HTTP
-    Client -->|POST /upload/async| HTTP
-    Client -->|GET /jobs/id| HTTP
-    Client -->|POST /sheets| HTTP
-    Client -->|GET /schemas| HTTP
-    Client -->|POST /sessions| HTTP
-    Client -->|PUT /sessions/id/mappings| HTTP
-    Client -->|POST /sessions/id/finalise| HTTP
+    Client -->|upload, corrections, schemas| HTTP
+    Client -->|sessions, async jobs| HTTP
     HTTP --> Service
     Service --> IngestorPort
     Service --> MapperPort
