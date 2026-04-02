@@ -82,6 +82,23 @@ SRC_DIR = Path(__file__).parent.parent.parent / "src"
 PYPROJECT = Path(__file__).parent.parent.parent / "pyproject.toml"
 
 
+def _parse_package_name(dep_str: str) -> str:
+    """Extract the bare package name from a PEP 508 dependency string.
+
+    Handles: version specifiers (>=, ==, <, !=, ~=), extras ([security]),
+    and environment markers (; python_version>="3.10").
+    """
+    import re
+
+    # Strip environment markers first: "package; python_version>='3.10'" → "package"
+    name = dep_str.split(";")[0].strip()
+    # Strip extras: "requests[security]" → "requests"
+    name = re.split(r"\[", name)[0]
+    # Strip version specifiers: "fastapi>=0.135.2" → "fastapi"
+    name = re.split(r"[><=!~]", name)[0].strip()
+    return name
+
+
 def _get_runtime_deps() -> set[str]:
     """Extract package names from [project].dependencies in pyproject.toml."""
     import tomllib
@@ -91,8 +108,7 @@ def _get_runtime_deps() -> set[str]:
 
     deps: set[str] = set()
     for dep_str in data.get("project", {}).get("dependencies", []):
-        # "fastapi>=0.135.2" → "fastapi"
-        name = dep_str.split(">=")[0].split("==")[0].split("<")[0].split("~=")[0].strip()
+        name = _parse_package_name(dep_str)
         deps.add(name.lower())
     return deps
 
@@ -198,3 +214,30 @@ class TestRuntimeDependenciesComplete:
         assert not internal_leaked, (
             f"Internal imports incorrectly classified as third-party: {internal_leaked}"
         )
+
+    @pytest.mark.parametrize(
+        "dep_str, expected",
+        [
+            ("fastapi>=0.135.2", "fastapi"),
+            ("pydantic==2.12.5", "pydantic"),
+            ("numpy<2.0", "numpy"),
+            ("numpy~=1.24.0", "numpy"),
+            ("numpy!=1.24.0", "numpy"),
+            ("requests[security]>=1.0", "requests"),
+            ('package; python_version>="3.10"', "package"),
+            ("some-package[extra1,extra2]>=1.0,<2.0", "some-package"),
+        ],
+        ids=[
+            ">=",
+            "==",
+            "<",
+            "~=",
+            "!=",
+            "extras",
+            "marker",
+            "multiple-extras-and-bounds",
+        ],
+    )
+    def test_parse_package_name(self, dep_str: str, expected: str) -> None:
+        """Verify the dependency string parser handles all PEP 508 forms."""
+        assert _parse_package_name(dep_str) == expected
