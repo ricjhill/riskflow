@@ -245,7 +245,11 @@ class TestReinsuranceExcelFixture:
                 },
             )
 
+        assert resp.status_code == 200
         body = resp.json()
+        assert len(body["valid_records"]) >= 10, (
+            f"Expected at least 10 valid records but got {len(body['valid_records'])}"
+        )
         # Row 10 (index 9) has Inception_Date=2025/07/01, Expiry_Date=2026/06/30
         row10 = body["valid_records"][9]
         assert row10["Inception_Date"] == "2025-07-01", (

@@ -14,12 +14,15 @@ with the same schema returns the same class instance (no regeneration).
 
 import datetime
 import functools
+import re
 from typing import Annotated, Any
 
 from dateutil import parser as dateutil_parser
 from pydantic import BaseModel, BeforeValidator, create_model, field_validator, model_validator
 
 from src.domain.model.target_schema import FieldDefinition, FieldType, TargetSchema
+
+_YYYY_SLASH_RE = re.compile(r"^(\d{4})/(\d{1,2})/(\d{1,2})$")
 
 
 def coerce_date(value: Any) -> Any:
@@ -47,9 +50,7 @@ def coerce_date(value: Any) -> Any:
         except ValueError:
             pass
         # Try YYYY/MM/DD — unambiguous year-first with slashes
-        import re
-
-        _yyyy_slash = re.match(r"^(\d{4})/(\d{1,2})/(\d{1,2})$", stripped)
+        _yyyy_slash = _YYYY_SLASH_RE.match(stripped)
         if _yyyy_slash:
             try:
                 return datetime.date(
