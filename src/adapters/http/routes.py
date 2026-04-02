@@ -458,6 +458,17 @@ def create_router(
                 )
                 result: dict[str, object] = session.model_dump()
                 return result
+            except (InvalidCedentDataError, ValueError) as e:
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+                raise HTTPException(
+                    status_code=400,
+                    detail=_error_detail(
+                        "INVALID_DATA",
+                        str(e),
+                        "Ensure the file is a valid CSV or Excel spreadsheet with headers in the first row.",
+                    ),
+                ) from e
             except SLMUnavailableError as e:
                 if os.path.exists(temp_path):
                     os.remove(temp_path)

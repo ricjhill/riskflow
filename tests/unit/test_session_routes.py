@@ -178,6 +178,14 @@ class TestPostSessions:
         )
         assert resp.status_code == 400
 
+    def test_empty_csv_returns_400(self, client: TestClient) -> None:
+        """Empty file should return 400, not 500."""
+        resp = client.post(
+            "/sessions",
+            files={"file": ("empty.csv", io.BytesIO(b""), "text/csv")},
+        )
+        assert resp.status_code == 400
+
     def test_unknown_schema_returns_404(self, client: TestClient) -> None:
         resp = client.post(
             "/sessions?schema=nonexistent",
