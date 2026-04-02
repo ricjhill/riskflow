@@ -91,11 +91,18 @@ def parse_date(value: str, format_hint: str | None) -> datetime.date:
             msg = f"Could not parse date: '{value}'"
             raise ValueError(msg) from e
 
-    # None hint: ISO-first, then dateutil fallback (same as coerce_date)
+    # None hint: ISO-first, then YYYY/MM/DD, then dateutil fallback
     try:
         return datetime.date.fromisoformat(stripped)
     except ValueError:
         pass
+    m = _YYYY_SLASH_PATTERN.match(stripped)
+    if m:
+        parts = stripped.split("/")
+        try:
+            return datetime.date(int(parts[0]), int(parts[1]), int(parts[2]))
+        except ValueError:
+            pass
     try:
         return dateutil_parser.parse(stripped, dayfirst=True).date()
     except (ValueError, OverflowError) as e:

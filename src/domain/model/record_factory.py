@@ -46,6 +46,19 @@ def coerce_date(value: Any) -> Any:
             return datetime.date.fromisoformat(stripped)
         except ValueError:
             pass
+        # Try YYYY/MM/DD — unambiguous year-first with slashes
+        import re
+
+        _yyyy_slash = re.match(r"^(\d{4})/(\d{1,2})/(\d{1,2})$", stripped)
+        if _yyyy_slash:
+            try:
+                return datetime.date(
+                    int(_yyyy_slash.group(1)),
+                    int(_yyyy_slash.group(2)),
+                    int(_yyyy_slash.group(3)),
+                )
+            except ValueError:
+                pass
         # Fall back to dateutil with dayfirst=True for broker formats
         try:
             return dateutil_parser.parse(stripped, dayfirst=True).date()
