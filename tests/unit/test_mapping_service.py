@@ -52,9 +52,7 @@ def _write_csv(path: Path) -> str:
     return file_path
 
 
-def _cache_key_for(
-    headers: list[str], schema: TargetSchema = DEFAULT_TARGET_SCHEMA
-) -> str:
+def _cache_key_for(headers: list[str], schema: TargetSchema = DEFAULT_TARGET_SCHEMA) -> str:
     normalized = "|".join(sorted(h.lower().strip() for h in headers))
     key_input = f"{schema.fingerprint}:{normalized}"
     return hashlib.sha256(key_input.encode()).hexdigest()
@@ -87,9 +85,7 @@ class TestMappingServiceOrchestration:
     """Test the coordination between ingestor, mapper, and cache."""
 
     @pytest.mark.asyncio
-    async def test_returns_processing_result(
-        self, service: MappingService, tmp_path: Path
-    ) -> None:
+    async def test_returns_processing_result(self, service: MappingService, tmp_path: Path) -> None:
         path = _write_csv(tmp_path)
         result = await service.process_file(path)
         assert isinstance(result, ProcessingResult)
@@ -164,9 +160,7 @@ class TestCacheInteraction:
             csv.writer(f).writerow(["GWP", "Extra", "Policy No."])
             csv.writer(f).writerow(["50000", "x", "P001"])
 
-        service = MappingService(
-            ingestor=PolarsIngestor(), mapper=mapper, cache=cache
-        )
+        service = MappingService(ingestor=PolarsIngestor(), mapper=mapper, cache=cache)
 
         await service.process_file(f1)
         key1 = cache.get_mapping.call_args[0][0]
@@ -201,11 +195,7 @@ class TestCacheLogging:
         cache.get_mapping.return_value = None
         with caplog.at_level("INFO"):
             await service.process_file(path)
-        log_events = [
-            json.loads(r.message)
-            for r in caplog.records
-            if "cache_lookup" in r.message
-        ]
+        log_events = [json.loads(r.message) for r in caplog.records if "cache_lookup" in r.message]
         assert len(log_events) == 1
         assert log_events[0]["result"] == "miss"
 
@@ -223,11 +213,7 @@ class TestCacheLogging:
         cache.get_mapping.return_value = _make_mapping_result()
         with caplog.at_level("INFO"):
             await service.process_file(path)
-        log_events = [
-            json.loads(r.message)
-            for r in caplog.records
-            if "cache_lookup" in r.message
-        ]
+        log_events = [json.loads(r.message) for r in caplog.records if "cache_lookup" in r.message]
         assert len(log_events) == 1
         assert log_events[0]["result"] == "hit"
 
@@ -244,9 +230,7 @@ class TestConfidenceThreshold:
     ) -> None:
         path = _write_csv(tmp_path)
         mapper.map_headers.return_value = _make_mapping_result(confidence=0.3)
-        with pytest.raises(
-            MappingConfidenceLowError, match="below threshold"
-        ):
+        with pytest.raises(MappingConfidenceLowError, match="below threshold"):
             await service.process_file(path)
 
     @pytest.mark.asyncio
@@ -286,9 +270,7 @@ class TestPartialMapping:
     rather than failing entirely."""
 
     @pytest.mark.asyncio
-    async def test_partial_mapping_returns_result(
-        self, cache: MagicMock, tmp_path: Path
-    ) -> None:
+    async def test_partial_mapping_returns_result(self, cache: MagicMock, tmp_path: Path) -> None:
         """A file with only 2 of 6 target fields should still process."""
         # CSV has Policy No. and GWP but not the other 4 target fields
         file_path = str(tmp_path / "partial.csv")
@@ -300,7 +282,9 @@ class TestPartialMapping:
         # SLM maps only 2 fields
         partial_mapping = MappingResult(
             mappings=[
-                ColumnMapping(source_header="Policy No.", target_field="Policy_ID", confidence=0.95),
+                ColumnMapping(
+                    source_header="Policy No.", target_field="Policy_ID", confidence=0.95
+                ),
                 ColumnMapping(source_header="GWP", target_field="Gross_Premium", confidence=0.90),
             ],
             unmapped_headers=["Notes"],
@@ -310,9 +294,7 @@ class TestPartialMapping:
         mapper.map_headers.return_value = partial_mapping
         cache.get_mapping.return_value = None
 
-        service = MappingService(
-            ingestor=PolarsIngestor(), mapper=mapper, cache=cache
-        )
+        service = MappingService(ingestor=PolarsIngestor(), mapper=mapper, cache=cache)
 
         result = await service.process_file(file_path)
         assert isinstance(result, ProcessingResult)
@@ -329,7 +311,9 @@ class TestPartialMapping:
 
         partial_mapping = MappingResult(
             mappings=[
-                ColumnMapping(source_header="Policy No.", target_field="Policy_ID", confidence=0.95),
+                ColumnMapping(
+                    source_header="Policy No.", target_field="Policy_ID", confidence=0.95
+                ),
                 ColumnMapping(source_header="GWP", target_field="Gross_Premium", confidence=0.90),
             ],
             unmapped_headers=[],
@@ -339,9 +323,7 @@ class TestPartialMapping:
         mapper.map_headers.return_value = partial_mapping
         cache.get_mapping.return_value = None
 
-        service = MappingService(
-            ingestor=PolarsIngestor(), mapper=mapper, cache=cache
-        )
+        service = MappingService(ingestor=PolarsIngestor(), mapper=mapper, cache=cache)
 
         result = await service.process_file(file_path)
         assert "Inception_Date" in result.confidence_report.missing_fields
@@ -349,9 +331,7 @@ class TestPartialMapping:
         assert len(result.confidence_report.missing_fields) == 4
 
     @pytest.mark.asyncio
-    async def test_partial_mapping_rows_are_invalid(
-        self, cache: MagicMock, tmp_path: Path
-    ) -> None:
+    async def test_partial_mapping_rows_are_invalid(self, cache: MagicMock, tmp_path: Path) -> None:
         """Rows with missing required fields go to invalid_records."""
         file_path = str(tmp_path / "partial.csv")
         with open(file_path, "w", newline="") as f:
@@ -361,7 +341,9 @@ class TestPartialMapping:
 
         partial_mapping = MappingResult(
             mappings=[
-                ColumnMapping(source_header="Policy No.", target_field="Policy_ID", confidence=0.95),
+                ColumnMapping(
+                    source_header="Policy No.", target_field="Policy_ID", confidence=0.95
+                ),
                 ColumnMapping(source_header="GWP", target_field="Gross_Premium", confidence=0.90),
             ],
             unmapped_headers=[],
@@ -371,9 +353,7 @@ class TestPartialMapping:
         mapper.map_headers.return_value = partial_mapping
         cache.get_mapping.return_value = None
 
-        service = MappingService(
-            ingestor=PolarsIngestor(), mapper=mapper, cache=cache
-        )
+        service = MappingService(ingestor=PolarsIngestor(), mapper=mapper, cache=cache)
 
         result = await service.process_file(file_path)
         # Row has Policy_ID and Gross_Premium but missing 4 other fields
@@ -741,3 +721,82 @@ class TestCorrectionCache:
         assert len(correction_events) == 1
         assert correction_events[0]["corrected_count"] == 1
         assert correction_events[0]["cedent_id"] == "ABC"
+
+
+class TestDateFormatDetection:
+    """MappingService detects date column formats from preview and
+    pre-converts values before row validation. Fixes YYYY/MM/DD
+    misparsing where dateutil with dayfirst=True turns '2025/07/01'
+    into January 7 instead of July 1."""
+
+    @pytest.mark.asyncio
+    async def test_yyyy_slash_dates_parsed_correctly(
+        self, cache: MagicMock, tmp_path: Path
+    ) -> None:
+        """CSV with YYYY/MM/DD dates should validate with correct months."""
+        file_path = str(tmp_path / "yyyy_slash.csv")
+        with open(file_path, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["Voyage", "Arrival", "Ship", "Value", "Premium", "Ccy", "Port"])
+            writer.writerow(
+                ["2024/03/15", "2024/04/02", "MV Star", "8500000", "212500", "USD", "Singapore"]
+            )
+            writer.writerow(
+                ["2024/05/01", "2024/05/20", "MV Dawn", "3200000", "96000", "USD", "Shanghai"]
+            )
+
+        marine_schema = TargetSchema(
+            name="test_marine",
+            fields={
+                "Voyage_Date": FieldDefinition(type=FieldType.DATE),
+                "Arrival_Date": FieldDefinition(type=FieldType.DATE),
+                "Vessel_Name": FieldDefinition(type=FieldType.STRING, not_empty=True),
+                "Cargo_Value": FieldDefinition(type=FieldType.FLOAT, non_negative=True),
+                "Premium": FieldDefinition(type=FieldType.FLOAT, non_negative=True),
+                "Currency": FieldDefinition(type=FieldType.CURRENCY, allowed_values=["USD", "GBP"]),
+                "Port_Of_Loading": FieldDefinition(type=FieldType.STRING, not_empty=True),
+            },
+        )
+
+        mapping = MappingResult(
+            mappings=[
+                ColumnMapping(source_header="Voyage", target_field="Voyage_Date", confidence=0.95),
+                ColumnMapping(
+                    source_header="Arrival", target_field="Arrival_Date", confidence=0.95
+                ),
+                ColumnMapping(source_header="Ship", target_field="Vessel_Name", confidence=0.95),
+                ColumnMapping(source_header="Value", target_field="Cargo_Value", confidence=0.95),
+                ColumnMapping(source_header="Premium", target_field="Premium", confidence=0.95),
+                ColumnMapping(source_header="Ccy", target_field="Currency", confidence=0.95),
+                ColumnMapping(
+                    source_header="Port", target_field="Port_Of_Loading", confidence=0.95
+                ),
+            ],
+            unmapped_headers=[],
+        )
+
+        mapper = AsyncMock()
+        mapper.map_headers.return_value = mapping
+        cache.get_mapping.return_value = None
+
+        service = MappingService(
+            ingestor=PolarsIngestor(),
+            mapper=mapper,
+            cache=cache,
+            schema=marine_schema,
+        )
+
+        result = await service.process_file(file_path)
+
+        assert len(result.errors) == 0, (
+            f"Expected 0 errors but got {len(result.errors)}:\n"
+            + "\n".join(f"  Row {e.row}: {e.error}" for e in result.errors)
+        )
+        assert len(result.valid_records) == 2
+
+        # Verify dates are correct (not misparsed by dayfirst)
+        import datetime
+
+        row1 = result.valid_records[0]
+        assert row1["Voyage_Date"] == datetime.date(2024, 3, 15)
+        assert row1["Arrival_Date"] == datetime.date(2024, 4, 2)  # NOT Feb 4
