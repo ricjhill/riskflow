@@ -89,6 +89,11 @@ class TestGetSchemaByName:
         resp = client.get("/schemas/nonexistent")
         assert resp.status_code == 404
 
+    @pytest.mark.parametrize("bad_name", ["a b", "x;y", "bad!name"])
+    def test_rejects_invalid_name(self, client: TestClient, bad_name: str) -> None:
+        resp = client.get(f"/schemas/{bad_name}")
+        assert resp.status_code == 400
+
 
 class TestPostSchema:
     """POST /schemas — create a new runtime schema."""
@@ -181,3 +186,8 @@ class TestDeleteSchema:
     def test_rejects_delete_unknown(self, client: TestClient) -> None:
         resp = client.delete("/schemas/nonexistent")
         assert resp.status_code == 404
+
+    @pytest.mark.parametrize("bad_name", ["a b", "x;y", "bad!name"])
+    def test_rejects_delete_invalid_name(self, client: TestClient, bad_name: str) -> None:
+        resp = client.delete(f"/schemas/{bad_name}")
+        assert resp.status_code == 400
