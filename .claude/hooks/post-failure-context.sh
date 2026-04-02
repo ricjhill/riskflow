@@ -84,11 +84,11 @@ if tool == 'pytest':
     failed_tests = [l.strip() for l in lines if l.strip().startswith('FAILED ')]
 
 elif tool == 'mypy':
-    diagnostic_lines = [l for l in lines if ': error:' in l or 'Found' in l]
+    diagnostic_lines = [l for l in lines if ': error:' in l or re.search(r'Found \d+ error', l)]
     diagnostic_lines = diagnostic_lines[-30:]
 
 elif tool == 'ruff':
-    diagnostic_lines = [l for l in lines if re.match(r'.+:\d+:\d+:', l) or 'Found' in l]
+    diagnostic_lines = [l for l in lines if re.match(r'.+:\d+:\d+:', l) or re.search(r'Found \d+ error', l)]
     diagnostic_lines = diagnostic_lines[-30:]
 
 # --- Build context message ---
