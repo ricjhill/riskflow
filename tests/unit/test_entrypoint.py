@@ -103,3 +103,17 @@ class TestCorrectionCacheWiring:
             client = TestClient(app)
             response = client.get("/health")
             assert response.status_code == 200
+
+
+class TestSessionStoreWiring:
+    """Session store is wired from Redis when available."""
+
+    def test_session_endpoints_registered(self) -> None:
+        from src.entrypoint.main import create_app
+
+        app = create_app()
+        routes = [route.path for route in app.routes]
+        assert "/sessions" in routes
+        assert "/sessions/{session_id}" in routes
+        assert "/sessions/{session_id}/mappings" in routes
+        assert "/sessions/{session_id}/finalise" in routes
