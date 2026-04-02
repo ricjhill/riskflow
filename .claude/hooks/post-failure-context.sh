@@ -134,4 +134,4 @@ print(json.dumps({
         'additionalContext': context
     }
 }))
-" "$INPUT"
+" "$INPUT" || true
