@@ -17,7 +17,8 @@
       "Bash(docker compose:*)",
       "Bash(ls:*)",
       "Bash(ls)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(cat:*)"
     ],
     "deny": [
       "Edit(uv.lock)",
