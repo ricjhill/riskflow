@@ -513,7 +513,14 @@ def create_router(
                     unmapped_headers=unmapped,
                 )
             except (ValueError, TypeError) as e:
-                raise HTTPException(status_code=422, detail=str(e)) from e
+                raise HTTPException(
+                    status_code=422,
+                    detail=_error_detail(
+                        "INVALID_MAPPING",
+                        str(e),
+                        "Check that all target fields are valid and not duplicated.",
+                    ),
+                ) from e
 
             session_store.save(session)
             result: dict[str, object] = session.model_dump()
@@ -547,7 +554,7 @@ def create_router(
                     status_code=500,
                     detail=_error_detail(
                         "INTERNAL_ERROR",
-                        str(e),
+                        "Internal server error",
                         "Contact support if the problem persists.",
                     ),
                 ) from e

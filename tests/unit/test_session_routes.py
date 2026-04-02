@@ -13,6 +13,8 @@ import io
 import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from src.domain.model.errors import SLMUnavailableError
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -190,6 +192,36 @@ class TestPostSessions:
         assert isinstance(saved, MappingSession)
         assert saved.status == SessionStatus.CREATED
 
+    def test_slm_unavailable_returns_503(self, session_store: MagicMock) -> None:
+        """SLM failure during suggest_mapping returns 503."""
+        mapper = AsyncMock()
+        mapper.map_headers.side_effect = SLMUnavailableError("Groq down")
+        cache = MagicMock()
+        cache.get_mapping.return_value = None
+        schema = _make_schema("default")
+        service = MappingService(
+            ingestor=PolarsIngestor(),
+            mapper=mapper,
+            cache=cache,
+            schema=schema,
+        )
+        registry: dict[str, MappingService] = {"default": service}
+        router = create_router(
+            service,
+            schema_registry=registry,
+            schema_definitions={"default": schema},
+            session_store=session_store,
+        )
+        app = FastAPI()
+        app.include_router(router)
+        slm_client = TestClient(app)
+
+        resp = slm_client.post(
+            "/sessions",
+            files={"file": ("test.csv", io.BytesIO(b"a,b\n1,2\n"), "text/csv")},
+        )
+        assert resp.status_code == 503
+
 
 class TestGetSession:
     """GET /sessions/{id} — retrieve current session state."""
@@ -329,6 +361,20 @@ class TestFinaliseSession:
         assert session_store.save.call_count == 2
         final_save = session_store.save.call_args[0][0]
         assert final_save.status == SessionStatus.FINALISED
+
+    def test_missing_temp_file_returns_500(
+        self, client: TestClient, session_store: MagicMock
+    ) -> None:
+        """If the temp file is deleted before finalise, returns 500."""
+        data = _upload_csv(client)
+        session_id = data["id"]
+        # Delete the temp file to trigger an error during validate_rows
+        saved_session = session_store.save.call_args[0][0]
+        os.remove(saved_session.file_path)
+        resp = client.post(f"/sessions/{session_id}/finalise")
+        assert resp.status_code == 500
+        body = resp.json()["detail"]
+        assert body["message"] == "Internal server error"
 
 
 class TestDeleteSession:
