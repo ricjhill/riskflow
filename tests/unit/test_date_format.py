@@ -6,7 +6,11 @@ This solves YYYY/MM/DD misparsing where dateutil with dayfirst=True
 turns "2025/07/01" into January 7 instead of July 1.
 """
 
-from src.domain.model.date_format import detect_date_format
+import datetime
+
+import pytest
+
+from src.domain.model.date_format import detect_date_format, parse_date
 
 
 class TestDetectISO:
@@ -73,3 +77,54 @@ class TestDetectEdgeCases:
     def test_single_value(self) -> None:
         """Single value should still detect."""
         assert detect_date_format(["01-Jan-2025"]) == "named_month"
+
+
+class TestParseDateYYYYSlash:
+    """parse_date with yyyy_slash hint — THE BUG FIX."""
+
+    def test_july_first(self) -> None:
+        """This was misparsed as Jan 7 by dateutil dayfirst=True."""
+        assert parse_date("2025/07/01", "yyyy_slash") == datetime.date(2025, 7, 1)
+
+    def test_november(self) -> None:
+        assert parse_date("2025/11/25", "yyyy_slash") == datetime.date(2025, 11, 25)
+
+    def test_ambiguous_both_valid_months(self) -> None:
+        """Both 03 and 05 are valid months — must use year-first logic."""
+        assert parse_date("2025/03/05", "yyyy_slash") == datetime.date(2025, 3, 5)
+
+
+class TestParseDateOtherFormats:
+    """parse_date with iso, named_month, dayfirst, and None hints."""
+
+    def test_iso(self) -> None:
+        assert parse_date("2025-01-15", "iso") == datetime.date(2025, 1, 15)
+
+    def test_named_month(self) -> None:
+        assert parse_date("01-Jan-2025", "named_month") == datetime.date(2025, 1, 1)
+
+    def test_dayfirst(self) -> None:
+        assert parse_date("15/01/2025", "dayfirst") == datetime.date(2025, 1, 15)
+
+    def test_none_fallback_iso(self) -> None:
+        """None hint falls back to coerce_date logic (ISO-first)."""
+        assert parse_date("2025-01-15", None) == datetime.date(2025, 1, 15)
+
+    def test_none_fallback_named(self) -> None:
+        assert parse_date("01-Jan-2025", None) == datetime.date(2025, 1, 1)
+
+
+class TestParseDateErrors:
+    """parse_date error handling."""
+
+    def test_garbage_raises(self) -> None:
+        with pytest.raises(ValueError, match="(?i)date"):
+            parse_date("garbage", "iso")
+
+    def test_empty_string_raises(self) -> None:
+        with pytest.raises(ValueError, match="(?i)date|empty"):
+            parse_date("", "iso")
+
+    def test_garbage_with_none_hint_raises(self) -> None:
+        with pytest.raises(ValueError, match="(?i)date"):
+            parse_date("not-a-date", None)

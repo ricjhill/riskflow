@@ -1,4 +1,4 @@
-"""Column-level date format detection.
+"""Column-level date format detection and parsing.
 
 Detects the date format from a sample of values in a single column,
 returning a format identifier that parse_date() can use for consistent
@@ -6,7 +6,10 @@ parsing across all rows. This avoids the per-value guessing that causes
 dateutil with dayfirst=True to misparse YYYY/MM/DD dates.
 """
 
+import datetime
 import re
+
+from dateutil import parser as dateutil_parser
 
 # Regex patterns for format detection
 _ISO_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -49,3 +52,52 @@ def detect_date_format(values: list[str]) -> str | None:
         return "dayfirst"
 
     return None
+
+
+def parse_date(value: str, format_hint: str | None) -> datetime.date:
+    """Parse a date string using the detected format hint.
+
+    If format_hint is None, falls back to the ISO-first then dateutil
+    logic used by coerce_date().
+    """
+    stripped = value.strip()
+    if not stripped:
+        msg = "Date string must not be empty"
+        raise ValueError(msg)
+
+    if format_hint == "iso":
+        try:
+            return datetime.date.fromisoformat(stripped)
+        except ValueError as e:
+            msg = f"Could not parse date as ISO: '{value}'"
+            raise ValueError(msg) from e
+
+    if format_hint == "yyyy_slash":
+        m = _YYYY_SLASH_PATTERN.match(stripped)
+        if m:
+            parts = stripped.split("/")
+            try:
+                return datetime.date(int(parts[0]), int(parts[1]), int(parts[2]))
+            except ValueError as e:
+                msg = f"Could not parse date as YYYY/MM/DD: '{value}'"
+                raise ValueError(msg) from e
+        msg = f"Could not parse date as YYYY/MM/DD: '{value}'"
+        raise ValueError(msg)
+
+    if format_hint in ("named_month", "dayfirst"):
+        try:
+            return dateutil_parser.parse(stripped, dayfirst=True).date()
+        except (ValueError, OverflowError) as e:
+            msg = f"Could not parse date: '{value}'"
+            raise ValueError(msg) from e
+
+    # None hint: ISO-first, then dateutil fallback (same as coerce_date)
+    try:
+        return datetime.date.fromisoformat(stripped)
+    except ValueError:
+        pass
+    try:
+        return dateutil_parser.parse(stripped, dayfirst=True).date()
+    except (ValueError, OverflowError) as e:
+        msg = f"Could not parse date: '{value}'"
+        raise ValueError(msg) from e
