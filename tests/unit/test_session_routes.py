@@ -188,3 +188,29 @@ class TestPostSessions:
         saved = session_store.save.call_args[0][0]
         assert isinstance(saved, MappingSession)
         assert saved.status == SessionStatus.CREATED
+
+
+class TestGetSession:
+    """GET /sessions/{id} — retrieve current session state."""
+
+    def test_returns_200_with_session(self, client: TestClient) -> None:
+        data = _upload_csv(client)
+        session_id = data["id"]
+        resp = client.get(f"/sessions/{session_id}")
+        assert resp.status_code == 200
+        assert resp.json()["id"] == session_id
+        assert resp.json()["status"] == "created"
+
+    def test_returns_404_for_unknown_id(self, client: TestClient) -> None:
+        resp = client.get("/sessions/nonexistent-id")
+        assert resp.status_code == 404
+
+    def test_returns_full_session_state(self, client: TestClient) -> None:
+        data = _upload_csv(client)
+        session_id = data["id"]
+        resp = client.get(f"/sessions/{session_id}")
+        body = resp.json()
+        assert "mappings" in body
+        assert "source_headers" in body
+        assert "target_fields" in body
+        assert "preview_rows" in body
