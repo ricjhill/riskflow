@@ -10,6 +10,7 @@ import re
 
 # Regex patterns for format detection
 _ISO_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_YYYY_SLASH_PATTERN = re.compile(r"^\d{4}/\d{1,2}/\d{1,2}$")
 
 
 def detect_date_format(values: list[str]) -> str | None:
@@ -20,7 +21,14 @@ def detect_date_format(values: list[str]) -> str | None:
     if not values:
         return None
 
-    if all(_ISO_PATTERN.match(v.strip()) for v in values if v.strip()):
+    stripped = [v.strip() for v in values if v.strip()]
+    if not stripped:
+        return None
+
+    if all(_ISO_PATTERN.match(v) for v in stripped):
         return "iso"
+
+    if all(_YYYY_SLASH_PATTERN.match(v) for v in stripped):
+        return "yyyy_slash"
 
     return None

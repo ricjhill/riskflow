@@ -17,3 +17,13 @@ class TestDetectISO:
 
     def test_single_iso_date(self) -> None:
         assert detect_date_format(["2025-01-15"]) == "iso"
+
+
+class TestDetectYYYYSlash:
+    """YYYY/MM/DD detection — the format that triggers the bug."""
+
+    def test_all_yyyy_slash(self) -> None:
+        assert detect_date_format(["2025/07/01", "2025/11/25"]) == "yyyy_slash"
+
+    def test_single_yyyy_slash(self) -> None:
+        assert detect_date_format(["2025/07/01"]) == "yyyy_slash"
