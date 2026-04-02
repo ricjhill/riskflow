@@ -10,7 +10,13 @@
       "Bash(git branch:*)",
       "Bash(git checkout:*)",
       "Bash(git commit:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git push:*)",
+      "Bash(git push)",
+      "Bash(gh:*)",
+      "Bash(docker compose:*)",
+      "Bash(ls:*)",
+      "Bash(ls)"
     ],
     "deny": [
       "Edit(uv.lock)",
@@ -68,6 +74,16 @@
           {
             "type": "command",
             "command": ".claude/hooks/post-edit-lint.sh",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/post-rename-check.sh",
             "timeout": 10
           }
         ]
