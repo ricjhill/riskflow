@@ -323,7 +323,7 @@ class TestPutSessionMappings:
         )
         assert resp.status_code == 422
 
-    def test_missing_mappings_key_returns_422(self, client: TestClient) -> None:
+    def test_missing_mappings_key_defaults_to_empty_returns_200(self, client: TestClient) -> None:
         data = _upload_csv(client)
         session_id = data["id"]
         resp = client.put(

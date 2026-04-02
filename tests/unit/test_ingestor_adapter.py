@@ -7,6 +7,7 @@ import openpyxl
 import pytest
 
 from src.adapters.parsers.ingestor import PolarsIngestor
+from src.domain.model.errors import InvalidCedentDataError
 from src.ports.input.ingestor import IngestorPort
 
 
@@ -60,6 +61,13 @@ class TestGetHeaders:
         with pytest.raises(FileNotFoundError):
             PolarsIngestor().get_headers("/nonexistent/file.csv")
 
+    def test_empty_file_raises_invalid_cedent_data(self, tmp_path: Path) -> None:
+        """A 0-byte CSV triggers Polars NoDataError, mapped to InvalidCedentDataError."""
+        file_path = str(tmp_path / "empty.csv")
+        Path(file_path).write_bytes(b"")
+        with pytest.raises(InvalidCedentDataError, match="empty or contains no data"):
+            PolarsIngestor().get_headers(file_path)
+
 
 class TestGetPreview:
     def test_returns_first_n_rows(self, tmp_path: Path) -> None:
@@ -104,6 +112,13 @@ class TestGetPreview:
     def test_raises_on_missing_file(self) -> None:
         with pytest.raises(FileNotFoundError):
             PolarsIngestor().get_preview("/nonexistent/file.csv")
+
+    def test_empty_file_raises_invalid_cedent_data(self, tmp_path: Path) -> None:
+        """A 0-byte CSV triggers Polars NoDataError, mapped to InvalidCedentDataError."""
+        file_path = str(tmp_path / "empty.csv")
+        Path(file_path).write_bytes(b"")
+        with pytest.raises(InvalidCedentDataError, match="empty or contains no data"):
+            PolarsIngestor().get_preview(file_path)
 
 
 def _write_xlsx(
