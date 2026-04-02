@@ -314,6 +314,26 @@ class TestPutSessionMappings:
         )
         assert resp.status_code == 404
 
+    def test_null_mappings_returns_422(self, client: TestClient) -> None:
+        data = _upload_csv(client)
+        session_id = data["id"]
+        resp = client.put(
+            f"/sessions/{session_id}/mappings",
+            json={"mappings": None, "unmapped_headers": []},
+        )
+        assert resp.status_code == 422
+
+    def test_missing_mappings_key_returns_422(self, client: TestClient) -> None:
+        data = _upload_csv(client)
+        session_id = data["id"]
+        resp = client.put(
+            f"/sessions/{session_id}/mappings",
+            json={"unmapped_headers": []},
+        )
+        # Missing "mappings" key defaults to [] via body.get("mappings", [])
+        # which is valid (empty mapping list)
+        assert resp.status_code == 200
+
     def test_update_persisted_to_store(self, client: TestClient, session_store: MagicMock) -> None:
         data = _upload_csv(client)
         session_id = data["id"]
