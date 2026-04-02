@@ -1,7 +1,7 @@
-# Interactive Session API & Harness Completion
+# Interactive Session API, Harness Completion & Flow Mapper GUI
 
 **RiskFlow Engineering Session — 2 April 2026 (afternoon)**
-**Duration: 45 minutes**
+**Duration: 55 minutes**
 
 ---
 
@@ -15,16 +15,17 @@
 | 4 | 11 TDD Loops in 5 Endpoints | 8 min |
 | 5 | Edge Case Hardening | 5 min |
 | 6 | PostToolUse Failure Context Hook | 7 min |
-| 7 | The Code Review Loop | 5 min |
-| 8 | Cleanup Scan | 3 min |
-| 9 | By the Numbers | 3 min |
-| 10 | Lessons Learned | 3 min |
+| 7 | API Client & Flow Mapper GUI | 7 min |
+| 8 | The Code Review Loop | 5 min |
+| 9 | Cleanup Scan | 3 min |
+| 10 | By the Numbers | 3 min |
+| 11 | Lessons Learned | 3 min |
 
 ---
 
 ## 1. What We Built (3 min)
 
-Four PRs, three themes:
+Seven PRs, four themes:
 
 | PR | Title | Theme |
 |----|-------|-------|
@@ -32,8 +33,11 @@ Four PRs, three themes:
 | #100 | Empty file fix, DELETE cleanup, edge case tests | Hardening |
 | #101 | PostToolUse failure context hook | Harness |
 | #102 | README, CLAUDE.md, .env.example updates + cleanup | Docs |
+| #103 | Session presentation | Docs |
+| #104 | API client session methods + full test coverage | Plumbing |
+| #105 | Flow Mapper tab (interactive GUI) | Feature |
 
-Starting point: a one-shot `/upload` endpoint where the SLM decides everything. Ending point: a stateful API where users can review, edit, and finalise mappings interactively.
+Starting point: a one-shot `/upload` endpoint where the SLM decides everything. Ending point: a fully interactive Flow Mapper GUI where users upload, review SLM suggestions, edit mappings via dropdowns, and finalise — all backed by a stateful session API with Redis persistence.
 
 ---
 
@@ -272,7 +276,56 @@ This was item #4 — the last deferred item. All 4 harness improvements are now 
 
 ---
 
-## 7. The Code Review Loop (5 min)
+## 7. API Client & Flow Mapper GUI (7 min)
+
+### API Client: Bridging Backend to GUI (PR #104)
+
+The GUI talks to the API via `gui/api_client.py` — a thin httpx wrapper. It had methods for `/upload`, `/schemas`, `/sheets`, `/corrections`, but nothing for the new session endpoints. Added 5 methods:
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| `create_session` | POST /sessions | Upload + get SLM suggestions |
+| `get_session` | GET /sessions/{id} | Retrieve session state |
+| `update_mappings` | PUT /sessions/{id}/mappings | Save user edits |
+| `finalise_session` | POST /sessions/{id}/finalise | Validate rows |
+| `delete_session` | DELETE /sessions/{id} | Cleanup |
+
+Also added 32 tests for the entire api_client (all 10 methods), including raise_for_status verification on every method, empty-params boundary test, and trailing-slash constructor test. The module went from 0 tests to complete coverage.
+
+### Flow Mapper Tab (PR #105)
+
+New 4th tab in the Streamlit GUI with a 3-step wizard:
+
+```
+Step 1: Upload     → file + schema picker → "Create Session"
+Step 2: Review     → preview table + mapping editor (selectboxes) → "Finalise"
+Step 3: Results    → valid/invalid records + CSV download → "New Session"
+```
+
+### The Mapping Editor — Option 2 Swap Point
+
+The core design decision: isolate the editor as a single function:
+
+```python
+def _mapping_editor(
+    source_headers: list[str],
+    target_fields: list[str],
+    current_mappings: list[dict],
+) -> tuple[list[dict], list[str]]:
+```
+
+Option 1 (shipped): renders `st.selectbox` per source header, pre-populated with SLM suggestions. Option 2 (future): replace the body with a Streamlit custom React component for drag-and-drop. Same inputs, same outputs — the rest of the tab doesn't change.
+
+### Session Lifecycle in the GUI
+
+- `st.session_state` tracks the active session ID, data, and step
+- "New Session" / "Start Over" calls `client.delete_session()` to clean up temp files and Redis
+- Step indicator shows progress through Upload → Review & Edit → Results
+- All API errors display structured messages (error_code, message, suggestion)
+
+---
+
+## 8. The Code Review Loop (5 min)
 
 ### How the code-reviewer agent works
 
@@ -290,17 +343,21 @@ Every PR goes through `/create-pr`, which launches the code-reviewer agent. The 
 | #99 | REVISE | PUT 422 uses bare `str(e)` not `_error_detail`; finalise 500 leaks `str(e)`; missing 503/500 error path tests | Fixed all 3, re-reviewed → APPROVE |
 | #100 | REVISE | Test named `_returns_422` but asserts 200; missing adapter-layer tests for NoDataError | Renamed test, added 2 adapter tests → APPROVE |
 | #101 | BLOCK | Ruff pattern doesn't match full output format | Fixed pattern to handle both formats → APPROVE |
+| #104 | REVISE | raise_for_status only asserted in 2/10 classes; no empty-params test; no trailing-slash test | Added all 3, 21→32 tests → APPROVE |
+| #105 | REVISE | Save/Finalise handlers missing `except Exception` fallback; dead `unmapped_headers` param; stale docstring | Added fallbacks, removed dead param, fixed docstring → APPROVE |
 
 ### What the reviewer catches that humans miss
 
 - **Response shape consistency:** The 422 on PUT used `detail=str(e)` while every other 422 used `_error_detail(...)`. API clients expect a consistent shape.
 - **Exception leakage:** The finalise 500 passed `str(e)` to the response, potentially exposing file paths and Polars internals.
 - **Output format assumptions:** The ruff pattern assumed concise format but the project uses full format.
-- **PR description accuracy:** The reviewer verified every factual claim against the actual code, flagging 3 inaccurate statements across 2 PRs.
+- **Test coverage gaps:** raise_for_status only asserted in 2 of 10 api_client test classes — inconsistent error path verification.
+- **Dead code:** `unmapped_headers` parameter accepted but never read in `_mapping_editor`.
+- **PR description accuracy:** The reviewer verified every factual claim against the actual code, flagging inaccurate statements across 5 PRs.
 
 ---
 
-## 8. Cleanup Scan (3 min)
+## 9. Cleanup Scan (3 min)
 
 Ran the `/cleanup` skill after all PRs merged. Six-category scan:
 
@@ -322,16 +379,17 @@ Both fixed in PR #102 alongside the README update.
 
 ---
 
-## 9. By the Numbers (3 min)
+## 10. By the Numbers (3 min)
 
 | Metric | Start of session | End of session |
 |--------|-----------------|----------------|
-| PRs merged | 98 | 102 |
-| Unit tests | 567 | 639 (+72) |
+| PRs merged | 98 | 105 |
+| Unit tests | 567 | 671 (+104) |
 | Hooks | 8 | 9 (+ failure context) |
 | Source files | 35 | 38 (+ session.py, session_store.py, session_store port) |
 | Endpoints | 10 | 15 (+ 5 session endpoints) |
-| Lines added | — | ~1,600 net |
+| GUI tabs | 3 | 4 (+ Flow Mapper) |
+| Lines added | — | ~2,000 net |
 
 ### PRs this session
 
@@ -341,6 +399,9 @@ Both fixed in PR #102 alongside the README update.
 | #100 | Edge case hardening | 7 |
 | #101 | PostToolUse failure context hook | 0 (shell hook) |
 | #102 | Docs + cleanup | 0 (docs only) |
+| #103 | Session presentation | 0 (docs only) |
+| #104 | API client session methods | 32 |
+| #105 | Flow Mapper GUI tab | 0 (Streamlit UI) |
 
 ### Harness roadmap status
 
@@ -352,11 +413,11 @@ All 4 items complete. 9 hooks total, covering:
 
 ---
 
-## 10. Lessons Learned (3 min)
+## 11. Lessons Learned (3 min)
 
 ### 1. The code reviewer pays for itself in PR #1
 
-Three PRs got REVISE or BLOCK before merge. Each finding was a real issue that would have shipped:
+Five PRs got REVISE or BLOCK before merge. Each finding was a real issue that would have shipped:
 - Inconsistent error response shapes (breaks API clients)
 - Exception detail leakage (security)
 - Output format mismatch (broken diagnostics)
@@ -378,3 +439,11 @@ The failure context hook fires on every `uv run pytest` — but only produces ou
 ### 5. The cleanup scan found exactly what post-rename-check was designed to catch
 
 Two stale references to `schemas/default.yaml` in CLAUDE.md and .env.example — the same class of bug that motivated the post-rename hook (#92). The difference: these were stale from a rename that happened before the hook existed. The hook prevents new staleness; the cleanup scan catches legacy staleness.
+
+### 6. Ship the simplest version that proves the contract
+
+The Flow Mapper uses selectboxes, not drag-and-drop. The UX is less impressive, but it shipped in one commit and proves the full session lifecycle works end-to-end: upload → SLM suggest → user edits → finalise → results. The mapping editor is an isolated function with a clear contract — swapping selectboxes for a React drag-and-drop component changes one function body, not the tab architecture. Build the boring version first, verify the plumbing, then upgrade the UX.
+
+### 7. Test the client, not just the server
+
+The api_client had 0 tests until PR #104. Adding 32 tests found no bugs — but it locked down the request shapes (URLs, params, JSON bodies, error propagation) so that future refactors can't silently break the GUI's assumptions about the API. The reviewer caught that raise_for_status was only asserted in 2 of 10 methods — meaning 8 methods could silently swallow HTTP errors without any test noticing.
