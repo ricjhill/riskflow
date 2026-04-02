@@ -32,10 +32,13 @@ from src.domain.model.errors import (
     SLMUnavailableError,
 )
 from src.domain.model.job import Job
+from src.domain.model.schema import ColumnMapping, MappingResult
+from src.domain.model.session import MappingSession, SessionStatus
 from src.domain.model.target_schema import TargetSchema
 from src.domain.service.mapping_service import MappingService
 from src.ports.output.job_store import JobStorePort
 from src.ports.output.schema_store import SchemaStorePort
+from src.ports.output.session_store import MappingSessionStorePort
 
 logger = structlog.get_logger()
 
@@ -81,6 +84,7 @@ def create_router(
     builtin_schema_names: set[str] | None = None,
     schema_store: SchemaStorePort | None = None,
     service_factory: Callable[[TargetSchema], MappingService] | None = None,
+    session_store: MappingSessionStorePort | None = None,
 ) -> APIRouter:
     """Create a FastAPI router wired to the given MappingService.
 
@@ -95,6 +99,7 @@ def create_router(
     - builtin_schema_names: names that can't be deleted
     - schema_store: persistence for runtime schemas
     - service_factory: closure to build MappingService for new schemas
+    - session_store: interactive mapping session persistence
     """
     router = APIRouter()
     _registry = schema_registry or {}
@@ -397,6 +402,187 @@ def create_router(
             count=len(request.corrections),
         )
         return {"stored": len(request.corrections)}
+
+    if session_store is not None:
+
+        @router.post("/sessions", status_code=201)
+        async def create_session(
+            file: UploadFile = File(...),
+            sheet_name: str | None = Query(
+                default=None, description="Sheet name for multi-sheet Excel files"
+            ),
+            schema: str | None = Query(
+                default=None, description="Schema name to use (from GET /schemas)"
+            ),
+        ) -> dict[str, object]:
+            """Upload a file, get SLM suggestion + preview. Creates a session."""
+            _validate_file(file)
+            active_service = _resolve_service(schema)
+            schema_name = (
+                schema
+                if schema and schema.strip()
+                else next(
+                    (name for name, svc in _registry.items() if svc is active_service),
+                    "default",
+                )
+            )
+
+            temp_path = _save_temp_file(file)
+            try:
+                headers = active_service.get_headers(temp_path, sheet_name=sheet_name)
+                preview = active_service.get_preview(temp_path, sheet_name=sheet_name)
+                suggestion = await active_service.suggest_mapping(headers, preview)
+
+                # Resolve target fields from the schema definition
+                schema_def = _definitions.get(schema_name)
+                target_fields = sorted(schema_def.field_names) if schema_def else []
+
+                session = MappingSession.create(
+                    schema_name=schema_name,
+                    file_path=temp_path,
+                    sheet_name=sheet_name,
+                    source_headers=headers,
+                    target_fields=target_fields,
+                    mappings=suggestion.mappings,
+                    unmapped_headers=suggestion.unmapped_headers,
+                    preview_rows=preview,
+                )
+                session_store.save(session)
+
+                logger.info(
+                    "session_created",
+                    session_id=session.id,
+                    schema_name=schema_name,
+                    header_count=len(headers),
+                    mapping_count=len(suggestion.mappings),
+                )
+                result: dict[str, object] = session.model_dump()
+                return result
+            except SLMUnavailableError as e:
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+                raise HTTPException(
+                    status_code=503,
+                    detail=_error_detail(
+                        "SLM_UNAVAILABLE",
+                        str(e),
+                        "The mapping service is temporarily unavailable. Retry in a few seconds.",
+                    ),
+                ) from e
+            except Exception as e:
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+                logger.error("session_create_error", error=str(e))
+                raise HTTPException(
+                    status_code=500,
+                    detail=_error_detail(
+                        "INTERNAL_ERROR",
+                        "Internal server error",
+                        "Contact support if the problem persists.",
+                    ),
+                ) from e
+
+        @router.get("/sessions/{session_id}")
+        async def get_session(session_id: str) -> dict[str, object]:
+            """Return current session state."""
+            session = session_store.get(session_id)
+            if session is None:
+                raise HTTPException(status_code=404, detail="Session not found")
+            result: dict[str, object] = session.model_dump()
+            return result
+
+        @router.put("/sessions/{session_id}/mappings")
+        async def update_session_mappings(
+            session_id: str, body: dict[str, object]
+        ) -> dict[str, object]:
+            """Update the session's mappings with user-edited values."""
+            session = session_store.get(session_id)
+            if session is None:
+                raise HTTPException(status_code=404, detail="Session not found")
+
+            try:
+                raw_mappings = body.get("mappings", [])
+                if not isinstance(raw_mappings, list):
+                    raise ValueError("mappings must be a list")  # noqa: TRY301
+                mappings = [ColumnMapping.model_validate(m) for m in raw_mappings]
+                unmapped = body.get("unmapped_headers", [])
+                if not isinstance(unmapped, list):
+                    raise ValueError("unmapped_headers must be a list")  # noqa: TRY301
+                session.update_mappings(
+                    mappings=mappings,
+                    unmapped_headers=unmapped,
+                )
+            except (ValueError, TypeError) as e:
+                raise HTTPException(
+                    status_code=422,
+                    detail=_error_detail(
+                        "INVALID_MAPPING",
+                        str(e),
+                        "Check that all target fields are valid and not duplicated.",
+                    ),
+                ) from e
+
+            session_store.save(session)
+            result: dict[str, object] = session.model_dump()
+            return result
+
+        @router.post("/sessions/{session_id}/finalise")
+        async def finalise_session(session_id: str) -> dict[str, object]:
+            """Validate rows with the session's current mapping."""
+            session = session_store.get(session_id)
+            if session is None:
+                raise HTTPException(status_code=404, detail="Session not found")
+
+            if session.status == SessionStatus.FINALISED:
+                raise HTTPException(status_code=409, detail="Session already finalised")
+
+            active_service = _resolve_service(session.schema_name)
+            mapping_result = MappingResult(
+                mappings=session.mappings,
+                unmapped_headers=session.unmapped_headers,
+            )
+
+            try:
+                processing_result = active_service.validate_rows_with_mapping(
+                    session.file_path,
+                    mapping_result,
+                    sheet_name=session.sheet_name,
+                )
+            except Exception as e:
+                logger.error("session_finalise_error", session_id=session_id, error=str(e))
+                raise HTTPException(
+                    status_code=500,
+                    detail=_error_detail(
+                        "INTERNAL_ERROR",
+                        "Internal server error",
+                        "Contact support if the problem persists.",
+                    ),
+                ) from e
+
+            session.finalise(result=processing_result.model_dump())
+            session_store.save(session)
+
+            logger.info(
+                "session_finalised",
+                session_id=session_id,
+                valid_count=len(processing_result.valid_records),
+                error_count=len(processing_result.errors),
+            )
+            result: dict[str, object] = session.model_dump()
+            return result
+
+        @router.delete("/sessions/{session_id}", status_code=204)
+        async def delete_session(session_id: str) -> None:
+            """Delete a session and clean up its temp file."""
+            session = session_store.get(session_id)
+            if session is None:
+                raise HTTPException(status_code=404, detail="Session not found")
+
+            if os.path.exists(session.file_path):
+                os.remove(session.file_path)
+            session_store.delete(session_id)
+
+            logger.info("session_deleted", session_id=session_id)
 
     if job_store is not None:
 

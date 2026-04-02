@@ -800,3 +800,86 @@ class TestDateFormatDetection:
         row1 = result.valid_records[0]
         assert row1["Voyage_Date"] == datetime.date(2024, 3, 15)
         assert row1["Arrival_Date"] == datetime.date(2024, 4, 2)  # NOT Feb 4
+
+
+class TestGetHeaders:
+    """get_headers delegates to the ingestor and returns a list of strings."""
+
+    def test_returns_headers_from_csv(self, service: MappingService, tmp_path: Path) -> None:
+        path = _write_csv(tmp_path)
+        headers = service.get_headers(path)
+        assert headers == ["Policy No.", "GWP", "Extra"]
+
+    def test_returns_headers_with_sheet_name(self, service: MappingService, tmp_path: Path) -> None:
+        path = _write_csv(tmp_path)
+        # CSV ignores sheet_name, but the API should accept it
+        headers = service.get_headers(path, sheet_name=None)
+        assert headers == ["Policy No.", "GWP", "Extra"]
+
+
+class TestGetPreview:
+    """get_preview delegates to the ingestor and returns a list of row dicts."""
+
+    def test_returns_preview_rows(self, service: MappingService, tmp_path: Path) -> None:
+        path = _write_csv(tmp_path)
+        preview = service.get_preview(path)
+        assert len(preview) >= 1
+        assert "Policy No." in preview[0]
+
+    def test_returns_preview_with_sheet_name(self, service: MappingService, tmp_path: Path) -> None:
+        path = _write_csv(tmp_path)
+        preview = service.get_preview(path, sheet_name=None)
+        assert isinstance(preview, list)
+
+
+class TestSuggestMapping:
+    """suggest_mapping calls the SLM without cache or confidence check."""
+
+    @pytest.mark.asyncio
+    async def test_returns_mapping_result(self, service: MappingService, mapper: AsyncMock) -> None:
+        headers = ["Premium", "PolicyNum"]
+        preview = [{"Premium": 1000, "PolicyNum": "P001"}]
+        result = await service.suggest_mapping(headers, preview)
+        assert isinstance(result, MappingResult)
+        mapper.map_headers.assert_called_once_with(headers, preview)
+
+    @pytest.mark.asyncio
+    async def test_does_not_use_cache(
+        self, service: MappingService, mapper: AsyncMock, cache: MagicMock
+    ) -> None:
+        await service.suggest_mapping(["H"], [{"H": 1}])
+        cache.get_mapping.assert_not_called()
+        cache.set_mapping.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_does_not_check_confidence(self, mapper: AsyncMock, cache: MagicMock) -> None:
+        """Low confidence should NOT raise — suggest_mapping skips threshold."""
+        mapper.map_headers.return_value = _make_mapping_result(confidence=0.1)
+        service = MappingService(ingestor=PolarsIngestor(), mapper=mapper, cache=cache)
+        result = await service.suggest_mapping(["H"], [{"H": 1}])
+        assert result.mappings[0].confidence == 0.1
+
+
+class TestValidateRowsWithMapping:
+    """validate_rows_with_mapping validates a file using a supplied mapping."""
+
+    def test_returns_processing_result(self, service: MappingService, tmp_path: Path) -> None:
+        path = _write_csv(tmp_path)
+        mapping = _make_mapping_result()
+        result = service.validate_rows_with_mapping(path, mapping)
+        assert isinstance(result, ProcessingResult)
+
+    def test_uses_supplied_mapping_not_slm(
+        self, service: MappingService, mapper: AsyncMock, tmp_path: Path
+    ) -> None:
+        path = _write_csv(tmp_path)
+        mapping = _make_mapping_result()
+        service.validate_rows_with_mapping(path, mapping)
+        mapper.map_headers.assert_not_called()
+
+    def test_with_sheet_name(self, service: MappingService, tmp_path: Path) -> None:
+        path = _write_csv(tmp_path)
+        mapping = _make_mapping_result()
+        # CSV ignores sheet_name but API should accept it
+        result = service.validate_rows_with_mapping(path, mapping, sheet_name=None)
+        assert isinstance(result, ProcessingResult)

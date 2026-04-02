@@ -174,6 +174,9 @@ def create_app() -> FastAPI:
     # --- Job store for async uploads ---
     job_store = InMemoryJobStore()
 
+    # --- Session store for interactive mapping ---
+    session_store = _create_session_store(redis_client)
+
     # --- Routes ---
     router = create_router(
         mapping_service,
@@ -183,6 +186,7 @@ def create_app() -> FastAPI:
         builtin_schema_names=builtin_schema_names,
         schema_store=schema_store,
         service_factory=_make_service,
+        session_store=session_store,
     )
     app.include_router(router)
 
@@ -248,6 +252,17 @@ def _create_correction_cache(redis_client: Any) -> CorrectionCachePort:
     if redis_client:
         return RedisCorrectionCache(client=redis_client)
     return NullCorrectionCache()
+
+
+def _create_session_store(redis_client: Any) -> Any:
+    """Create Redis session store if client is available, otherwise NullMappingSessionStore."""
+    if redis_client:
+        from src.adapters.storage.session_store import RedisMappingSessionStore
+
+        return RedisMappingSessionStore(client=redis_client)
+    from src.adapters.storage.session_store import NullMappingSessionStore
+
+    return NullMappingSessionStore()
 
 
 def _create_schema_store(redis_client: Any) -> Any:
