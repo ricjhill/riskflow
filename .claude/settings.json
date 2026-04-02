@@ -85,6 +85,11 @@
             "type": "command",
             "command": ".claude/hooks/post-rename-check.sh",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": ".claude/hooks/post-failure-context.sh",
+            "timeout": 10
           }
         ]
       }
