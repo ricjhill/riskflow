@@ -88,7 +88,15 @@ elif tool == 'mypy':
     diagnostic_lines = diagnostic_lines[-30:]
 
 elif tool == 'ruff':
-    diagnostic_lines = [l for l in lines if re.match(r'.+:\d+:\d+:', l) or re.search(r'Found \d+ error', l)]
+    # Full format: rule line 'F401 [*] ...' + ' --> file:line:col'
+    # Concise format: 'file:line:col: F401 ...'
+    diagnostic_lines = [
+        l for l in lines
+        if re.match(r'[A-Z]\d+\s', l)
+        or re.search(r'-->\s+.+:\d+:\d+', l)
+        or re.match(r'.+:\d+:\d+:', l)
+        or re.search(r'Found \d+ error', l)
+    ]
     diagnostic_lines = diagnostic_lines[-30:]
 
 # --- Build context message ---
