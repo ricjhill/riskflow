@@ -1,8 +1,9 @@
-"""RiskFlow Dashboard — 3-tab Streamlit GUI.
+"""RiskFlow Dashboard — 4-tab Streamlit GUI.
 
 Tab 1: Mapping & Ingestion (for underwriters/brokers)
 Tab 2: Harness Debugger (for DevOps/engineering)
 Tab 3: Feedback & Corrections (for data quality)
+Tab 4: Flow Mapper (interactive session-based mapping)
 
 Talks to the RiskFlow API via HTTP — never imports domain code.
 
@@ -397,7 +398,6 @@ def _mapping_editor(
     source_headers: list[str],
     target_fields: list[str],
     current_mappings: list[dict],
-    unmapped_headers: list[str],
 ) -> tuple[list[dict], list[str]]:
     """Render mapping editor with selectboxes. Returns (mappings, unmapped).
 
@@ -573,7 +573,6 @@ with tab4:
                 source_headers=session.get("source_headers", []),
                 target_fields=session.get("target_fields", []),
                 current_mappings=session.get("mappings", []),
-                unmapped_headers=session.get("unmapped_headers", []),
             )
 
             btn_col1, btn_col2, btn_col3 = st.columns([1, 1, 1])
@@ -591,6 +590,8 @@ with tab4:
                         st.rerun()
                     except httpx.HTTPStatusError as e:
                         _show_api_error(e)
+                    except Exception as e:
+                        st.error(f"Error: {e}")
 
             with btn_col2:
                 if st.button("Finalise", type="primary", key="flow_finalise"):
@@ -609,6 +610,8 @@ with tab4:
                         st.rerun()
                     except httpx.HTTPStatusError as e:
                         _show_api_error(e)
+                    except Exception as e:
+                        st.error(f"Error: {e}")
 
             with btn_col3:
                 if st.button("Start Over", key="flow_restart_review"):
