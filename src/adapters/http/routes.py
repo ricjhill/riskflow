@@ -589,8 +589,15 @@ def create_router(
             if session is None:
                 raise HTTPException(status_code=404, detail="Session not found")
 
-            if os.path.exists(session.file_path):
-                os.remove(session.file_path)
+            try:
+                if os.path.exists(session.file_path):
+                    os.remove(session.file_path)
+            except OSError:
+                logger.warning(
+                    "session_file_cleanup_failed",
+                    session_id=session_id,
+                    file_path=session.file_path,
+                )
             session_store.delete(session_id)
 
             logger.info("session_deleted", session_id=session_id)

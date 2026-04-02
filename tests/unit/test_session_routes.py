@@ -421,3 +421,29 @@ class TestDeleteSession:
         client.delete(f"/sessions/{session_id}")
         resp = client.get(f"/sessions/{session_id}")
         assert resp.status_code == 404
+
+    def test_delete_succeeds_when_temp_file_already_gone(
+        self, client: TestClient, session_store: MagicMock
+    ) -> None:
+        """DELETE still returns 204 and removes session even if temp file was already deleted."""
+        data = _upload_csv(client)
+        session_id = data["id"]
+        # Remove the temp file before DELETE
+        saved_session = session_store.save.call_args[0][0]
+        os.remove(saved_session.file_path)
+
+        resp = client.delete(f"/sessions/{session_id}")
+        assert resp.status_code == 204
+        session_store.delete.assert_called_once_with(session_id)
+
+    def test_delete_succeeds_when_file_removal_fails(
+        self, client: TestClient, session_store: MagicMock
+    ) -> None:
+        """DELETE still returns 204 even if os.remove raises OSError."""
+        data = _upload_csv(client)
+        session_id = data["id"]
+
+        with patch("src.adapters.http.routes.os.remove", side_effect=OSError("permission denied")):
+            resp = client.delete(f"/sessions/{session_id}")
+        assert resp.status_code == 204
+        session_store.delete.assert_called_once_with(session_id)
