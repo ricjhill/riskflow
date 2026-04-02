@@ -10,6 +10,7 @@ Tests use FastAPI TestClient with mocked MappingService.
 """
 
 import io
+import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -328,3 +329,41 @@ class TestFinaliseSession:
         assert session_store.save.call_count == 2
         final_save = session_store.save.call_args[0][0]
         assert final_save.status == SessionStatus.FINALISED
+
+
+class TestDeleteSession:
+    """DELETE /sessions/{id} — cleanup temp file + session store."""
+
+    def test_returns_204(self, client: TestClient) -> None:
+        data = _upload_csv(client)
+        session_id = data["id"]
+        resp = client.delete(f"/sessions/{session_id}")
+        assert resp.status_code == 204
+
+    def test_unknown_session_returns_404(self, client: TestClient) -> None:
+        resp = client.delete("/sessions/nonexistent")
+        assert resp.status_code == 404
+
+    def test_session_removed_from_store(self, client: TestClient, session_store: MagicMock) -> None:
+        data = _upload_csv(client)
+        session_id = data["id"]
+        client.delete(f"/sessions/{session_id}")
+        session_store.delete.assert_called_once_with(session_id)
+
+    def test_temp_file_cleaned_up(self, client: TestClient, session_store: MagicMock) -> None:
+        data = _upload_csv(client)
+        session_id = data["id"]
+        # Get the file path from the stored session
+        saved_session = session_store.save.call_args[0][0]
+        file_path = saved_session.file_path
+        assert os.path.exists(file_path)
+
+        client.delete(f"/sessions/{session_id}")
+        assert not os.path.exists(file_path)
+
+    def test_get_after_delete_returns_404(self, client: TestClient) -> None:
+        data = _upload_csv(client)
+        session_id = data["id"]
+        client.delete(f"/sessions/{session_id}")
+        resp = client.get(f"/sessions/{session_id}")
+        assert resp.status_code == 404
