@@ -26,8 +26,12 @@ def coerce_date(value: Any) -> Any:
     """Coerce common date formats to datetime.date.
 
     Handles DD-Mon-YYYY, DD/MM/YYYY, YYYY/MM/DD, verbose formats, and
-    datetime objects. Passes through datetime.date unchanged. Uses
-    dayfirst=True since reinsurance is heavily London-market oriented.
+    datetime objects. Passes through datetime.date unchanged.
+
+    Tries ISO 8601 first (YYYY-MM-DD is unambiguous), then falls back
+    to dayfirst=True for broker-format dates. Without the ISO-first
+    strategy, dayfirst=True misparses ISO dates: 2024-04-02 becomes
+    Feb 4 instead of April 2.
     """
     if isinstance(value, datetime.date) and not isinstance(value, datetime.datetime):
         return value
@@ -37,6 +41,12 @@ def coerce_date(value: Any) -> Any:
         stripped = value.strip()
         if not stripped:
             raise ValueError("Date string must not be empty")
+        # Try ISO 8601 first — unambiguous, no dayfirst needed
+        try:
+            return datetime.date.fromisoformat(stripped)
+        except ValueError:
+            pass
+        # Fall back to dateutil with dayfirst=True for broker formats
         try:
             return dateutil_parser.parse(stripped, dayfirst=True).date()
         except (ValueError, OverflowError) as e:
