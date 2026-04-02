@@ -94,6 +94,8 @@ graph LR
         SLM[SLM Adapter<br>Groq Mapper]
         Cache[Cache Adapter<br>Redis Client]
         CorrCache[Correction Cache<br>Redis Hash]
+        SessionStore[Session Store<br>Redis + TTL]
+        SchemaStore[Schema Store<br>Redis]
         JobStore[Job Store<br>In-Memory]
     end
 
@@ -102,14 +104,18 @@ graph LR
         MapperPort{{MapperPort}}
         CachePort{{CachePort}}
         CorrectionCachePort{{CorrectionCachePort}}
+        SessionStorePort{{MappingSessionStorePort}}
+        SchemaStorePort{{SchemaStorePort}}
         JobStorePort{{JobStorePort}}
         SchemaLoaderPort{{SchemaLoaderPort}}
     end
 
     subgraph Domain
         Service[MappingService]
+        Session[MappingSession<br>CREATED → FINALISED]
         Models[TargetSchema<br>ColumnMapping<br>MappingResult<br>ConfidenceReport<br>Correction]
         RecordFactory[record_factory<br>Dynamic pydantic models]
+        DateFormat[date_format<br>Column-level detection]
         Errors[Domain Errors]
     end
 
@@ -120,6 +126,9 @@ graph LR
     Client -->|GET /jobs/id| HTTP
     Client -->|POST /sheets| HTTP
     Client -->|GET /schemas| HTTP
+    Client -->|POST /sessions| HTTP
+    Client -->|PUT /sessions/id/mappings| HTTP
+    Client -->|POST /sessions/id/finalise| HTTP
     HTTP --> Service
     Service --> IngestorPort
     Service --> MapperPort
@@ -127,40 +136,66 @@ graph LR
     Service --> CorrectionCachePort
     Service --> RecordFactory
     Service --> Models
+    Service --> DateFormat
     IngestorPort -.-> Parser
     MapperPort -.-> SLM
     CachePort -.-> Cache
     CorrectionCachePort -.-> CorrCache
+    SessionStorePort -.-> SessionStore
+    SchemaStorePort -.-> SchemaStore
     JobStorePort -.-> JobStore
     SchemaLoaderPort -.-> SchemaLoader
     Parser --> Excel
     SLM --> Groq
     Cache --> Redis
     CorrCache --> Redis
+    SessionStore --> Redis
+    SchemaStore --> Redis
 ```
 
-**Data flow:** Upload → Parse headers → Check cache → (miss?) Check corrections → SLM maps uncorrected headers → Merge → Validate rows → Return results with confidence report
+**Data flows:**
+- **Batch:** Upload → Parse headers → Check cache → (miss?) Check corrections → SLM maps uncorrected headers → Merge → Validate rows → Return results with confidence report
+- **Interactive:** Upload → SLM suggests → User edits mappings → Finalise → Validate rows → Return results
 
 **Endpoints:**
-- `POST /upload` — synchronous upload with optional `?sheet_name`, `?cedent_id`, and `?schema`
-- `POST /upload/async` — async upload, returns job ID for polling
-- `GET /jobs/{id}` — poll async job status and result
-- `POST /sheets` — list sheet names in an Excel file
-- `POST /corrections` — submit human-verified mapping corrections
-- `GET /schemas` — list available target schemas
-- `GET /health` — health check
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/upload` | POST | Synchronous upload with optional `?sheet_name`, `?cedent_id`, `?schema` |
+| `/upload/async` | POST | Async upload, returns job ID for polling |
+| `/jobs/{id}` | GET | Poll async job status and result |
+| `/sheets` | POST | List sheet names in an Excel file |
+| `/corrections` | POST | Submit human-verified mapping corrections |
+| `/schemas` | GET | List available target schemas |
+| `/schemas/{name}` | GET | View a schema's full definition |
+| `/schemas` | POST | Create a runtime schema from JSON |
+| `/schemas/{name}` | DELETE | Delete a runtime schema |
+| `/sessions` | POST | Upload file, get SLM suggestion + preview (interactive) |
+| `/sessions/{id}` | GET | Current session state |
+| `/sessions/{id}/mappings` | PUT | Edit mappings before finalising |
+| `/sessions/{id}/finalise` | POST | Validate rows with user's mapping |
+| `/sessions/{id}` | DELETE | Cleanup session + temp file |
+| `/health` | GET | Health check |
 
 ```
 src/
   entrypoint/        # FastAPI wiring (composition root)
-  domain/            # Business logic, models, validation
-  ports/             # Interfaces (Protocol-based)
-  adapters/          # Implementations (HTTP, Groq, Redis, Polars)
+  domain/
+    model/           # TargetSchema, MappingSession, ColumnMapping, date_format, errors
+    service/         # MappingService (orchestration)
+  ports/
+    input/           # IngestorPort
+    output/          # MapperPort, CachePort, SessionStorePort, SchemaStorePort, ...
+  adapters/
+    http/            # FastAPI routes
+    slm/             # Groq API mapper
+    storage/         # Redis cache, session store, schema store, job store
+    parsers/         # Polars ingestor, YAML schema loader
 ```
 
 ## Target Schema
 
-The default target schema (`schemas/default.yaml`) maps Bordereaux data to:
+The default target schema (`schemas/standard_reinsurance.yaml`) maps Bordereaux data to:
 
 | Field | Type | Constraints |
 |-------|------|------------|
