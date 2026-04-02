@@ -61,6 +61,34 @@ class MappingService:
         """Return sheet names for Excel files, empty list for CSV."""
         return self._ingestor.get_sheet_names(file_path)
 
+    def get_headers(self, file_path: str, *, sheet_name: str | None = None) -> list[str]:
+        """Return column headers from the file."""
+        return self._ingestor.get_headers(file_path, sheet_name=sheet_name)
+
+    def get_preview(
+        self, file_path: str, *, sheet_name: str | None = None
+    ) -> list[dict[str, object]]:
+        """Return preview rows from the file."""
+        return self._ingestor.get_preview(file_path, sheet_name=sheet_name)
+
+    async def suggest_mapping(
+        self,
+        headers: list[str],
+        preview: list[dict[str, object]],
+    ) -> MappingResult:
+        """Call the SLM to suggest mappings. No cache, no confidence check."""
+        return await self._mapper.map_headers(headers, preview)
+
+    def validate_rows_with_mapping(
+        self,
+        file_path: str,
+        mapping: MappingResult,
+        *,
+        sheet_name: str | None = None,
+    ) -> ProcessingResult:
+        """Validate rows using a supplied mapping (no SLM call)."""
+        return self._validate_rows(file_path, mapping, sheet_name=sheet_name)
+
     def store_correction(self, correction: Correction) -> None:
         """Validate and store a human-verified correction.
 
