@@ -5,9 +5,8 @@ from YAML files are loaded separately at startup and are not stored here.
 """
 
 from src.adapters.storage.schema_store import NullSchemaStore
-from src.ports.output.schema_store import SchemaStorePort
-
 from src.domain.model.target_schema import FieldDefinition, FieldType, TargetSchema
+from src.ports.output.schema_store import SchemaStorePort
 
 
 def _make_schema(name: str = "test_schema") -> TargetSchema:
@@ -41,3 +40,81 @@ class TestNullSchemaStore:
     def test_delete_is_noop(self) -> None:
         store = NullSchemaStore()
         store.delete("anything")  # Should not raise
+
+
+class TestRedisSchemaStoreProtocol:
+    def test_satisfies_schema_store_port(self) -> None:
+        from unittest.mock import MagicMock
+
+        client = MagicMock()
+        from src.adapters.storage.schema_store import RedisSchemaStore
+
+        assert isinstance(RedisSchemaStore(client=client), SchemaStorePort)
+
+
+class TestRedisSchemaStoreGetSave:
+    def test_save_then_get_roundtrip(self) -> None:
+        from unittest.mock import MagicMock
+
+        from src.adapters.storage.schema_store import RedisSchemaStore
+
+        client = MagicMock()
+        store = RedisSchemaStore(client=client)
+        schema = _make_schema("my_schema")
+
+        store.save(schema)
+        client.set.assert_called_once()
+        call_args = client.set.call_args
+        assert "riskflow:schema:my_schema" in str(call_args)
+
+    def test_get_returns_schema(self) -> None:
+        from unittest.mock import MagicMock
+
+        from src.adapters.storage.schema_store import RedisSchemaStore
+
+        schema = _make_schema("my_schema")
+        client = MagicMock()
+        client.get.return_value = schema.model_dump_json().encode()
+        store = RedisSchemaStore(client=client)
+
+        result = store.get("my_schema")
+        assert result is not None
+        assert result.name == "my_schema"
+        assert result.field_names == schema.field_names
+
+    def test_get_unknown_returns_none(self) -> None:
+        from unittest.mock import MagicMock
+
+        from src.adapters.storage.schema_store import RedisSchemaStore
+
+        client = MagicMock()
+        client.get.return_value = None
+        store = RedisSchemaStore(client=client)
+
+        assert store.get("nonexistent") is None
+
+    def test_get_graceful_on_connection_error(self) -> None:
+        from unittest.mock import MagicMock
+
+        import redis as redis_lib
+
+        from src.adapters.storage.schema_store import RedisSchemaStore
+
+        client = MagicMock()
+        client.get.side_effect = redis_lib.ConnectionError("down")
+        store = RedisSchemaStore(client=client)
+
+        assert store.get("any") is None
+
+    def test_save_graceful_on_connection_error(self) -> None:
+        from unittest.mock import MagicMock
+
+        import redis as redis_lib
+
+        from src.adapters.storage.schema_store import RedisSchemaStore
+
+        client = MagicMock()
+        client.set.side_effect = redis_lib.ConnectionError("down")
+        store = RedisSchemaStore(client=client)
+
+        store.save(_make_schema())  # Should not raise
