@@ -10,9 +10,7 @@
 # Triggered by: renaming default.yaml left 10+ stale references
 # across docs, rules, agents, and tests.
 
-set -euo pipefail
-
-COMMAND=$(/usr/bin/python3 -c "import json,sys; print(json.load(sys.stdin).get('tool_input',{}).get('command',''))" 2>/dev/null)
+COMMAND=$(/usr/bin/python3 -c "import json,sys; print(json.load(sys.stdin).get('tool_input',{}).get('command',''))" 2>/dev/null || true)
 
 # Only trigger on mv or git mv commands
 if [[ ! "$COMMAND" =~ ^(mv|git\ mv)\ .+ ]]; then
@@ -45,9 +43,6 @@ OLD_NAME=$(basename "$OLD_PATH")
 if [ ${#OLD_NAME} -lt 3 ]; then
   exit 0
 fi
-
-# Strip common extensions to also catch references without extension
-OLD_STEM="${OLD_NAME%.*}"
 
 # Grep for references to the old filename across the repo
 # Exclude .git, binary files, and the rename command output itself
