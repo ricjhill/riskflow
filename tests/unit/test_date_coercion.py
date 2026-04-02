@@ -62,6 +62,9 @@ class TestDateCoercionFormats:
             # DD/MM/YYYY — common in London market
             ("15/01/2025", datetime.date(2025, 1, 15)),
             ("01/12/2025", datetime.date(2025, 12, 1)),
+            # DD/MM/YYYY where both day and month are valid months (1-12).
+            # Proves dayfirst=True correctly assigns 02 as day, 04 as month.
+            ("02/04/2024", datetime.date(2024, 4, 2)),
             # YYYY/MM/DD
             ("2025/01/15", datetime.date(2025, 1, 15)),
             # DD Mon YYYY (space-separated)
@@ -80,6 +83,7 @@ class TestDateCoercionFormats:
             "dd-mon-yyyy-dec",
             "dd/mm/yyyy",
             "dd/mm/yyyy-dec",
+            "dd/mm/yyyy-ambiguous-dayfirst",
             "yyyy/mm/dd",
             "dd-month-yyyy-full",
             "d-mon-yyyy-short",
@@ -153,6 +157,19 @@ class TestDateCoercionLenientBehavior:
         Model = build_record_model(_date_schema())
         record = Model.model_validate({"Start": "20250115"})
         assert record.Start == datetime.date(2025, 1, 15)  # type: ignore[attr-defined]
+
+    def test_invalid_month_13_silently_reinterpreted(self) -> None:
+        """'2025-13-05' has month 13 which is invalid. fromisoformat rejects
+        it, but dateutil with dayfirst=True silently interprets it as day=13,
+        month=05 — producing May 13, 2025 instead of raising an error.
+
+        This documents a data integrity risk: if a source system produces
+        month-13 dates (e.g. off-by-one bug), coerce_date will silently
+        accept them as valid dates with wrong values."""
+        Model = build_record_model(_date_schema())
+        record = Model.model_validate({"Start": "2025-13-05"})
+        # dateutil with dayfirst=True: day=13, month=05 → May 13
+        assert record.Start == datetime.date(2025, 5, 13)  # type: ignore[attr-defined]
 
 
 class TestDateCoercionWithCrossFieldRules:
