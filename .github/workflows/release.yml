@@ -1,0 +1,152 @@
+name: Release
+
+# Runs after CI passes on main — checks for API changes and creates a
+# GitHub release with semantic version bump if the API surface changed.
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+jobs:
+  check-and-release:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0  # Need full history for tags
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Get last release spec
+        id: last_spec
+        run: |
+          LATEST_TAG=$(git tag --sort=-v:refname | head -1)
+          if [ -z "$LATEST_TAG" ]; then
+            echo "No previous release tag found — this will be the initial release"
+            echo "has_previous=false" >> $GITHUB_OUTPUT
+          else
+            echo "Latest tag: $LATEST_TAG"
+            git show "${LATEST_TAG}:openapi.json" > /tmp/old_openapi.json 2>/dev/null || {
+              echo "No openapi.json in tag $LATEST_TAG — treating as initial release"
+              echo "has_previous=false" >> $GITHUB_OUTPUT
+              exit 0
+            }
+            echo "has_previous=true" >> $GITHUB_OUTPUT
+            echo "tag=$LATEST_TAG" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Detect API changes
+        id: changes
+        run: |
+          if [ "${{ steps.last_spec.outputs.has_previous }}" = "false" ]; then
+            echo "kind=INITIAL" >> $GITHUB_OUTPUT
+            echo "Initial release — no comparison needed"
+            exit 0
+          fi
+
+          # Compare old spec against current committed spec
+          uv run python -c "
+          import json, os
+          from tools.check_api_changes import detect_changes
+          old = json.load(open('/tmp/old_openapi.json'))
+          new = json.load(open('openapi.json'))
+          result = detect_changes(old, new)
+          print(str(result))
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f'kind={result.kind.value}\n')
+          "
+
+      - name: Compute next version
+        id: version
+        run: |
+          CHANGE_KIND="${{ steps.changes.outputs.kind }}"
+          CURRENT=$(python3 -c "
+          for line in open('pyproject.toml'):
+              if line.strip().startswith('version'):
+                  print(line.split('=',1)[1].strip().strip('\"'))
+                  break
+          ")
+          echo "Current version: $CURRENT"
+
+          if [ "$CHANGE_KIND" = "INITIAL" ]; then
+            echo "new_version=$CURRENT" >> $GITHUB_OUTPUT
+            echo "should_release=true" >> $GITHUB_OUTPUT
+            echo "Initial release at v$CURRENT"
+          elif [ "$CHANGE_KIND" = "NONE" ]; then
+            echo "should_release=false" >> $GITHUB_OUTPUT
+            echo "No API changes — skipping release"
+          elif [ "$CHANGE_KIND" = "BREAKING" ]; then
+            NEW=$(uv run python -c "from tools.bump_version import bump_major; print(bump_major('$CURRENT'))")
+            echo "new_version=$NEW" >> $GITHUB_OUTPUT
+            echo "should_release=true" >> $GITHUB_OUTPUT
+            echo "Breaking change: $CURRENT → $NEW"
+          elif [ "$CHANGE_KIND" = "NON_BREAKING" ]; then
+            NEW=$(uv run python -c "from tools.bump_version import bump_minor; print(bump_minor('$CURRENT'))")
+            echo "new_version=$NEW" >> $GITHUB_OUTPUT
+            echo "should_release=true" >> $GITHUB_OUTPUT
+            echo "Non-breaking change: $CURRENT → $NEW"
+          fi
+
+      - name: Update version and spec
+        if: steps.version.outputs.should_release == 'true' && steps.changes.outputs.kind != 'INITIAL'
+        run: |
+          NEW_VERSION="${{ steps.version.outputs.new_version }}"
+          # Update pyproject.toml
+          sed -i "s/^version = \".*\"/version = \"$NEW_VERSION\"/" pyproject.toml
+          # Re-export spec with new version
+          uv run python -m tools.export_openapi
+          echo "Updated to v$NEW_VERSION"
+
+      - name: Commit version bump
+        if: steps.version.outputs.should_release == 'true' && steps.changes.outputs.kind != 'INITIAL'
+        run: |
+          NEW_VERSION="${{ steps.version.outputs.new_version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add pyproject.toml openapi.json
+          git commit -m "Release v${NEW_VERSION} — API version bump
+
+          Automated by release workflow based on OpenAPI change detection.
+          Change kind: ${{ steps.changes.outputs.kind }}"
+          git push
+
+      - name: Create GitHub release
+        if: steps.version.outputs.should_release == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          NEW_VERSION="${{ steps.version.outputs.new_version }}"
+          CHANGE_KIND="${{ steps.changes.outputs.kind }}"
+
+          if [ "$CHANGE_KIND" = "INITIAL" ]; then
+            NOTES="Initial API release with $(python3 -c "import json; spec=json.load(open('openapi.json')); print(len(spec['paths']))" ) endpoints and $(python3 -c "import json; spec=json.load(open('openapi.json')); print(len(spec.get('components',{}).get('schemas',{})))" ) component schemas."
+          else
+            NOTES=$(uv run python -c "
+          import json
+          from tools.check_api_changes import detect_changes
+          old = json.load(open('/tmp/old_openapi.json'))
+          new = json.load(open('openapi.json'))
+          result = detect_changes(old, new)
+          print(str(result))
+          ")
+          fi
+
+          gh release create "v${NEW_VERSION}" \
+            --title "v${NEW_VERSION}" \
+            --notes "${NOTES}" \
+            --target main \
+            openapi.json
