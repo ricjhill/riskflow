@@ -33,7 +33,7 @@ The spec includes **30 component schemas** covering every request body, response
 | **Domain models** | ProcessingResult, MappingResult, ColumnMapping, ConfidenceReport, RowError, MappingSession, TargetSchema, FieldDefinition, DateOrderingRule, SLMHint, SessionStatus, FieldType |
 | **Response models** | SchemaListResponse, SchemaCreatedResponse, SheetListResponse, CorrectionStoredResponse, AsyncJobResponse, JobStatusResponse, HealthResponse, ErrorDetail |
 | **Request models** | CorrectionRequest, CorrectionItem, UpdateMappingsRequest, ExtendTargetFieldsRequest |
-| **Auto-generated** | Body_upload_file_*, HTTPValidationError, ValidationError |
+| **Auto-generated** | Body_* (file upload forms), HTTPValidationError, ValidationError |
 
 ## Version
 
