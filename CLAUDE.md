@@ -44,6 +44,12 @@ tests/
 schemas/
   standard_reinsurance.yaml  # Default 6-field reinsurance target schema
   marine_cargo.yaml          # 8-field marine cargo schema (demo + testing)
+tools/
+  export_openapi.py    # Export OpenAPI spec to openapi.json (no Redis/Groq needed)
+  check_api_changes.py # Detect breaking vs non-breaking changes between two OpenAPI specs
+  bump_version.py      # Semantic version bumping based on API change classification
+  hexagonal_linter.py  # AST-based architecture boundary checker
+openapi.json           # Committed OpenAPI 3.1 spec — CI-enforced, auto-versioned
 gui/
   app.py             # Streamlit dashboard (3 tabs: mapping, debugger, corrections)
   api_client.py      # Thin httpx wrapper — GUI talks to API via HTTP, not imports
