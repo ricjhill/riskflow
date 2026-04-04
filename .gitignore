@@ -40,3 +40,6 @@ htmlcov/
 
 # Logs
 *.log
+
+# Temp file from CI OpenAPI staleness check
+openapi.generated.json
