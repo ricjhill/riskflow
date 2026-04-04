@@ -4,8 +4,6 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
 
 def _load_spec(tmp_path: Path) -> dict:
     """Export the OpenAPI spec and return it as a dict."""
