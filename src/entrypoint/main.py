@@ -19,7 +19,7 @@ import openai
 import structlog
 from fastapi import FastAPI
 
-from src.adapters.http.routes import create_router
+from src.adapters.http.routes import HealthResponse, create_router
 from src.adapters.parsers.ingestor import PolarsIngestor
 from src.adapters.parsers.schema_loader import YamlSchemaLoader
 from src.adapters.slm.mapper import GroqMapper
@@ -191,8 +191,8 @@ def create_app() -> FastAPI:
     app.include_router(router)
 
     @app.get("/health")
-    async def health() -> dict[str, str]:
-        return {"status": "ok"}
+    async def health() -> HealthResponse:
+        return HealthResponse(status="ok")
 
     return app
 
