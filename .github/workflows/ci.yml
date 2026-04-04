@@ -54,6 +54,12 @@ jobs:
       - name: Architecture boundary check
         run: uv run python -m tools.hexagonal_linter
 
+      - name: OpenAPI spec staleness check
+        run: |
+          uv run python -m tools.export_openapi openapi.generated.json
+          diff openapi.json openapi.generated.json || (echo "openapi.json is stale — run: uv run python -m tools.export_openapi" && exit 1)
+          rm openapi.generated.json
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v7

@@ -1,0 +1,1476 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "RiskFlow API",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/schemas": {
+      "get": {
+        "summary": "List Schemas",
+        "description": "List all available schema names.",
+        "operationId": "list_schemas_schemas_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchemaListResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create Schema",
+        "description": "Create a new runtime schema from a JSON definition.",
+        "operationId": "create_schema_schemas_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Body"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchemaCreatedResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/schemas/{name}": {
+      "get": {
+        "summary": "Get Schema",
+        "description": "Return the full definition of a schema.",
+        "operationId": "get_schema_schemas__name__get",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TargetSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete Schema",
+        "description": "Delete a runtime schema. Built-in schemas cannot be deleted.",
+        "operationId": "delete_schema_schemas__name__delete",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/upload": {
+      "post": {
+        "summary": "Upload File",
+        "description": "Upload a spreadsheet and map its headers to the target schema.",
+        "operationId": "upload_file_upload_post",
+        "parameters": [
+          {
+            "name": "sheet_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Sheet name for multi-sheet Excel files",
+              "title": "Sheet Name"
+            },
+            "description": "Sheet name for multi-sheet Excel files"
+          },
+          {
+            "name": "cedent_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Cedent ID for correction cache lookup",
+              "title": "Cedent Id"
+            },
+            "description": "Cedent ID for correction cache lookup"
+          },
+          {
+            "name": "schema",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Schema name to use (from GET /schemas)",
+              "title": "Schema"
+            },
+            "description": "Schema name to use (from GET /schemas)"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_file_upload_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcessingResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid data or sheet name",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Low confidence or schema validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SLM unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sheets": {
+      "post": {
+        "summary": "List Sheets",
+        "description": "Upload a file and return its sheet names (Excel only).",
+        "operationId": "list_sheets_sheets_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_list_sheets_sheets_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SheetListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/corrections": {
+      "post": {
+        "summary": "Submit Corrections",
+        "description": "Submit human-verified mapping corrections for a cedent.",
+        "operationId": "submit_corrections_corrections_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CorrectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CorrectionStoredResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sessions": {
+      "post": {
+        "summary": "Create Session",
+        "description": "Upload a file, get SLM suggestion + preview. Creates a session.",
+        "operationId": "create_session_sessions_post",
+        "parameters": [
+          {
+            "name": "sheet_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Sheet name for multi-sheet Excel files",
+              "title": "Sheet Name"
+            },
+            "description": "Sheet name for multi-sheet Excel files"
+          },
+          {
+            "name": "schema",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Schema name to use (from GET /schemas)",
+              "title": "Schema"
+            },
+            "description": "Schema name to use (from GET /schemas)"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_create_session_sessions_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingSession"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sessions/{session_id}": {
+      "get": {
+        "summary": "Get Session",
+        "description": "Return current session state.",
+        "operationId": "get_session_sessions__session_id__get",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingSession"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete Session",
+        "description": "Delete a session and clean up its temp file.",
+        "operationId": "delete_session_sessions__session_id__delete",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sessions/{session_id}/mappings": {
+      "put": {
+        "summary": "Update Session Mappings",
+        "description": "Update the session's mappings with user-edited values.",
+        "operationId": "update_session_mappings_sessions__session_id__mappings_put",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMappingsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingSession"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sessions/{session_id}/target-fields": {
+      "patch": {
+        "summary": "Extend Target Fields",
+        "description": "Add custom target fields to a session.",
+        "operationId": "extend_target_fields_sessions__session_id__target_fields_patch",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExtendTargetFieldsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingSession"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sessions/{session_id}/finalise": {
+      "post": {
+        "summary": "Finalise Session",
+        "description": "Validate rows with the session's current mapping.",
+        "operationId": "finalise_session_sessions__session_id__finalise_post",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingSession"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/upload/async": {
+      "post": {
+        "summary": "Upload File Async",
+        "description": "Accept a file for async processing, return job ID immediately.",
+        "operationId": "upload_file_async_upload_async_post",
+        "parameters": [
+          {
+            "name": "sheet_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Sheet name for multi-sheet Excel files",
+              "title": "Sheet Name"
+            },
+            "description": "Sheet name for multi-sheet Excel files"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_file_async_upload_async_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AsyncJobResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/{job_id}": {
+      "get": {
+        "summary": "Get Job Status",
+        "description": "Get the status and result of an async job.",
+        "operationId": "get_job_status_jobs__job_id__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobStatusResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AsyncJobResponse": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id"
+        ],
+        "title": "AsyncJobResponse",
+        "description": "POST /upload/async response."
+      },
+      "Body_create_session_sessions_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_create_session_sessions_post"
+      },
+      "Body_list_sheets_sheets_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_list_sheets_sheets_post"
+      },
+      "Body_upload_file_async_upload_async_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_file_async_upload_async_post"
+      },
+      "Body_upload_file_upload_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_file_upload_post"
+      },
+      "ColumnMapping": {
+        "properties": {
+          "source_header": {
+            "type": "string",
+            "title": "Source Header"
+          },
+          "target_field": {
+            "type": "string",
+            "title": "Target Field"
+          },
+          "confidence": {
+            "type": "number",
+            "title": "Confidence"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_header",
+          "target_field",
+          "confidence"
+        ],
+        "title": "ColumnMapping",
+        "description": "Maps a source spreadsheet header to a target schema field.\n\ntarget_field is not validated here \u2014 it's validated at the\nMappingResult level via validate_against_schema() where the\nTargetSchema is known. This allows ColumnMapping to work with\nany schema, not just the hardcoded default."
+      },
+      "ConfidenceReport": {
+        "properties": {
+          "min_confidence": {
+            "type": "number",
+            "title": "Min Confidence"
+          },
+          "avg_confidence": {
+            "type": "number",
+            "title": "Avg Confidence"
+          },
+          "low_confidence_fields": {
+            "items": {
+              "$ref": "#/components/schemas/ColumnMapping"
+            },
+            "type": "array",
+            "title": "Low Confidence Fields"
+          },
+          "missing_fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing Fields"
+          }
+        },
+        "type": "object",
+        "required": [
+          "min_confidence",
+          "avg_confidence",
+          "low_confidence_fields",
+          "missing_fields"
+        ],
+        "title": "ConfidenceReport",
+        "description": "Summarizes mapping quality for human review.\n\nBuilt from a MappingResult, this report highlights:\n- Overall confidence (min and average)\n- Which fields have low confidence and need review\n- Which target fields were not mapped at all"
+      },
+      "CorrectionItem": {
+        "properties": {
+          "source_header": {
+            "type": "string",
+            "title": "Source Header"
+          },
+          "target_field": {
+            "type": "string",
+            "title": "Target Field"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_header",
+          "target_field"
+        ],
+        "title": "CorrectionItem",
+        "description": "A single correction in a POST /corrections request."
+      },
+      "CorrectionRequest": {
+        "properties": {
+          "cedent_id": {
+            "type": "string",
+            "title": "Cedent Id"
+          },
+          "corrections": {
+            "items": {
+              "$ref": "#/components/schemas/CorrectionItem"
+            },
+            "type": "array",
+            "title": "Corrections"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cedent_id",
+          "corrections"
+        ],
+        "title": "CorrectionRequest",
+        "description": "Request body for POST /corrections."
+      },
+      "CorrectionStoredResponse": {
+        "properties": {
+          "stored": {
+            "type": "integer",
+            "title": "Stored"
+          }
+        },
+        "type": "object",
+        "required": [
+          "stored"
+        ],
+        "title": "CorrectionStoredResponse",
+        "description": "POST /corrections response."
+      },
+      "DateOrderingRule": {
+        "properties": {
+          "earlier": {
+            "type": "string",
+            "title": "Earlier"
+          },
+          "later": {
+            "type": "string",
+            "title": "Later"
+          }
+        },
+        "type": "object",
+        "required": [
+          "earlier",
+          "later"
+        ],
+        "title": "DateOrderingRule",
+        "description": "Cross-field rule: one date must not precede another."
+      },
+      "ErrorDetail": {
+        "properties": {
+          "error_code": {
+            "type": "string",
+            "title": "Error Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "suggestion": {
+            "type": "string",
+            "title": "Suggestion"
+          }
+        },
+        "type": "object",
+        "required": [
+          "error_code",
+          "message",
+          "suggestion"
+        ],
+        "title": "ErrorDetail",
+        "description": "Structured error response body."
+      },
+      "ExtendTargetFieldsRequest": {
+        "properties": {
+          "fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Fields"
+          }
+        },
+        "type": "object",
+        "required": [
+          "fields"
+        ],
+        "title": "ExtendTargetFieldsRequest",
+        "description": "Request body for PATCH /sessions/{session_id}/target-fields."
+      },
+      "FieldDefinition": {
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/FieldType"
+          },
+          "required": {
+            "type": "boolean",
+            "title": "Required",
+            "default": true
+          },
+          "not_empty": {
+            "type": "boolean",
+            "title": "Not Empty",
+            "default": false
+          },
+          "non_negative": {
+            "type": "boolean",
+            "title": "Non Negative",
+            "default": false
+          },
+          "allowed_values": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allowed Values"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type"
+        ],
+        "title": "FieldDefinition",
+        "description": "Definition of a single target field with type-safe constraints.\n\nConstraints are validated against the field type:\n- not_empty: only valid for STRING\n- non_negative: only valid for FLOAT\n- allowed_values: only valid for CURRENCY"
+      },
+      "FieldType": {
+        "type": "string",
+        "enum": [
+          "string",
+          "date",
+          "float",
+          "currency"
+        ],
+        "title": "FieldType"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "HealthResponse",
+        "description": "GET /health response."
+      },
+      "JobStatusResponse": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "status"
+        ],
+        "title": "JobStatusResponse",
+        "description": "GET /jobs/{job_id} response."
+      },
+      "MappingResult": {
+        "properties": {
+          "mappings": {
+            "items": {
+              "$ref": "#/components/schemas/ColumnMapping"
+            },
+            "type": "array",
+            "title": "Mappings"
+          },
+          "unmapped_headers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Unmapped Headers"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mappings",
+          "unmapped_headers"
+        ],
+        "title": "MappingResult",
+        "description": "Result of SLM header mapping."
+      },
+      "MappingSession": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SessionStatus"
+          },
+          "schema_name": {
+            "type": "string",
+            "title": "Schema Name"
+          },
+          "file_path": {
+            "type": "string",
+            "title": "File Path"
+          },
+          "sheet_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sheet Name"
+          },
+          "source_headers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Source Headers"
+          },
+          "target_fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Target Fields"
+          },
+          "mappings": {
+            "items": {
+              "$ref": "#/components/schemas/ColumnMapping"
+            },
+            "type": "array",
+            "title": "Mappings"
+          },
+          "unmapped_headers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Unmapped Headers"
+          },
+          "preview_rows": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Preview Rows"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "schema_name",
+          "file_path",
+          "sheet_name",
+          "source_headers",
+          "target_fields",
+          "mappings",
+          "unmapped_headers",
+          "preview_rows"
+        ],
+        "title": "MappingSession",
+        "description": "Tracks state for an interactive mapping workflow."
+      },
+      "ProcessingResult": {
+        "properties": {
+          "mapping": {
+            "$ref": "#/components/schemas/MappingResult"
+          },
+          "confidence_report": {
+            "$ref": "#/components/schemas/ConfidenceReport"
+          },
+          "valid_records": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Valid Records"
+          },
+          "invalid_records": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Invalid Records"
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/RowError"
+            },
+            "type": "array",
+            "title": "Errors"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mapping",
+          "confidence_report",
+          "valid_records",
+          "invalid_records",
+          "errors"
+        ],
+        "title": "ProcessingResult",
+        "description": "Full result of processing a spreadsheet: mapping + row validation.\n\nvalid_records uses list[dict] instead of list[RiskRecord] because\nthe record model is dynamic \u2014 field names depend on the active\nTargetSchema. Dicts are the natural serialization format and avoid\ncomplex generic type gymnastics."
+      },
+      "RowError": {
+        "properties": {
+          "row": {
+            "type": "integer",
+            "title": "Row"
+          },
+          "error": {
+            "type": "string",
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "row",
+          "error"
+        ],
+        "title": "RowError",
+        "description": "A validation error for a specific row."
+      },
+      "SLMHint": {
+        "properties": {
+          "source_alias": {
+            "type": "string",
+            "title": "Source Alias"
+          },
+          "target": {
+            "type": "string",
+            "title": "Target"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_alias",
+          "target"
+        ],
+        "title": "SLMHint",
+        "description": "Maps common source header aliases to target fields.\n\nInjected into the SLM prompt to improve mapping accuracy.\nE.g., \"GWP\" is a common alias for \"Gross_Premium\" in reinsurance."
+      },
+      "SchemaCreatedResponse": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "fingerprint": {
+            "type": "string",
+            "title": "Fingerprint"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "fingerprint"
+        ],
+        "title": "SchemaCreatedResponse",
+        "description": "POST /schemas response."
+      },
+      "SchemaListResponse": {
+        "properties": {
+          "schemas": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Schemas"
+          }
+        },
+        "type": "object",
+        "required": [
+          "schemas"
+        ],
+        "title": "SchemaListResponse",
+        "description": "GET /schemas response."
+      },
+      "SessionStatus": {
+        "type": "string",
+        "enum": [
+          "created",
+          "finalised"
+        ],
+        "title": "SessionStatus"
+      },
+      "SheetListResponse": {
+        "properties": {
+          "sheets": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Sheets"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sheets"
+        ],
+        "title": "SheetListResponse",
+        "description": "POST /sheets response."
+      },
+      "TargetSchema": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "fields": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/FieldDefinition"
+            },
+            "type": "object",
+            "title": "Fields"
+          },
+          "cross_field_rules": {
+            "items": {
+              "$ref": "#/components/schemas/DateOrderingRule"
+            },
+            "type": "array",
+            "title": "Cross Field Rules",
+            "default": []
+          },
+          "slm_hints": {
+            "items": {
+              "$ref": "#/components/schemas/SLMHint"
+            },
+            "type": "array",
+            "title": "Slm Hints",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "fields"
+        ],
+        "title": "TargetSchema",
+        "description": "A complete target schema definition.\n\nSelf-validating: cross-field rules must reference existing DATE fields,\nSLM hints must reference existing fields, aliases must be unique."
+      },
+      "UpdateMappingsRequest": {
+        "properties": {
+          "mappings": {
+            "items": {
+              "$ref": "#/components/schemas/ColumnMapping"
+            },
+            "type": "array",
+            "title": "Mappings",
+            "default": []
+          },
+          "unmapped_headers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Unmapped Headers",
+            "default": []
+          }
+        },
+        "type": "object",
+        "title": "UpdateMappingsRequest",
+        "description": "Request body for PUT /sessions/{session_id}/mappings."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

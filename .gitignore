@@ -41,5 +41,5 @@ htmlcov/
 # Logs
 *.log
 
-# Generated OpenAPI spec (use tools/export_openapi.py to regenerate)
-openapi.json
+# Temp file from CI OpenAPI staleness check
+openapi.generated.json

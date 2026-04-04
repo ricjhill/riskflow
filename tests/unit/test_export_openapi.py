@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
+ROOT = Path(__file__).resolve().parents[2]
+
 
 def _load_spec(tmp_path: Path) -> dict:
     """Export the OpenAPI spec and return it as a dict."""
@@ -158,3 +160,19 @@ class TestResponseModelSchemas:
         assert "error_code" in properties
         assert "message" in properties
         assert "suggestion" in properties
+
+
+class TestCommittedSpecStaleness:
+    """Verify the committed openapi.json matches the live app."""
+
+    def test_committed_spec_matches_live_app(self, tmp_path: Path) -> None:
+        """openapi.json in the repo root must match what the app generates."""
+        committed = ROOT / "openapi.json"
+        if not committed.exists():
+            return  # skip if not yet committed (e.g. first run)
+
+        live_spec = _load_spec(tmp_path)
+        committed_spec = json.loads(committed.read_text())
+        assert live_spec == committed_spec, (
+            "openapi.json is stale — run: uv run python -m tools.export_openapi"
+        )
