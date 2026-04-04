@@ -32,7 +32,7 @@ from src.domain.model.errors import (
     SLMUnavailableError,
 )
 from src.domain.model.job import Job
-from src.domain.model.schema import ColumnMapping, MappingResult
+from src.domain.model.schema import ColumnMapping, MappingResult, ProcessingResult
 from src.domain.model.session import MappingSession, SessionStatus
 from src.domain.model.target_schema import TargetSchema
 from src.domain.service.mapping_service import MappingService
@@ -58,6 +58,76 @@ class CorrectionRequest(BaseModel):
 
     cedent_id: str
     corrections: list[CorrectionItem]
+
+
+class UpdateMappingsRequest(BaseModel):
+    """Request body for PUT /sessions/{session_id}/mappings."""
+
+    mappings: list[ColumnMapping] = []
+    unmapped_headers: list[str] = []
+
+
+class ExtendTargetFieldsRequest(BaseModel):
+    """Request body for PATCH /sessions/{session_id}/target-fields."""
+
+    fields: list[str]
+
+
+# --- Response models (drive the OpenAPI spec) ---
+
+
+class ErrorDetail(BaseModel):
+    """Structured error response body."""
+
+    error_code: str
+    message: str
+    suggestion: str
+
+
+class HealthResponse(BaseModel):
+    """GET /health response."""
+
+    status: str
+
+
+class SchemaListResponse(BaseModel):
+    """GET /schemas response."""
+
+    schemas: list[str]
+
+
+class SchemaCreatedResponse(BaseModel):
+    """POST /schemas response."""
+
+    name: str
+    fingerprint: str
+
+
+class SheetListResponse(BaseModel):
+    """POST /sheets response."""
+
+    sheets: list[str]
+
+
+class CorrectionStoredResponse(BaseModel):
+    """POST /corrections response."""
+
+    stored: int
+
+
+class AsyncJobResponse(BaseModel):
+    """POST /upload/async response."""
+
+    job_id: str
+
+
+class JobStatusResponse(BaseModel):
+    """GET /jobs/{job_id} response."""
+
+    job_id: str
+    status: str
+    result: dict[str, object] | None = None
+    error: str | None = None
 
 
 _SCHEMA_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
@@ -126,12 +196,12 @@ def create_router(
         return service
 
     @router.get("/schemas")
-    async def list_schemas() -> dict[str, object]:
+    async def list_schemas() -> SchemaListResponse:
         """List all available schema names."""
-        return {"schemas": sorted(_registry.keys())}
+        return SchemaListResponse(schemas=sorted(_registry.keys()))
 
     @router.get("/schemas/{name}")
-    async def get_schema(name: str) -> dict[str, object]:
+    async def get_schema(name: str) -> TargetSchema:
         """Return the full definition of a schema."""
         _validate_schema_name(name)
         schema = _definitions.get(name)
@@ -144,11 +214,10 @@ def create_router(
                     "Use GET /schemas to list available schemas.",
                 ),
             )
-        result: dict[str, object] = schema.model_dump()
-        return result
+        return schema
 
     @router.post("/schemas", status_code=201)
-    async def create_schema(body: dict[str, object]) -> dict[str, object]:
+    async def create_schema(body: dict[str, object]) -> SchemaCreatedResponse:
         """Create a new runtime schema from a JSON definition."""
         from pydantic import ValidationError as PydanticValidationError
 
@@ -201,7 +270,7 @@ def create_router(
             fingerprint=schema.fingerprint,
             field_count=len(schema.fields),
         )
-        return {"name": schema.name, "fingerprint": schema.fingerprint}
+        return SchemaCreatedResponse(name=schema.name, fingerprint=schema.fingerprint)
 
     @router.delete("/schemas/{name}", status_code=204)
     async def delete_schema(name: str) -> None:
@@ -235,7 +304,15 @@ def create_router(
 
         logger.info("schema_deleted", schema_name=name)
 
-    @router.post("/upload")
+    @router.post(
+        "/upload",
+        responses={
+            400: {"model": ErrorDetail, "description": "Invalid data or sheet name"},
+            422: {"model": ErrorDetail, "description": "Low confidence or schema validation error"},
+            503: {"model": ErrorDetail, "description": "SLM unavailable"},
+            500: {"model": ErrorDetail, "description": "Internal server error"},
+        },
+    )
     async def upload_file(
         file: UploadFile = File(...),
         sheet_name: str | None = Query(
@@ -247,7 +324,7 @@ def create_router(
         schema: str | None = Query(
             default=None, description="Schema name to use (from GET /schemas)"
         ),
-    ) -> dict[str, object]:
+    ) -> ProcessingResult:
         """Upload a spreadsheet and map its headers to the target schema."""
         _validate_file(file)
         active_service = _resolve_service(schema)
@@ -275,7 +352,7 @@ def create_router(
                 error_count=len(result.errors),
                 duration_ms=duration_ms,
             )
-            return result.model_dump()
+            return result
         except MappingConfidenceLowError as e:
             logger.warning("mapping_low_confidence", filename=file.filename, error=str(e))
             raise HTTPException(
@@ -359,24 +436,38 @@ def create_router(
                 os.remove(temp_path)
 
     @router.post("/sheets")
-    async def list_sheets(file: UploadFile = File(...)) -> dict[str, object]:
+    async def list_sheets(file: UploadFile = File(...)) -> SheetListResponse:
         """Upload a file and return its sheet names (Excel only)."""
         _validate_file(file)
         temp_path = _save_temp_file(file)
         try:
             names = mapping_service.get_sheet_names(temp_path)
-            return {"sheets": names}
+            return SheetListResponse(sheets=names)
         finally:
             if os.path.exists(temp_path):
                 os.remove(temp_path)
 
     @router.post("/corrections", status_code=201)
-    async def submit_corrections(request: CorrectionRequest) -> dict[str, object]:
+    async def submit_corrections(request: CorrectionRequest) -> CorrectionStoredResponse:
         """Submit human-verified mapping corrections for a cedent."""
         if not request.cedent_id.strip():
-            raise HTTPException(status_code=400, detail="cedent_id must not be empty")
+            raise HTTPException(
+                status_code=400,
+                detail=_error_detail(
+                    "INVALID_DATA",
+                    "cedent_id must not be empty",
+                    "Provide a non-blank cedent_id string.",
+                ),
+            )
         if not request.corrections:
-            raise HTTPException(status_code=400, detail="corrections list must not be empty")
+            raise HTTPException(
+                status_code=400,
+                detail=_error_detail(
+                    "INVALID_DATA",
+                    "corrections list must not be empty",
+                    "Provide at least one correction with source_header and target_field.",
+                ),
+            )
 
         for item in request.corrections:
             correction = Correction(
@@ -401,7 +492,7 @@ def create_router(
             cedent_id=request.cedent_id,
             count=len(request.corrections),
         )
-        return {"stored": len(request.corrections)}
+        return CorrectionStoredResponse(stored=len(request.corrections))
 
     if session_store is not None:
 
@@ -414,7 +505,7 @@ def create_router(
             schema: str | None = Query(
                 default=None, description="Schema name to use (from GET /schemas)"
             ),
-        ) -> dict[str, object]:
+        ) -> MappingSession:
             """Upload a file, get SLM suggestion + preview. Creates a session."""
             _validate_file(file)
             active_service = _resolve_service(schema)
@@ -456,8 +547,7 @@ def create_router(
                     header_count=len(headers),
                     mapping_count=len(suggestion.mappings),
                 )
-                result: dict[str, object] = session.model_dump()
-                return result
+                return session
             except (InvalidCedentDataError, ValueError) as e:
                 if os.path.exists(temp_path):
                     os.remove(temp_path)
@@ -494,34 +584,26 @@ def create_router(
                 ) from e
 
         @router.get("/sessions/{session_id}")
-        async def get_session(session_id: str) -> dict[str, object]:
+        async def get_session(session_id: str) -> MappingSession:
             """Return current session state."""
             session = session_store.get(session_id)
             if session is None:
                 raise HTTPException(status_code=404, detail="Session not found")
-            result: dict[str, object] = session.model_dump()
-            return result
+            return session
 
         @router.put("/sessions/{session_id}/mappings")
         async def update_session_mappings(
-            session_id: str, body: dict[str, object]
-        ) -> dict[str, object]:
+            session_id: str, body: UpdateMappingsRequest
+        ) -> MappingSession:
             """Update the session's mappings with user-edited values."""
             session = session_store.get(session_id)
             if session is None:
                 raise HTTPException(status_code=404, detail="Session not found")
 
             try:
-                raw_mappings = body.get("mappings", [])
-                if not isinstance(raw_mappings, list):
-                    raise ValueError("mappings must be a list")  # noqa: TRY301
-                mappings = [ColumnMapping.model_validate(m) for m in raw_mappings]
-                unmapped = body.get("unmapped_headers", [])
-                if not isinstance(unmapped, list):
-                    raise ValueError("unmapped_headers must be a list")  # noqa: TRY301
                 session.update_mappings(
-                    mappings=mappings,
-                    unmapped_headers=unmapped,
+                    mappings=body.mappings,
+                    unmapped_headers=body.unmapped_headers,
                 )
             except (ValueError, TypeError) as e:
                 raise HTTPException(
@@ -534,43 +616,19 @@ def create_router(
                 ) from e
 
             session_store.save(session)
-            result: dict[str, object] = session.model_dump()
-            return result
+            return session
 
         @router.patch("/sessions/{session_id}/target-fields")
         async def extend_target_fields(
-            session_id: str, body: dict[str, object]
-        ) -> dict[str, object]:
+            session_id: str, body: ExtendTargetFieldsRequest
+        ) -> MappingSession:
             """Add custom target fields to a session."""
             session = session_store.get(session_id)
             if session is None:
                 raise HTTPException(status_code=404, detail="Session not found")
 
-            raw_fields = body.get("fields", [])
-            if not isinstance(raw_fields, list):
-                raise HTTPException(
-                    status_code=422,
-                    detail=_error_detail(
-                        "INVALID_FIELDS",
-                        "fields must be a list of strings",
-                        "Provide a JSON object with a 'fields' key containing a list of field names.",
-                    ),
-                )
-
-            # Validate all elements are strings
-            for f in raw_fields:
-                if not isinstance(f, str):
-                    raise HTTPException(
-                        status_code=422,
-                        detail=_error_detail(
-                            "INVALID_FIELDS",
-                            f"Field names must be strings, got {type(f).__name__}",
-                            "Provide a list of string field names.",
-                        ),
-                    )
-
             try:
-                session.extend_target_fields(fields=raw_fields)
+                session.extend_target_fields(fields=body.fields)
             except ValueError as e:
                 raise HTTPException(
                     status_code=422,
@@ -582,11 +640,10 @@ def create_router(
                 ) from e
 
             session_store.save(session)
-            result: dict[str, object] = session.model_dump()
-            return result
+            return session
 
         @router.post("/sessions/{session_id}/finalise")
-        async def finalise_session(session_id: str) -> dict[str, object]:
+        async def finalise_session(session_id: str) -> MappingSession:
             """Validate rows with the session's current mapping."""
             session = session_store.get(session_id)
             if session is None:
@@ -627,8 +684,7 @@ def create_router(
                 valid_count=len(processing_result.valid_records),
                 error_count=len(processing_result.errors),
             )
-            result: dict[str, object] = session.model_dump()
-            return result
+            return session
 
         @router.delete("/sessions/{session_id}", status_code=204)
         async def delete_session(session_id: str) -> None:
@@ -660,7 +716,7 @@ def create_router(
                 default=None,
                 description="Sheet name for multi-sheet Excel files",
             ),
-        ) -> dict[str, object]:
+        ) -> AsyncJobResponse:
             """Accept a file for async processing, return job ID immediately."""
             _validate_file(file)
 
@@ -679,20 +735,20 @@ def create_router(
                 _process_job, job, temp_path, sheet_name, mapping_service, job_store
             )
 
-            return {"job_id": job.id}
+            return AsyncJobResponse(job_id=job.id)
 
         @router.get("/jobs/{job_id}")
-        async def get_job_status(job_id: str) -> dict[str, object]:
+        async def get_job_status(job_id: str) -> JobStatusResponse:
             """Get the status and result of an async job."""
             job = job_store.get(job_id)
             if job is None:
                 raise HTTPException(status_code=404, detail="Job not found")
-            return {
-                "job_id": job.id,
-                "status": job.status.value,
-                "result": job.result,
-                "error": job.error,
-            }
+            return JobStatusResponse(
+                job_id=job.id,
+                status=job.status.value,
+                result=job.result,
+                error=job.error,
+            )
 
     return router
 
@@ -720,11 +776,11 @@ async def _process_job(
 
 def _error_detail(error_code: str, message: str, suggestion: str) -> dict[str, str]:
     """Build a structured error response body."""
-    return {
-        "error_code": error_code,
-        "message": message,
-        "suggestion": suggestion,
-    }
+    return ErrorDetail(
+        error_code=error_code,
+        message=message,
+        suggestion=suggestion,
+    ).model_dump()
 
 
 def _validate_file(file: UploadFile) -> None:
