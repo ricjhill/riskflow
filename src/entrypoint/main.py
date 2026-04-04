@@ -38,6 +38,23 @@ SCHEMAS_DIR = "schemas"
 DEFAULT_SCHEMA_FILE = "schemas/standard_reinsurance.yaml"
 
 
+def _get_version() -> str:
+    """Read the project version from pyproject.toml."""
+    try:
+        from importlib.metadata import version
+
+        return version("riskflow")
+    except Exception:
+        # Fallback: parse pyproject.toml directly (e.g. when not installed as a package)
+        from pathlib import Path
+
+        pyproject = Path(__file__).resolve().parents[2] / "pyproject.toml"
+        for line in pyproject.read_text().splitlines():
+            if line.strip().startswith("version"):
+                return line.split("=", 1)[1].strip().strip('"')
+        return "0.0.0"
+
+
 def configure_logging() -> None:
     """Configure structlog for JSON output via stdlib logging.
 
@@ -82,7 +99,7 @@ def create_app() -> FastAPI:
     configure_logging()
     logger = structlog.get_logger()
 
-    app = FastAPI(title="RiskFlow API")
+    app = FastAPI(title="RiskFlow API", version=_get_version())
 
     # --- Schemas ---
     schemas = _load_all_schemas()
