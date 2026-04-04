@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import enum
 from dataclasses import dataclass, field
+from typing import Any
 
 HTTP_METHODS = {"get", "post", "put", "patch", "delete", "head", "options", "trace"}
 
@@ -44,7 +45,7 @@ class ChangeResult:
         return "\n".join(lines)
 
 
-def detect_changes(old: dict, new: dict) -> ChangeResult:
+def detect_changes(old: dict[str, Any], new: dict[str, Any]) -> ChangeResult:
     """Compare two OpenAPI specs and return classified changes."""
     breaking: list[str] = []
     non_breaking: list[str] = []
@@ -81,8 +82,8 @@ def detect_changes(old: dict, new: dict) -> ChangeResult:
 
 def _compare_path_item(
     path: str,
-    old_item: dict,
-    new_item: dict,
+    old_item: dict[str, Any],
+    new_item: dict[str, Any],
     breaking: list[str],
     non_breaking: list[str],
 ) -> None:
@@ -108,8 +109,8 @@ def _compare_path_item(
 def _compare_operation(
     path: str,
     method: str,
-    old_op: dict,
-    new_op: dict,
+    old_op: dict[str, Any],
+    new_op: dict[str, Any],
     breaking: list[str],
     non_breaking: list[str],
 ) -> None:
@@ -122,8 +123,8 @@ def _compare_operation(
 
 def _compare_parameters(
     label: str,
-    old_op: dict,
-    new_op: dict,
+    old_op: dict[str, Any],
+    new_op: dict[str, Any],
     breaking: list[str],
     non_breaking: list[str],
 ) -> None:
@@ -167,8 +168,8 @@ def _compare_parameters(
 
 def _compare_responses(
     label: str,
-    old_op: dict,
-    new_op: dict,
+    old_op: dict[str, Any],
+    new_op: dict[str, Any],
     breaking: list[str],
     non_breaking: list[str],
 ) -> None:

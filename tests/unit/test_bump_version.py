@@ -1,8 +1,16 @@
 """Tests for tools/bump_version.py — semantic version bumping based on API changes."""
 
+from pathlib import Path
+
 import pytest
 
-from tools.bump_version import bump_major, bump_minor, compute_next_version
+from tools.bump_version import (
+    bump_major,
+    bump_minor,
+    compute_next_version,
+    read_version,
+    write_version,
+)
 from tools.check_api_changes import ChangeKind
 
 
@@ -49,3 +57,65 @@ class TestComputeNextVersion:
 
     def test_non_breaking_from_zero(self) -> None:
         assert compute_next_version("0.1.0", ChangeKind.NON_BREAKING) == "0.2.0"
+
+
+class TestBumpInvalidInput:
+    """Invalid version strings."""
+
+    def test_bump_major_two_parts(self) -> None:
+        with pytest.raises(ValueError):
+            bump_major("1.0")
+
+    def test_bump_minor_two_parts(self) -> None:
+        with pytest.raises(ValueError):
+            bump_minor("1.0")
+
+    def test_bump_major_empty_string(self) -> None:
+        with pytest.raises(ValueError):
+            bump_major("")
+
+    def test_bump_minor_empty_string(self) -> None:
+        with pytest.raises(ValueError):
+            bump_minor("")
+
+
+class TestReadVersion:
+    """Read version from pyproject.toml."""
+
+    def test_reads_current_version(self) -> None:
+        version = read_version()
+        parts = version.split(".")
+        assert len(parts) == 3
+        assert all(p.isdigit() for p in parts)
+
+    def test_raises_on_missing_version(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        fake_pyproject = tmp_path / "pyproject.toml"
+        fake_pyproject.write_text("[project]\nname = 'test'\n")
+        monkeypatch.setattr("tools.bump_version.PYPROJECT", fake_pyproject)
+        with pytest.raises(ValueError, match="version"):
+            read_version()
+
+
+class TestWriteVersion:
+    """Write version to pyproject.toml."""
+
+    def test_round_trip(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        fake_pyproject = tmp_path / "pyproject.toml"
+        fake_pyproject.write_text('[project]\nname = "test"\nversion = "1.0.0"\n')
+        monkeypatch.setattr("tools.bump_version.PYPROJECT", fake_pyproject)
+        write_version("2.0.0")
+        assert read_version() == "2.0.0"
+
+    def test_preserves_other_content(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        content = (
+            '[project]\nname = "test"\nversion = "1.0.0"\n\n[tool.ruff]\ntarget-version = "py312"\n'
+        )
+        fake_pyproject = tmp_path / "pyproject.toml"
+        fake_pyproject.write_text(content)
+        monkeypatch.setattr("tools.bump_version.PYPROJECT", fake_pyproject)
+        write_version("3.0.0")
+        result = fake_pyproject.read_text()
+        assert 'version = "3.0.0"' in result
+        assert 'target-version = "py312"' in result

@@ -127,4 +127,4 @@ if __name__ == "__main__":
     dry = "--dry-run" in sys.argv
     result = main(dry_run=dry)
     if result:
-        print(f"::set-output name=new_version::{result}")
+        print(f"New version: {result}")

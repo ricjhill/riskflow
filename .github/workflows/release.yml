@@ -60,13 +60,14 @@ jobs:
 
           # Compare old spec against current committed spec
           uv run python -c "
-          import json, sys
+          import json, os
           from tools.check_api_changes import detect_changes
           old = json.load(open('/tmp/old_openapi.json'))
           new = json.load(open('openapi.json'))
           result = detect_changes(old, new)
           print(str(result))
-          print(f'::set-output name=kind::{result.kind.value}')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f'kind={result.kind.value}\n')
           "
 
       - name: Compute next version
