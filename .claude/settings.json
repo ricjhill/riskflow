@@ -53,6 +53,11 @@
             "type": "command",
             "command": ".claude/hooks/check-runtime-deps.sh",
             "timeout": 30
+          },
+          {
+            "type": "command",
+            "command": ".claude/hooks/docs-reminder.sh",
+            "timeout": 5
           }
         ]
       },
