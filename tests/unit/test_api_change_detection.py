@@ -98,6 +98,41 @@ class TestBreakingChanges:
         result = detect_changes(old, new)
         assert result.kind == ChangeKind.BREAKING
 
+    def test_added_required_parameter_is_breaking(self) -> None:
+        param = {"name": "id", "in": "query", "required": True}
+        old = _spec({"/items": _path_with_get(parameters=[])})
+        new = _spec({"/items": _path_with_get(parameters=[param])})
+        result = detect_changes(old, new)
+        assert result.kind == ChangeKind.BREAKING
+        assert any("id" in c for c in result.changes)
+
+    def test_optional_param_made_required_is_breaking(self) -> None:
+        old_param = {"name": "filter", "in": "query", "required": False}
+        new_param = {"name": "filter", "in": "query", "required": True}
+        old = _spec({"/items": _path_with_get(parameters=[old_param])})
+        new = _spec({"/items": _path_with_get(parameters=[new_param])})
+        result = detect_changes(old, new)
+        assert result.kind == ChangeKind.BREAKING
+        assert any("filter" in c for c in result.changes)
+
+    def test_removed_response_status_code_is_breaking(self) -> None:
+        old = _spec(
+            {
+                "/items": {
+                    "get": {
+                        "responses": {
+                            "200": {"description": "OK"},
+                            "404": {"description": "Not found"},
+                        }
+                    }
+                }
+            }
+        )
+        new = _spec({"/items": {"get": {"responses": {"200": {"description": "OK"}}}}})
+        result = detect_changes(old, new)
+        assert result.kind == ChangeKind.BREAKING
+        assert any("404" in c for c in result.changes)
+
     def test_multiple_breaking_changes(self) -> None:
         old = _spec(
             {
@@ -131,6 +166,14 @@ class TestNonBreakingChanges:
         result = detect_changes(old, new)
         assert result.kind == ChangeKind.NON_BREAKING
         assert any("POST" in c and "/health" in c for c in result.changes)
+
+    def test_removed_optional_parameter_is_non_breaking(self) -> None:
+        param = {"name": "filter", "in": "query", "required": False}
+        old = _spec({"/items": _path_with_get(parameters=[param])})
+        new = _spec({"/items": _path_with_get(parameters=[])})
+        result = detect_changes(old, new)
+        assert result.kind == ChangeKind.NON_BREAKING
+        assert any("filter" in c for c in result.changes)
 
     def test_added_optional_parameter_is_non_breaking(self) -> None:
         param = {"name": "filter", "in": "query", "required": False}
