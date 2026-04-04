@@ -44,5 +44,7 @@ Background and context for product owners and testers.
 Complete specifications for developers and testers.
 
 - [API Reference](reference/api.md) — All endpoints, parameters, request/response shapes, error codes
+- [OpenAPI Specification](reference/openapi.md) — Machine-readable spec, code generation, CI enforcement
+- [API Versioning](reference/versioning.md) — Semantic versioning, breaking change detection, GitHub releases
 - [Target Schema](reference/schema.md) — Default schema fields, types, constraints, and how to create custom schemas
 - [Error Codes](reference/errors.md) — Every error code, what triggers it, and what to do about it

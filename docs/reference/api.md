@@ -2,6 +2,8 @@
 
 Base URL: `http://localhost:8000`
 
+The API is semantically versioned. The current version is in [`openapi.json`](../../openapi.json). For the machine-readable spec, see [OpenAPI Specification](openapi.md). For the versioning strategy, see [Versioning](versioning.md).
+
 ## Endpoints
 
 ### GET /health
