@@ -229,3 +229,55 @@ class TestDateCoercionOptionalFields:
         Model = build_record_model(schema)
         record = Model.model_validate({})
         assert record.Start is None  # type: ignore[attr-defined]
+
+
+class TestDateCoercionBoundaryValues:
+    """Boundary date values: leap years, year extremes, whitespace."""
+
+    def test_leap_year_feb_29_valid(self) -> None:
+        Model = build_record_model(_date_schema())
+        record = Model.model_validate({"Start": "2024-02-29"})
+        assert record.Start == datetime.date(2024, 2, 29)  # type: ignore[attr-defined]
+
+    def test_non_leap_year_feb_29_rejected(self) -> None:
+        Model = build_record_model(_date_schema())
+        with pytest.raises((ValidationError, ValueError)):
+            Model.model_validate({"Start": "2025-02-29"})
+
+    def test_whitespace_only_date_rejected(self) -> None:
+        Model = build_record_model(_date_schema())
+        with pytest.raises((ValidationError, ValueError), match="(?i)empty"):
+            Model.model_validate({"Start": "   "})
+
+    def test_leading_trailing_whitespace_stripped(self) -> None:
+        """Whitespace around a valid date should be stripped and parsed."""
+        Model = build_record_model(_date_schema())
+        record = Model.model_validate({"Start": "  2025-03-15  "})
+        assert record.Start == datetime.date(2025, 3, 15)  # type: ignore[attr-defined]
+
+    def test_yyyy_slash_invalid_day_rejected(self) -> None:
+        """YYYY/MM/DD with day=32 should be rejected."""
+        Model = build_record_model(_date_schema())
+        with pytest.raises((ValidationError, ValueError)):
+            Model.model_validate({"Start": "2025/01/32"})
+
+
+class TestClearRecordModelCache:
+    """clear_record_model_cache evicts cached models."""
+
+    def test_cache_clear_forces_rebuild(self) -> None:
+        """After clearing the cache, build_record_model returns a new class."""
+        schema = _date_schema()
+        model_1 = build_record_model(schema)
+        clear_record_model_cache()
+        model_2 = build_record_model(schema)
+        # Same schema fingerprint, but fresh class object after cache clear
+        assert model_1 is not model_2
+
+    def test_cached_model_is_same_object(self) -> None:
+        """Without clearing, same schema returns the exact same class."""
+        schema = _date_schema()
+        clear_record_model_cache()
+        model_1 = build_record_model(schema)
+        model_2 = build_record_model(schema)
+        assert model_1 is model_2

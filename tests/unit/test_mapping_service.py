@@ -802,6 +802,186 @@ class TestDateFormatDetection:
         assert row1["Arrival_Date"] == datetime.date(2024, 4, 2)  # NOT Feb 4
 
 
+class TestStoreCorrection:
+    """store_correction validates target field against the active schema."""
+
+    def test_valid_correction_stored(self, mapper: AsyncMock, cache: MagicMock) -> None:
+        from src.domain.model.correction import Correction
+
+        correction_cache = MagicMock()
+        service = MappingService(
+            ingestor=PolarsIngestor(),
+            mapper=mapper,
+            cache=cache,
+            correction_cache=correction_cache,
+        )
+        correction = Correction(
+            cedent_id="ABC",
+            source_header="GWP",
+            target_field="Gross_Premium",
+        )
+        service.store_correction(correction)
+        correction_cache.set_correction.assert_called_once_with(correction)
+
+    def test_invalid_target_raises_invalid_correction_error(
+        self, mapper: AsyncMock, cache: MagicMock
+    ) -> None:
+        from src.domain.model.correction import Correction
+
+        service = MappingService(
+            ingestor=PolarsIngestor(),
+            mapper=mapper,
+            cache=cache,
+        )
+        correction = Correction(
+            cedent_id="ABC",
+            source_header="GWP",
+            target_field="Nonexistent_Field",
+        )
+        with pytest.raises(InvalidCorrectionError, match="Nonexistent_Field"):
+            service.store_correction(correction)
+
+    def test_valid_correction_without_cache_is_noop(
+        self, mapper: AsyncMock, cache: MagicMock
+    ) -> None:
+        """When no correction_cache is configured, store_correction validates
+        but doesn't persist (no error raised)."""
+        from src.domain.model.correction import Correction
+
+        service = MappingService(
+            ingestor=PolarsIngestor(),
+            mapper=mapper,
+            cache=cache,
+        )
+        correction = Correction(
+            cedent_id="ABC",
+            source_header="GWP",
+            target_field="Gross_Premium",
+        )
+        service.store_correction(correction)  # should not raise
+
+
+class TestConfidenceThresholdBoundary:
+    """Test exact boundary values for confidence threshold."""
+
+    @pytest.mark.asyncio
+    async def test_confidence_just_below_threshold_raises(
+        self, cache: MagicMock, tmp_path: Path
+    ) -> None:
+        """0.599999 is below 0.6 threshold — should raise."""
+        path = _write_csv(tmp_path)
+        mapper = AsyncMock()
+        mapper.map_headers.return_value = _make_mapping_result(confidence=0.599999)
+        service = MappingService(ingestor=PolarsIngestor(), mapper=mapper, cache=cache)
+        with pytest.raises(MappingConfidenceLowError):
+            await service.process_file(path)
+
+
+class TestHeaderOnlyFile:
+    """CSV with headers but no data rows."""
+
+    @pytest.mark.asyncio
+    async def test_header_only_csv_produces_empty_result(
+        self, cache: MagicMock, tmp_path: Path
+    ) -> None:
+        """A file with headers but no data rows should produce 0 valid/invalid records."""
+        file_path = str(tmp_path / "empty.csv")
+        with open(file_path, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["Policy No.", "GWP", "Extra"])
+
+        mapper = AsyncMock()
+        mapper.map_headers.return_value = _make_mapping_result()
+        cache.get_mapping.return_value = None
+
+        service = MappingService(ingestor=PolarsIngestor(), mapper=mapper, cache=cache)
+        result = await service.process_file(file_path)
+
+        assert result.valid_records == []
+        assert result.invalid_records == []
+        assert result.errors == []
+
+
+class TestOptionalFieldValidation:
+    """Row validation with optional fields in a custom schema."""
+
+    @pytest.mark.asyncio
+    async def test_optional_date_none_passes_validation(
+        self, cache: MagicMock, tmp_path: Path
+    ) -> None:
+        """A schema with an optional date field should accept rows missing that field."""
+        file_path = str(tmp_path / "optional.csv")
+        with open(file_path, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["Name"])
+            writer.writerow(["Alice"])
+
+        schema = TargetSchema(
+            name="with_optional",
+            fields={
+                "Name": FieldDefinition(type=FieldType.STRING, not_empty=True),
+                "Birthday": FieldDefinition(type=FieldType.DATE, required=False),
+            },
+        )
+
+        mapping = MappingResult(
+            mappings=[
+                ColumnMapping(source_header="Name", target_field="Name", confidence=0.95),
+            ],
+            unmapped_headers=[],
+        )
+
+        mapper = AsyncMock()
+        mapper.map_headers.return_value = mapping
+        cache.get_mapping.return_value = None
+
+        service = MappingService(
+            ingestor=PolarsIngestor(), mapper=mapper, cache=cache, schema=schema
+        )
+        result = await service.process_file(file_path)
+
+        assert len(result.valid_records) == 1
+        assert result.valid_records[0]["Birthday"] is None
+
+    @pytest.mark.asyncio
+    async def test_optional_float_none_passes_validation(
+        self, cache: MagicMock, tmp_path: Path
+    ) -> None:
+        """Optional float field should accept rows missing that field."""
+        file_path = str(tmp_path / "opt_float.csv")
+        with open(file_path, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["Name"])
+            writer.writerow(["Bob"])
+
+        schema = TargetSchema(
+            name="with_optional_float",
+            fields={
+                "Name": FieldDefinition(type=FieldType.STRING, not_empty=True),
+                "Amount": FieldDefinition(type=FieldType.FLOAT, required=False),
+            },
+        )
+
+        mapping = MappingResult(
+            mappings=[
+                ColumnMapping(source_header="Name", target_field="Name", confidence=0.95),
+            ],
+            unmapped_headers=[],
+        )
+
+        mapper = AsyncMock()
+        mapper.map_headers.return_value = mapping
+        cache.get_mapping.return_value = None
+
+        service = MappingService(
+            ingestor=PolarsIngestor(), mapper=mapper, cache=cache, schema=schema
+        )
+        result = await service.process_file(file_path)
+
+        assert len(result.valid_records) == 1
+        assert result.valid_records[0]["Amount"] is None
+
+
 class TestGetHeaders:
     """get_headers delegates to the ingestor and returns a list of strings."""
 

@@ -369,3 +369,24 @@ class TestConfidenceReport:
         )
         report = ConfidenceReport.from_mapping_result(mapping, valid_fields=VALID_TARGET_FIELDS)
         assert len(report.low_confidence_fields) == 1
+
+    def test_valid_fields_none_raises(self) -> None:
+        """valid_fields is required — passing None must raise ValueError."""
+        mapping = self._make_mapping([("Policy_ID", 0.9)])
+        with pytest.raises(ValueError, match="valid_fields is required"):
+            ConfidenceReport.from_mapping_result(mapping, valid_fields=None)
+
+    def test_missing_fields_are_sorted(self) -> None:
+        """missing_fields should be alphabetically sorted."""
+        mapping = self._make_mapping([("Policy_ID", 0.9)])
+        report = ConfidenceReport.from_mapping_result(mapping, valid_fields=VALID_TARGET_FIELDS)
+        assert report.missing_fields == sorted(report.missing_fields)
+
+
+class TestMappingResultEdgeCases:
+    """Edge cases for validate_against_schema and empty mappings."""
+
+    def test_validate_against_schema_with_empty_mappings(self) -> None:
+        """Empty mappings list should pass validation (nothing to reject)."""
+        result = MappingResult(mappings=[], unmapped_headers=["A"])
+        result.validate_against_schema(VALID_TARGET_FIELDS)  # should not raise
