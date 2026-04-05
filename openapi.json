@@ -1269,7 +1269,7 @@
           "errors"
         ],
         "title": "ProcessingResult",
-        "description": "Full result of processing a spreadsheet: mapping + row validation.\n\nvalid_records uses list[dict] instead of list[RiskRecord] because\nthe record model is dynamic \u2014 field names depend on the active\nTargetSchema. Dicts are the natural serialization format and avoid\ncomplex generic type gymnastics."
+        "description": "Full result of processing a spreadsheet: mapping + row validation.\n\nvalid_records uses list[dict] because the record model is dynamic \u2014\nfield names depend on the active TargetSchema. Dicts are the natural\nserialization format and avoid complex generic type gymnastics."
       },
       "RowError": {
         "properties": {

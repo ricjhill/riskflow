@@ -9,16 +9,15 @@ Tests cover:
 - Passthrough for already-valid types (datetime.date, datetime.datetime, ISO strings)
 - Invalid inputs still raise errors
 - Coercion works with cross-field date ordering rules
-- Both dynamic model and hardcoded RiskRecord accept flexible dates
+- Dynamic model accepts flexible dates
 """
 
 import datetime
 
 import pytest
-from pydantic import BaseModel, ValidationError
+from pydantic import ValidationError
 
 from src.domain.model.record_factory import build_record_model, clear_record_model_cache
-from src.domain.model.schema import RiskRecord
 from src.domain.model.target_schema import (
     DEFAULT_TARGET_SCHEMA,
     DateOrderingRule,
@@ -230,60 +229,3 @@ class TestDateCoercionOptionalFields:
         Model = build_record_model(schema)
         record = Model.model_validate({})
         assert record.Start is None  # type: ignore[attr-defined]
-
-
-class TestRiskRecordDateCoercion:
-    """The hardcoded RiskRecord must also accept flexible date formats,
-    maintaining equivalence with the dynamic model."""
-
-    def test_accepts_dd_mon_yyyy(self) -> None:
-        record = RiskRecord.model_validate(
-            {
-                "Policy_ID": "P001",
-                "Inception_Date": "01-Jan-2025",
-                "Expiry_Date": "31-Dec-2025",
-                "Sum_Insured": 1_000_000.0,
-                "Gross_Premium": 50_000.0,
-                "Currency": "USD",
-            }
-        )
-        assert record.Inception_Date == datetime.date(2025, 1, 1)
-        assert record.Expiry_Date == datetime.date(2025, 12, 31)
-
-    def test_accepts_dd_slash_mm_slash_yyyy(self) -> None:
-        record = RiskRecord.model_validate(
-            {
-                "Policy_ID": "P001",
-                "Inception_Date": "15/01/2025",
-                "Expiry_Date": "15/01/2026",
-                "Sum_Insured": 1_000_000.0,
-                "Gross_Premium": 50_000.0,
-                "Currency": "USD",
-            }
-        )
-        assert record.Inception_Date == datetime.date(2025, 1, 15)
-
-
-class TestDynamicModelEquivalenceWithFlexibleDates:
-    """Dynamic and static models must agree on flexible date inputs."""
-
-    VALID_ROW_FLEXIBLE = {
-        "Policy_ID": "POL-001",
-        "Inception_Date": "01-Jan-2024",
-        "Expiry_Date": "01-Jan-2025",
-        "Sum_Insured": 1_000_000.0,
-        "Gross_Premium": 50_000.0,
-        "Currency": "USD",
-    }
-
-    @pytest.fixture
-    def DynamicRecord(self) -> type[BaseModel]:
-        return build_record_model(DEFAULT_TARGET_SCHEMA)
-
-    def test_both_accept_flexible_dates(self, DynamicRecord: type[BaseModel]) -> None:
-        static = RiskRecord.model_validate(self.VALID_ROW_FLEXIBLE)
-        dynamic = DynamicRecord.model_validate(self.VALID_ROW_FLEXIBLE)
-
-        assert static.Inception_Date == dynamic.Inception_Date  # type: ignore[attr-defined]
-        assert static.Expiry_Date == dynamic.Expiry_Date  # type: ignore[attr-defined]
-        assert static.Inception_Date == datetime.date(2024, 1, 1)  # type: ignore[attr-defined]

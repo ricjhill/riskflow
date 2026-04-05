@@ -3,7 +3,7 @@
 After the SLM maps headers, the service should:
 1. Read the full dataframe
 2. Rename columns according to the mapping
-3. Validate each row as a RiskRecord
+3. Validate each row against the schema's record model
 4. Return valid records, invalid records with errors
 """
 
@@ -39,24 +39,12 @@ def _full_mapping() -> MappingResult:
     """A mapping that covers all 6 target fields."""
     return MappingResult(
         mappings=[
-            ColumnMapping(
-                source_header="Policy No.", target_field="Policy_ID", confidence=0.95
-            ),
-            ColumnMapping(
-                source_header="Start", target_field="Inception_Date", confidence=0.95
-            ),
-            ColumnMapping(
-                source_header="End", target_field="Expiry_Date", confidence=0.95
-            ),
-            ColumnMapping(
-                source_header="TSI", target_field="Sum_Insured", confidence=0.95
-            ),
-            ColumnMapping(
-                source_header="GWP", target_field="Gross_Premium", confidence=0.95
-            ),
-            ColumnMapping(
-                source_header="Ccy", target_field="Currency", confidence=0.95
-            ),
+            ColumnMapping(source_header="Policy No.", target_field="Policy_ID", confidence=0.95),
+            ColumnMapping(source_header="Start", target_field="Inception_Date", confidence=0.95),
+            ColumnMapping(source_header="End", target_field="Expiry_Date", confidence=0.95),
+            ColumnMapping(source_header="TSI", target_field="Sum_Insured", confidence=0.95),
+            ColumnMapping(source_header="GWP", target_field="Gross_Premium", confidence=0.95),
+            ColumnMapping(source_header="Ccy", target_field="Currency", confidence=0.95),
         ],
         unmapped_headers=[],
     )

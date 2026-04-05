@@ -357,7 +357,7 @@ class TestPartialMapping:
 
         result = await service.process_file(file_path)
         # Row has Policy_ID and Gross_Premium but missing 4 other fields
-        # → should be invalid because RiskRecord requires all 6
+        # → should be invalid because the schema requires all 6
         assert len(result.valid_records) == 0
         assert len(result.invalid_records) == 1
         assert len(result.errors) == 1
@@ -366,7 +366,7 @@ class TestPartialMapping:
 class TestCustomSchema:
     """MappingService accepts an optional TargetSchema. When provided,
     row validation uses a dynamic model built from that schema instead
-    of the hardcoded RiskRecord."""
+    of the default schema's record model."""
 
     @pytest.mark.asyncio
     async def test_validates_rows_against_custom_schema(

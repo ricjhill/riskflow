@@ -35,7 +35,7 @@ class MappingService:
         3. On cache miss, the SLM mapper is called
         4. Confidence is validated against the threshold
         5. Result is cached
-        6. Full dataframe is read, columns renamed, rows validated as RiskRecords
+        6. Full dataframe is read, columns renamed, rows validated against the schema
         7. ProcessingResult returned with valid records and errors
     """
 

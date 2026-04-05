@@ -1,52 +1,6 @@
 """Domain models for reinsurance data mapping."""
 
-from typing import Literal
-
 from pydantic import BaseModel, field_validator, model_validator
-
-from src.domain.model.record_factory import FlexibleDate
-
-
-class RiskRecord(BaseModel):
-    """A single validated reinsurance risk record."""
-
-    Policy_ID: str
-    Inception_Date: FlexibleDate
-    Expiry_Date: FlexibleDate
-    Sum_Insured: float
-    Gross_Premium: float
-    Currency: Literal["USD", "GBP", "EUR", "JPY"]
-
-    @field_validator("Policy_ID")
-    @classmethod
-    def policy_id_not_empty(cls, v: str) -> str:
-        if not v.strip():
-            msg = "Policy_ID must not be empty"
-            raise ValueError(msg)
-        return v
-
-    @field_validator("Sum_Insured")
-    @classmethod
-    def sum_insured_non_negative(cls, v: float) -> float:
-        if v < 0:
-            msg = "Sum_Insured must be non-negative"
-            raise ValueError(msg)
-        return v
-
-    @field_validator("Gross_Premium")
-    @classmethod
-    def gross_premium_non_negative(cls, v: float) -> float:
-        if v < 0:
-            msg = "Gross_Premium must be non-negative"
-            raise ValueError(msg)
-        return v
-
-    @model_validator(mode="after")
-    def expiry_not_before_inception(self) -> "RiskRecord":
-        if self.Expiry_Date < self.Inception_Date:
-            msg = "Expiry_Date must not be before Inception_Date"
-            raise ValueError(msg)
-        return self
 
 
 class ColumnMapping(BaseModel):
@@ -160,10 +114,9 @@ class RowError(BaseModel):
 class ProcessingResult(BaseModel):
     """Full result of processing a spreadsheet: mapping + row validation.
 
-    valid_records uses list[dict] instead of list[RiskRecord] because
-    the record model is dynamic — field names depend on the active
-    TargetSchema. Dicts are the natural serialization format and avoid
-    complex generic type gymnastics.
+    valid_records uses list[dict] because the record model is dynamic —
+    field names depend on the active TargetSchema. Dicts are the natural
+    serialization format and avoid complex generic type gymnastics.
     """
 
     mapping: MappingResult

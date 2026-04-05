@@ -11,7 +11,6 @@ import pytest
 from pydantic import BaseModel, ValidationError
 
 from src.domain.model.record_factory import build_record_model
-from src.domain.model.schema import RiskRecord
 from src.domain.model.target_schema import (
     DEFAULT_TARGET_SCHEMA,
     DateOrderingRule,
@@ -245,7 +244,9 @@ class TestCrossFieldRuleValidation:
                 ],
             )
 
-    @pytest.mark.parametrize("non_date_type", [FieldType.STRING, FieldType.FLOAT, FieldType.CURRENCY])
+    @pytest.mark.parametrize(
+        "non_date_type", [FieldType.STRING, FieldType.FLOAT, FieldType.CURRENCY]
+    )
     def test_rejects_rule_on_each_non_date_type(self, non_date_type: FieldType) -> None:
         kwargs: dict = {"type": non_date_type}
         if non_date_type == FieldType.CURRENCY:
@@ -311,8 +312,12 @@ class TestDefaultTargetSchema:
 
     def test_field_names_match_hardcoded(self) -> None:
         expected = {
-            "Policy_ID", "Inception_Date", "Expiry_Date",
-            "Sum_Insured", "Gross_Premium", "Currency",
+            "Policy_ID",
+            "Inception_Date",
+            "Expiry_Date",
+            "Sum_Insured",
+            "Gross_Premium",
+            "Currency",
         }
         assert DEFAULT_TARGET_SCHEMA.field_names == expected
 
@@ -386,9 +391,7 @@ class TestBuildRecordModelBasicTypes:
         schema = TargetSchema(
             name="test",
             fields={
-                "Ccy": FieldDefinition(
-                    type=FieldType.CURRENCY, allowed_values=["USD", "GBP"]
-                ),
+                "Ccy": FieldDefinition(type=FieldType.CURRENCY, allowed_values=["USD", "GBP"]),
             },
         )
         Model = build_record_model(schema)
@@ -426,11 +429,13 @@ class TestBuildRecordModelBasicTypes:
             },
         )
         Model = build_record_model(schema)
-        record = Model.model_validate({
-            "ID": "P001",
-            "Start": "2024-06-15",
-            "Amount": 50000.0,
-        })
+        record = Model.model_validate(
+            {
+                "ID": "P001",
+                "Start": "2024-06-15",
+                "Amount": 50000.0,
+            }
+        )
         assert record.ID == "P001"  # type: ignore[attr-defined]
         assert record.Start == datetime.date(2024, 6, 15)  # type: ignore[attr-defined]
         assert record.Amount == 50000.0  # type: ignore[attr-defined]
@@ -508,9 +513,7 @@ class TestBuildRecordModelConstraints:
         schema = TargetSchema(
             name="test",
             fields={
-                "Ccy": FieldDefinition(
-                    type=FieldType.CURRENCY, allowed_values=["USD", "GBP"]
-                ),
+                "Ccy": FieldDefinition(type=FieldType.CURRENCY, allowed_values=["USD", "GBP"]),
             },
         )
         Model = build_record_model(schema)
@@ -522,9 +525,7 @@ class TestBuildRecordModelConstraints:
         schema = TargetSchema(
             name="test",
             fields={
-                "Ccy": FieldDefinition(
-                    type=FieldType.CURRENCY, allowed_values=["USD", "GBP"]
-                ),
+                "Ccy": FieldDefinition(type=FieldType.CURRENCY, allowed_values=["USD", "GBP"]),
             },
         )
         Model = build_record_model(schema)
@@ -600,11 +601,13 @@ class TestBuildRecordModelCrossFieldRules:
         Model = build_record_model(schema)
         # Created < Start but Start > End → should fail on second rule
         with pytest.raises(Exception, match="End"):
-            Model.model_validate({
-                "Created": "2024-01-01",
-                "Start": "2024-06-01",
-                "End": "2024-03-01",
-            })
+            Model.model_validate(
+                {
+                    "Created": "2024-01-01",
+                    "Start": "2024-06-01",
+                    "End": "2024-03-01",
+                }
+            )
 
 
 class TestBuildRecordModelOptionalFields:
@@ -670,129 +673,3 @@ class TestBuildRecordModelOptionalFields:
         Model = build_record_model(schema)
         record = Model.model_validate({"Start": "2024-01-01"})
         assert record.End is None  # type: ignore[attr-defined]
-
-
-# --- Loop 7: Equivalence test ---
-
-
-class TestDynamicModelEquivalence:
-    """Prove that build_record_model(DEFAULT_TARGET_SCHEMA) validates
-    identically to the hardcoded RiskRecord. This is the safety net
-    for the Expand and Contract migration.
-
-    Every test feeds the same input to both models and compares:
-    - Valid input: both accept, same field values in output
-    - Invalid input: both reject with matching error patterns
-    """
-
-    @pytest.fixture
-    def DynamicRecord(self) -> type[BaseModel]:
-        return build_record_model(DEFAULT_TARGET_SCHEMA)
-
-    VALID_ROW: dict = {
-        "Policy_ID": "POL-001",
-        "Inception_Date": "2024-01-01",
-        "Expiry_Date": "2025-01-01",
-        "Sum_Insured": 1_000_000.0,
-        "Gross_Premium": 50_000.0,
-        "Currency": "USD",
-    }
-
-    def test_both_accept_valid_record(self, DynamicRecord: type[BaseModel]) -> None:
-        static = RiskRecord.model_validate(self.VALID_ROW)
-        dynamic = DynamicRecord.model_validate(self.VALID_ROW)
-
-        assert static.Policy_ID == dynamic.Policy_ID  # type: ignore[attr-defined]
-        assert static.Inception_Date == dynamic.Inception_Date  # type: ignore[attr-defined]
-        assert static.Sum_Insured == dynamic.Sum_Insured  # type: ignore[attr-defined]
-        assert static.Currency == dynamic.Currency  # type: ignore[attr-defined]
-
-    def test_both_accept_zero_sum_insured(self, DynamicRecord: type[BaseModel]) -> None:
-        row = {**self.VALID_ROW, "Sum_Insured": 0.0}
-        static = RiskRecord.model_validate(row)
-        dynamic = DynamicRecord.model_validate(row)
-        assert static.Sum_Insured == dynamic.Sum_Insured == 0.0  # type: ignore[attr-defined]
-
-    def test_both_accept_zero_gross_premium(self, DynamicRecord: type[BaseModel]) -> None:
-        row = {**self.VALID_ROW, "Gross_Premium": 0.0}
-        static = RiskRecord.model_validate(row)
-        dynamic = DynamicRecord.model_validate(row)
-        assert static.Gross_Premium == dynamic.Gross_Premium == 0.0  # type: ignore[attr-defined]
-
-    def test_both_reject_negative_sum_insured(self, DynamicRecord: type[BaseModel]) -> None:
-        row = {**self.VALID_ROW, "Sum_Insured": -0.01}
-        with pytest.raises(ValidationError, match="Sum_Insured"):
-            RiskRecord.model_validate(row)
-        with pytest.raises((ValidationError, ValueError), match="Sum_Insured"):
-            DynamicRecord.model_validate(row)
-
-    def test_both_reject_negative_gross_premium(self, DynamicRecord: type[BaseModel]) -> None:
-        row = {**self.VALID_ROW, "Gross_Premium": -100.0}
-        with pytest.raises(ValidationError, match="Gross_Premium"):
-            RiskRecord.model_validate(row)
-        with pytest.raises((ValidationError, ValueError), match="Gross_Premium"):
-            DynamicRecord.model_validate(row)
-
-    @pytest.mark.parametrize("currency", ["USD", "GBP", "EUR", "JPY"])
-    def test_both_accept_valid_currencies(
-        self, DynamicRecord: type[BaseModel], currency: str
-    ) -> None:
-        row = {**self.VALID_ROW, "Currency": currency}
-        static = RiskRecord.model_validate(row)
-        dynamic = DynamicRecord.model_validate(row)
-        assert static.Currency == dynamic.Currency == currency  # type: ignore[attr-defined]
-
-    @pytest.mark.parametrize("currency", ["DOLLARS", "usd", "Us", "", "AUD"])
-    def test_both_reject_invalid_currencies(
-        self, DynamicRecord: type[BaseModel], currency: str
-    ) -> None:
-        row = {**self.VALID_ROW, "Currency": currency}
-        with pytest.raises(ValidationError):
-            RiskRecord.model_validate(row)
-        with pytest.raises((ValidationError, ValueError)):
-            DynamicRecord.model_validate(row)
-
-    def test_both_reject_expiry_before_inception(self, DynamicRecord: type[BaseModel]) -> None:
-        row = {
-            **self.VALID_ROW,
-            "Inception_Date": "2025-01-01",
-            "Expiry_Date": "2024-01-01",
-        }
-        with pytest.raises(ValidationError, match="Expiry_Date"):
-            RiskRecord.model_validate(row)
-        with pytest.raises((ValidationError, ValueError), match="Expiry_Date"):
-            DynamicRecord.model_validate(row)
-
-    def test_both_accept_same_inception_and_expiry(self, DynamicRecord: type[BaseModel]) -> None:
-        row = {
-            **self.VALID_ROW,
-            "Inception_Date": "2024-06-15",
-            "Expiry_Date": "2024-06-15",
-        }
-        static = RiskRecord.model_validate(row)
-        dynamic = DynamicRecord.model_validate(row)
-        assert static.Inception_Date == dynamic.Inception_Date  # type: ignore[attr-defined]
-        assert static.Expiry_Date == dynamic.Expiry_Date  # type: ignore[attr-defined]
-
-    def test_both_reject_empty_policy_id(self, DynamicRecord: type[BaseModel]) -> None:
-        row = {**self.VALID_ROW, "Policy_ID": ""}
-        with pytest.raises(ValidationError, match="Policy_ID"):
-            RiskRecord.model_validate(row)
-        with pytest.raises((ValidationError, ValueError), match="Policy_ID"):
-            DynamicRecord.model_validate(row)
-
-    def test_json_output_identical(self, DynamicRecord: type[BaseModel]) -> None:
-        """The ultimate proof: serialized JSON output is byte-identical
-        for both models given the same valid input."""
-        static = RiskRecord.model_validate(self.VALID_ROW)
-        dynamic = DynamicRecord.model_validate(self.VALID_ROW)
-
-        static_dict = static.model_dump()
-        dynamic_dict = dynamic.model_dump()
-
-        # Compare field by field — dynamic model may have extra fields
-        # from the schema, so we check that all static fields match
-        for field in static_dict:
-            assert static_dict[field] == dynamic_dict[field], (
-                f"Field {field}: static={static_dict[field]}, dynamic={dynamic_dict[field]}"
-            )

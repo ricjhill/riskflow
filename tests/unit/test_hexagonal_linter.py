@@ -76,7 +76,7 @@ class TestAllowedImports:
     def test_domain_importing_domain(self, tmp_path: Path) -> None:
         f = tmp_path / "src" / "domain" / "service" / "ok.py"
         f.parent.mkdir(parents=True)
-        f.write_text("from src.domain.model.schema import RiskRecord\n")
+        f.write_text("from src.domain.model.schema import ColumnMapping\n")
         errors = check_file(f)
         assert errors == []
 
@@ -105,7 +105,7 @@ class TestAllowedImports:
         f = tmp_path / "src" / "entrypoint" / "ok.py"
         f.parent.mkdir(parents=True)
         f.write_text(
-            "from src.domain.model.schema import RiskRecord\n"
+            "from src.domain.model.schema import ColumnMapping\n"
             "from src.ports.output.repo import CachePort\n"
             "from src.adapters.storage.cache import RedisCache\n"
         )
@@ -159,8 +159,7 @@ class TestMultipleViolations:
         f = tmp_path / "src" / "domain" / "model" / "bad.py"
         f.parent.mkdir(parents=True)
         f.write_text(
-            "from src.adapters.http import routes\n"
-            "from src.entrypoint.main import create_app\n"
+            "from src.adapters.http import routes\nfrom src.entrypoint.main import create_app\n"
         )
         errors = check_file(f)
         assert len(errors) == 2
@@ -171,6 +170,7 @@ class TestRealCodebase:
 
     def test_no_violations_in_codebase(self) -> None:
         from tools.hexagonal_linter import main
+
         # main() calls sys.exit(1) on violations, so if this doesn't
         # raise, the codebase is clean
         errors = main(exit_on_error=False)
