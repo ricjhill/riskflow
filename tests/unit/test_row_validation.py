@@ -17,6 +17,7 @@ import pytest
 from src.domain.model.schema import (
     ColumnMapping,
     ConfidenceReport,
+    FieldError,
     MappingResult,
     ProcessingResult,
     RowError,
@@ -79,6 +80,23 @@ class TestProcessingResult:
         assert err.row == 2
         assert "DOLLARS" in err.error
 
+    def test_row_error_with_field_errors(self) -> None:
+        err = RowError(
+            row=2,
+            error="validation failed",
+            field_errors=[
+                FieldError(field="Currency", message="not in ISO 4217", value="DOLLARS"),
+            ],
+        )
+        assert len(err.field_errors) == 1
+        assert err.field_errors[0].field == "Currency"
+        assert err.field_errors[0].message == "not in ISO 4217"
+        assert err.field_errors[0].value == "DOLLARS"
+
+    def test_row_error_field_errors_defaults_to_empty(self) -> None:
+        err = RowError(row=1, error="some error")
+        assert err.field_errors == []
+
 
 class TestRowValidation:
     """Test that process_file validates rows after mapping."""
@@ -140,6 +158,10 @@ class TestRowValidation:
         assert len(result.valid_records) == 1
         assert len(result.errors) == 1
         assert result.errors[0].row == 2
+        assert len(result.errors[0].field_errors) >= 1
+        currency_err = [fe for fe in result.errors[0].field_errors if fe.field == "Currency"]
+        assert len(currency_err) == 1
+        assert "DOLLARS" in (currency_err[0].value or "")
 
     @pytest.mark.asyncio
     async def test_negative_premium_captured_as_error(self, tmp_path: Path) -> None:
