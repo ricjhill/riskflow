@@ -104,11 +104,20 @@ class ConfidenceReport(BaseModel):
         )
 
 
+class FieldError(BaseModel):
+    """A validation error for a specific field within a row."""
+
+    field: str
+    message: str
+    value: str | None = None
+
+
 class RowError(BaseModel):
     """A validation error for a specific row."""
 
     row: int
     error: str
+    field_errors: list[FieldError] = []
 
 
 class ProcessingResult(BaseModel):

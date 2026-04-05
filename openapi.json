@@ -1031,6 +1031,36 @@
         "title": "FieldDefinition",
         "description": "Definition of a single target field with type-safe constraints.\n\nConstraints are validated against the field type:\n- not_empty: only valid for STRING\n- non_negative: only valid for FLOAT\n- allowed_values: only valid for CURRENCY"
       },
+      "FieldError": {
+        "properties": {
+          "field": {
+            "type": "string",
+            "title": "Field"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "field",
+          "message"
+        ],
+        "title": "FieldError",
+        "description": "A validation error for a specific field within a row."
+      },
       "FieldType": {
         "type": "string",
         "enum": [
@@ -1280,6 +1310,14 @@
           "error": {
             "type": "string",
             "title": "Error"
+          },
+          "field_errors": {
+            "items": {
+              "$ref": "#/components/schemas/FieldError"
+            },
+            "type": "array",
+            "title": "Field Errors",
+            "default": []
           }
         },
         "type": "object",

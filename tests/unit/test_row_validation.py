@@ -17,6 +17,7 @@ import pytest
 from src.domain.model.schema import (
     ColumnMapping,
     ConfidenceReport,
+    FieldError,
     MappingResult,
     ProcessingResult,
     RowError,
@@ -78,6 +79,23 @@ class TestProcessingResult:
         err = RowError(row=2, error="Currency 'DOLLARS' not in ISO 4217")
         assert err.row == 2
         assert "DOLLARS" in err.error
+
+    def test_row_error_with_field_errors(self) -> None:
+        err = RowError(
+            row=2,
+            error="validation failed",
+            field_errors=[
+                FieldError(field="Currency", message="not in ISO 4217", value="DOLLARS"),
+            ],
+        )
+        assert len(err.field_errors) == 1
+        assert err.field_errors[0].field == "Currency"
+        assert err.field_errors[0].message == "not in ISO 4217"
+        assert err.field_errors[0].value == "DOLLARS"
+
+    def test_row_error_field_errors_defaults_to_empty(self) -> None:
+        err = RowError(row=1, error="some error")
+        assert err.field_errors == []
 
 
 class TestRowValidation:
