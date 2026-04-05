@@ -199,6 +199,17 @@ class TestExtendTargetFields:
         with pytest.raises(ValueError, match="at least one"):
             session.extend_target_fields(fields=[])
 
+    def test_all_fields_already_exist_is_noop(self, session: MappingSession) -> None:
+        """Extending with only existing fields doesn't change the list."""
+        original = list(session.target_fields)
+        session.extend_target_fields(fields=["Field_1", "Field_2"])
+        assert session.target_fields == original
+
+    def test_deduplicates_within_input_list(self, session: MappingSession) -> None:
+        """If the input list itself has duplicates, only one is added."""
+        session.extend_target_fields(fields=["New", "New", "New"])
+        assert session.target_fields.count("New") == 1
+
 
 class TestFinalise:
     """finalise transitions CREATED → FINALISED and stores the result."""
@@ -262,6 +273,30 @@ class TestSerialization:
         assert restored.unmapped_headers == session.unmapped_headers
         assert restored.preview_rows == session.preview_rows
         assert restored.result is None
+
+    def test_json_roundtrip(self) -> None:
+        """model_dump_json → model_validate_json preserves all fields."""
+        session = MappingSession.create(
+            schema_name="standard_reinsurance",
+            file_path="/tmp/test.csv",
+            sheet_name="Sheet1",
+            source_headers=["Premium"],
+            target_fields=["Gross_Premium"],
+            mappings=[
+                ColumnMapping(
+                    source_header="Premium",
+                    target_field="Gross_Premium",
+                    confidence=0.9,
+                ),
+            ],
+            unmapped_headers=[],
+            preview_rows=[{"Premium": 500}],
+        )
+        json_str = session.model_dump_json()
+        restored = MappingSession.model_validate_json(json_str)
+        assert restored.id == session.id
+        assert restored.status == session.status
+        assert len(restored.mappings) == 1
 
     def test_roundtrip_with_result(self) -> None:
         session = MappingSession.create(
