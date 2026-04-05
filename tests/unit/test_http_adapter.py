@@ -212,9 +212,7 @@ class TestErrorMapping:
 
     def test_invalid_cedent_data_returns_400(self) -> None:
         service = AsyncMock()
-        service.process_file.side_effect = InvalidCedentDataError(
-            "unparseable spreadsheet"
-        )
+        service.process_file.side_effect = InvalidCedentDataError("unparseable spreadsheet")
         app = _create_test_app(service)
         client = TestClient(app)
 
@@ -300,9 +298,7 @@ class TestStructuredErrorResponses:
 
     def test_invalid_cedent_data_includes_structured_detail(self) -> None:
         service = AsyncMock()
-        service.process_file.side_effect = InvalidCedentDataError(
-            "unparseable spreadsheet"
-        )
+        service.process_file.side_effect = InvalidCedentDataError("unparseable spreadsheet")
         app = _create_test_app(service)
         client = TestClient(app)
 
@@ -347,9 +343,7 @@ class TestSheetsEndpoint:
 
     def test_returns_sheet_names_for_xlsx(self) -> None:
         service = AsyncMock()
-        service.get_sheet_names = MagicMock(
-            return_value=["Policies", "Claims", "Summary"]
-        )
+        service.get_sheet_names = MagicMock(return_value=["Policies", "Claims", "Summary"])
         app = _create_test_app(service)
         client = TestClient(app)
 
@@ -429,9 +423,7 @@ class TestFileValidation:
 
         response = client.post(
             "/upload",
-            files={
-                "file": (filename, io.BytesIO(b"ID\n1\n"), "application/octet-stream")
-            },
+            files={"file": (filename, io.BytesIO(b"ID\n1\n"), "application/octet-stream")},
         )
 
         assert response.status_code == 200
@@ -461,6 +453,61 @@ class TestFileValidation:
         response = client.post(
             "/upload",
             files={"file": ("small.csv", io.BytesIO(small_content), "text/csv")},
+        )
+
+        assert response.status_code == 200
+
+
+class TestFileValidationEdgeCases:
+    """Boundary conditions for file validation."""
+
+    def test_empty_file_passes_validation_reaches_service(self) -> None:
+        """0-byte CSV passes _validate_file (valid extension, under size limit).
+        The service receives it and raises InvalidCedentDataError during parsing,
+        which the route maps to 400."""
+        from src.domain.model.errors import InvalidCedentDataError
+
+        service = AsyncMock()
+        service.process_file.side_effect = InvalidCedentDataError(
+            "File is empty or contains no data"
+        )
+        app = _create_test_app(service)
+        client = TestClient(app)
+
+        response = client.post(
+            "/upload",
+            files={"file": ("empty.csv", io.BytesIO(b""), "text/csv")},
+        )
+
+        assert response.status_code == 400
+        service.process_file.assert_called_once()
+
+    def test_no_filename_uses_fallback(self) -> None:
+        """File with no filename should use fallback extension detection."""
+        service = AsyncMock()
+        app = _create_test_app(service)
+        client = TestClient(app)
+
+        response = client.post(
+            "/upload",
+            files={"file": ("", io.BytesIO(b"data"), "application/octet-stream")},
+        )
+
+        # Empty filename is rejected — either by FastAPI validation (422)
+        # or by _validate_file extension check (400)
+        assert response.status_code in (400, 422)
+
+    def test_file_at_exact_size_limit_accepted(self) -> None:
+        """File exactly at 10MB should be accepted (limit is >10MB, not >=)."""
+        service = AsyncMock()
+        service.process_file.return_value = _make_processing_result()
+        app = _create_test_app(service)
+        client = TestClient(app)
+
+        exactly_10mb = b"x" * (10 * 1024 * 1024)
+        response = client.post(
+            "/upload",
+            files={"file": ("big.csv", io.BytesIO(exactly_10mb), "text/csv")},
         )
 
         assert response.status_code == 200

@@ -249,3 +249,30 @@ class TestGetSheetNames:
     def test_raises_on_missing_file(self) -> None:
         with pytest.raises(FileNotFoundError):
             PolarsIngestor().get_sheet_names("/nonexistent/file.xlsx")
+
+
+class TestCorruptFiles:
+    """Corrupt or non-spreadsheet files with spreadsheet extensions.
+
+    A .xlsx is a ZIP archive internally. Garbage bytes fail at the ZIP
+    layer: polars raises CalamineError, openpyxl raises BadZipFile.
+    """
+
+    @pytest.fixture()
+    def corrupt_xlsx(self, tmp_path: Path) -> str:
+        path = str(tmp_path / "corrupt.xlsx")
+        with open(path, "wb") as f:
+            f.write(b"this is not a valid zip archive")
+        return path
+
+    def test_corrupt_xlsx_raises_on_get_headers(self, corrupt_xlsx: str) -> None:
+        with pytest.raises(Exception, match="(?i)zip|xlsx|workbook"):
+            PolarsIngestor().get_headers(corrupt_xlsx)
+
+    def test_corrupt_xlsx_raises_on_get_sheet_names(self, corrupt_xlsx: str) -> None:
+        with pytest.raises(Exception, match="(?i)zip"):
+            PolarsIngestor().get_sheet_names(corrupt_xlsx)
+
+    def test_corrupt_xlsx_raises_on_get_preview(self, corrupt_xlsx: str) -> None:
+        with pytest.raises(Exception, match="(?i)zip|xlsx|workbook"):
+            PolarsIngestor().get_preview(corrupt_xlsx)

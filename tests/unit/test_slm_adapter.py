@@ -56,9 +56,7 @@ class TestPromptConstruction:
     @pytest.mark.asyncio
     async def test_prompt_contains_all_target_fields(self) -> None:
         client = AsyncMock()
-        client.chat.completions.create.return_value = _mock_completion(
-            _valid_response_json()
-        )
+        client.chat.completions.create.return_value = _mock_completion(_valid_response_json())
         mapper = GroqMapper(client=client)
 
         await mapper.map_headers(
@@ -83,9 +81,7 @@ class TestPromptConstruction:
     @pytest.mark.asyncio
     async def test_prompt_contains_gwp_hint(self) -> None:
         client = AsyncMock()
-        client.chat.completions.create.return_value = _mock_completion(
-            _valid_response_json()
-        )
+        client.chat.completions.create.return_value = _mock_completion(_valid_response_json())
         mapper = GroqMapper(client=client)
 
         await mapper.map_headers(["GWP"], [{"GWP": 50000}])
@@ -99,9 +95,7 @@ class TestPromptConstruction:
     @pytest.mark.asyncio
     async def test_prompt_includes_source_headers(self) -> None:
         client = AsyncMock()
-        client.chat.completions.create.return_value = _mock_completion(
-            _valid_response_json()
-        )
+        client.chat.completions.create.return_value = _mock_completion(_valid_response_json())
         mapper = GroqMapper(client=client)
 
         await mapper.map_headers(
@@ -118,9 +112,7 @@ class TestPromptConstruction:
     @pytest.mark.asyncio
     async def test_prompt_includes_sample_rows(self) -> None:
         client = AsyncMock()
-        client.chat.completions.create.return_value = _mock_completion(
-            _valid_response_json()
-        )
+        client.chat.completions.create.return_value = _mock_completion(_valid_response_json())
         mapper = GroqMapper(client=client)
 
         await mapper.map_headers(
@@ -137,9 +129,7 @@ class TestPromptConstruction:
     @pytest.mark.asyncio
     async def test_requests_json_response_format(self) -> None:
         client = AsyncMock()
-        client.chat.completions.create.return_value = _mock_completion(
-            _valid_response_json()
-        )
+        client.chat.completions.create.return_value = _mock_completion(_valid_response_json())
         mapper = GroqMapper(client=client)
 
         await mapper.map_headers(["ID"], [{"ID": "P001"}])
@@ -152,9 +142,7 @@ class TestResponseParsing:
     @pytest.mark.asyncio
     async def test_parses_valid_response(self) -> None:
         client = AsyncMock()
-        client.chat.completions.create.return_value = _mock_completion(
-            _valid_response_json()
-        )
+        client.chat.completions.create.return_value = _mock_completion(_valid_response_json())
         mapper = GroqMapper(client=client)
 
         result = await mapper.map_headers(
@@ -171,9 +159,7 @@ class TestResponseParsing:
     @pytest.mark.asyncio
     async def test_raises_on_malformed_json(self) -> None:
         client = AsyncMock()
-        client.chat.completions.create.return_value = _mock_completion(
-            "this is not json at all"
-        )
+        client.chat.completions.create.return_value = _mock_completion("this is not json at all")
         mapper = GroqMapper(client=client)
 
         with pytest.raises(SLMUnavailableError, match="parse"):
@@ -206,6 +192,100 @@ class TestResponseParsing:
             await mapper.map_headers(["ID"], [{"ID": "P001"}])
 
 
+class TestResponseParsingEdgeCases:
+    @pytest.mark.asyncio
+    async def test_raises_on_empty_choices(self) -> None:
+        """SLM returns response with empty choices list."""
+        client = AsyncMock()
+        response = MagicMock()
+        response.choices = []
+        client.chat.completions.create.return_value = response
+        mapper = GroqMapper(client=client)
+
+        with pytest.raises(SLMUnavailableError, match="empty"):
+            await mapper.map_headers(["ID"], [{"ID": "P001"}])
+
+    @pytest.mark.asyncio
+    async def test_raises_on_invalid_confidence_in_response(self) -> None:
+        """SLM returns valid JSON but confidence > 1.0 — MappingResult validation fails."""
+        bad_json = json.dumps(
+            {
+                "mappings": [
+                    {
+                        "source_header": "GWP",
+                        "target_field": "Gross_Premium",
+                        "confidence": 1.5,
+                    }
+                ],
+                "unmapped_headers": [],
+            }
+        )
+        client = AsyncMock()
+        client.chat.completions.create.return_value = _mock_completion(bad_json)
+        mapper = GroqMapper(client=client)
+
+        with pytest.raises(SLMUnavailableError, match="parse"):
+            await mapper.map_headers(["GWP"], [{"GWP": 50000}])
+
+
+class TestPromptConstructionWithCustomSchema:
+    @pytest.mark.asyncio
+    async def test_schema_with_no_hints_says_no_aliases(self) -> None:
+        """A schema with no slm_hints should produce 'No known aliases'."""
+        from src.domain.model.target_schema import FieldDefinition, FieldType, TargetSchema
+
+        schema = TargetSchema(
+            name="no_hints",
+            fields={"Name": FieldDefinition(type=FieldType.STRING)},
+        )
+        client = AsyncMock()
+        client.chat.completions.create.return_value = _mock_completion(
+            json.dumps(
+                {
+                    "mappings": [
+                        {"source_header": "Name", "target_field": "Name", "confidence": 0.9}
+                    ],
+                    "unmapped_headers": [],
+                }
+            )
+        )
+        mapper = GroqMapper(client=client, schema=schema)
+        await mapper.map_headers(["Name"], [{"Name": "Alice"}])
+
+        system_msg = client.chat.completions.create.call_args.kwargs["messages"][0]["content"]
+        assert "No known aliases" in system_msg
+
+    @pytest.mark.asyncio
+    async def test_custom_schema_fields_in_prompt(self) -> None:
+        """Custom schema field names should appear in the system prompt."""
+        from src.domain.model.target_schema import FieldDefinition, FieldType, TargetSchema
+
+        schema = TargetSchema(
+            name="custom",
+            fields={
+                "Vessel_Name": FieldDefinition(type=FieldType.STRING),
+                "Cargo_Value": FieldDefinition(type=FieldType.FLOAT),
+            },
+        )
+        client = AsyncMock()
+        client.chat.completions.create.return_value = _mock_completion(
+            json.dumps(
+                {
+                    "mappings": [
+                        {"source_header": "Ship", "target_field": "Vessel_Name", "confidence": 0.9}
+                    ],
+                    "unmapped_headers": ["Value"],
+                }
+            )
+        )
+        mapper = GroqMapper(client=client, schema=schema)
+        await mapper.map_headers(["Ship", "Value"], [{"Ship": "MV Star", "Value": 1000}])
+
+        system_msg = client.chat.completions.create.call_args.kwargs["messages"][0]["content"]
+        assert "Vessel_Name" in system_msg
+        assert "Cargo_Value" in system_msg
+
+
 class TestErrorHandling:
     @pytest.mark.asyncio
     async def test_wraps_api_error(self) -> None:
@@ -219,9 +299,7 @@ class TestErrorHandling:
     @pytest.mark.asyncio
     async def test_wraps_connection_error(self) -> None:
         client = AsyncMock()
-        client.chat.completions.create.side_effect = ConnectionError(
-            "unreachable"
-        )
+        client.chat.completions.create.side_effect = ConnectionError("unreachable")
         mapper = GroqMapper(client=client)
 
         with pytest.raises(SLMUnavailableError, match="unreachable"):
