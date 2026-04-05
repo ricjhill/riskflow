@@ -461,10 +461,16 @@ class TestFileValidation:
 class TestFileValidationEdgeCases:
     """Boundary conditions for file validation."""
 
-    def test_rejects_empty_file(self) -> None:
-        """0-byte file with valid extension should be rejected (or at least not crash)."""
+    def test_empty_file_passes_validation_reaches_service(self) -> None:
+        """0-byte CSV passes _validate_file (valid extension, under size limit).
+        The service receives it and raises InvalidCedentDataError during parsing,
+        which the route maps to 400."""
+        from src.domain.model.errors import InvalidCedentDataError
+
         service = AsyncMock()
-        service.process_file.side_effect = Exception("should not reach service")
+        service.process_file.side_effect = InvalidCedentDataError(
+            "File is empty or contains no data"
+        )
         app = _create_test_app(service)
         client = TestClient(app)
 
@@ -473,10 +479,8 @@ class TestFileValidationEdgeCases:
             files={"file": ("empty.csv", io.BytesIO(b""), "text/csv")},
         )
 
-        # Empty file is technically valid extension — service will get it
-        # and fail during parsing, which maps to a domain error.
-        # The key assertion: no 500 crash from _validate_file itself.
-        assert response.status_code in (400, 422, 500)
+        assert response.status_code == 400
+        service.process_file.assert_called_once()
 
     def test_no_filename_uses_fallback(self) -> None:
         """File with no filename should use fallback extension detection."""
