@@ -158,6 +158,10 @@ class TestRowValidation:
         assert len(result.valid_records) == 1
         assert len(result.errors) == 1
         assert result.errors[0].row == 2
+        assert len(result.errors[0].field_errors) >= 1
+        currency_err = [fe for fe in result.errors[0].field_errors if fe.field == "Currency"]
+        assert len(currency_err) == 1
+        assert "DOLLARS" in (currency_err[0].value or "")
 
     @pytest.mark.asyncio
     async def test_negative_premium_captured_as_error(self, tmp_path: Path) -> None:

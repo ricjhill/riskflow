@@ -13,6 +13,7 @@ from src.domain.model.record_factory import build_record_model
 from src.domain.model.schema import (
     ColumnMapping,
     ConfidenceReport,
+    FieldError,
     MappingResult,
     ProcessingResult,
     RowError,
@@ -241,7 +242,20 @@ class MappingService:
                 valid_records.append(record.model_dump())
             except (ValidationError, ValueError) as e:
                 invalid_records.append(row)
-                errors.append(RowError(row=i + 1, error=str(e)))
+                field_errors: list[FieldError] = []
+                if isinstance(e, ValidationError):
+                    for err in e.errors():
+                        field = str(err["loc"][-1]) if err.get("loc") else "unknown"
+                        field_errors.append(
+                            FieldError(
+                                field=field,
+                                message=err["msg"],
+                                value=str(err.get("input"))
+                                if err.get("input") is not None
+                                else None,
+                            )
+                        )
+                errors.append(RowError(row=i + 1, error=str(e), field_errors=field_errors))
 
         return ProcessingResult(
             mapping=mapping,
