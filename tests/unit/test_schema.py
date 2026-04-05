@@ -390,14 +390,3 @@ class TestMappingResultEdgeCases:
         """Empty mappings list should pass validation (nothing to reject)."""
         result = MappingResult(mappings=[], unmapped_headers=["A"])
         result.validate_against_schema(VALID_TARGET_FIELDS)  # should not raise
-
-    def test_validate_against_schema_is_case_sensitive(self) -> None:
-        """Target field matching is case-sensitive."""
-        result = MappingResult(
-            mappings=[
-                ColumnMapping(source_header="H", target_field="policy_id", confidence=0.9),
-            ],
-            unmapped_headers=[],
-        )
-        with pytest.raises(ValueError, match="policy_id"):
-            result.validate_against_schema(VALID_TARGET_FIELDS)

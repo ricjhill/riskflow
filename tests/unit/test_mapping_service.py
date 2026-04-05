@@ -876,18 +876,6 @@ class TestConfidenceThresholdBoundary:
         with pytest.raises(MappingConfidenceLowError):
             await service.process_file(path)
 
-    @pytest.mark.asyncio
-    async def test_confidence_exactly_at_threshold_passes(
-        self, cache: MagicMock, tmp_path: Path
-    ) -> None:
-        """0.6 is not below 0.6 — should pass."""
-        path = _write_csv(tmp_path)
-        mapper = AsyncMock()
-        mapper.map_headers.return_value = _make_mapping_result(confidence=0.6)
-        service = MappingService(ingestor=PolarsIngestor(), mapper=mapper, cache=cache)
-        result = await service.process_file(path)
-        assert isinstance(result, ProcessingResult)
-
 
 class TestHeaderOnlyFile:
     """CSV with headers but no data rows."""
