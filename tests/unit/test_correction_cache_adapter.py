@@ -25,9 +25,7 @@ class TestNullCorrectionCache:
 
     def test_set_correction_is_noop(self) -> None:
         cache = NullCorrectionCache()
-        correction = Correction(
-            cedent_id="ABC", source_header="GWP", target_field="Gross_Premium"
-        )
+        correction = Correction(cedent_id="ABC", source_header="GWP", target_field="Gross_Premium")
         cache.set_correction(correction)  # should not raise
 
     def test_get_corrections_with_empty_headers(self) -> None:
@@ -130,28 +128,34 @@ class TestRedisCorrectionCacheGet:
 
         assert result == {}
 
+    def test_partial_match_returns_only_matched(self) -> None:
+        """3 headers provided, only 1 has a correction — return just that one."""
+        client = MagicMock()
+        client.hmget.return_value = [b"Policy_ID", None, None]
+        cache = RedisCorrectionCache(client=client)
+
+        result = cache.get_corrections("ABC", ["Policy No.", "Notes", "Extra"])
+
+        assert result == {"Policy No.": "Policy_ID"}
+        assert "Notes" not in result
+        assert "Extra" not in result
+
 
 class TestRedisCorrectionCacheSet:
     def test_writes_to_hash(self) -> None:
         client = MagicMock()
         cache = RedisCorrectionCache(client=client)
-        correction = Correction(
-            cedent_id="ABC", source_header="GWP", target_field="Gross_Premium"
-        )
+        correction = Correction(cedent_id="ABC", source_header="GWP", target_field="Gross_Premium")
 
         cache.set_correction(correction)
 
-        client.hset.assert_called_once_with(
-            "corrections:ABC", "GWP", "Gross_Premium"
-        )
+        client.hset.assert_called_once_with("corrections:ABC", "GWP", "Gross_Premium")
 
     def test_swallows_connection_error(self) -> None:
         client = MagicMock()
         client.hset.side_effect = redis.ConnectionError("down")
         cache = RedisCorrectionCache(client=client)
-        correction = Correction(
-            cedent_id="ABC", source_header="GWP", target_field="Gross_Premium"
-        )
+        correction = Correction(cedent_id="ABC", source_header="GWP", target_field="Gross_Premium")
 
         cache.set_correction(correction)  # should not raise
 
@@ -159,8 +163,6 @@ class TestRedisCorrectionCacheSet:
         client = MagicMock()
         client.hset.side_effect = redis.RedisError("unexpected")
         cache = RedisCorrectionCache(client=client)
-        correction = Correction(
-            cedent_id="ABC", source_header="GWP", target_field="Gross_Premium"
-        )
+        correction = Correction(cedent_id="ABC", source_header="GWP", target_field="Gross_Premium")
 
         cache.set_correction(correction)  # should not raise

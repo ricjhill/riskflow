@@ -249,3 +249,34 @@ class TestGetSheetNames:
     def test_raises_on_missing_file(self) -> None:
         with pytest.raises(FileNotFoundError):
             PolarsIngestor().get_sheet_names("/nonexistent/file.xlsx")
+
+
+class TestCorruptFiles:
+    """Corrupt or non-spreadsheet files with spreadsheet extensions."""
+
+    def test_corrupt_xlsx_raises_on_get_headers(self, tmp_path: Path) -> None:
+        """A .xlsx file with garbage content should raise, not crash."""
+        path = str(tmp_path / "corrupt.xlsx")
+        with open(path, "wb") as f:
+            f.write(b"this is not a real xlsx file")
+
+        with pytest.raises(Exception):
+            PolarsIngestor().get_headers(path)
+
+    def test_corrupt_xlsx_raises_on_get_sheet_names(self, tmp_path: Path) -> None:
+        """get_sheet_names on a corrupt .xlsx should raise, not crash."""
+        path = str(tmp_path / "corrupt.xlsx")
+        with open(path, "wb") as f:
+            f.write(b"not a zip archive")
+
+        with pytest.raises(Exception):
+            PolarsIngestor().get_sheet_names(path)
+
+    def test_corrupt_xlsx_raises_on_get_preview(self, tmp_path: Path) -> None:
+        """get_preview on a corrupt .xlsx should raise, not crash."""
+        path = str(tmp_path / "corrupt.xlsx")
+        with open(path, "wb") as f:
+            f.write(b"garbage data")
+
+        with pytest.raises(Exception):
+            PolarsIngestor().get_preview(path)
