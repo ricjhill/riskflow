@@ -14,7 +14,7 @@ class InvalidCedentDataError(RiskFlowError):
 
 
 class SchemaValidationError(RiskFlowError):
-    """Raised when a row fails RiskRecord validation."""
+    """Raised when a row fails record validation."""
 
 
 class SLMUnavailableError(RiskFlowError):
