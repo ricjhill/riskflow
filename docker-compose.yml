@@ -11,6 +11,8 @@ services:
     volumes:
       - .:/app
       - /app/.venv
+    networks:
+      - riskflow
   gui:
     build:
       context: .
@@ -23,7 +25,15 @@ services:
       - api
     volumes:
       - ./schemas:/app/schemas:ro
+    networks:
+      - riskflow
   redis:
     image: "redis:alpine"
     ports:
       - "6379:6379"
+    networks:
+      - riskflow
+
+networks:
+  riskflow:
+    name: riskflow
