@@ -19,6 +19,7 @@ import openai
 import structlog
 from fastapi import FastAPI
 
+from src.adapters.http.middleware import RequestIdMiddleware
 from src.adapters.http.routes import HealthResponse, create_router
 from src.adapters.parsers.ingestor import PolarsIngestor
 from src.adapters.parsers.schema_loader import YamlSchemaLoader
@@ -100,6 +101,7 @@ def create_app() -> FastAPI:
     logger = structlog.get_logger()
 
     app = FastAPI(title="RiskFlow API", version=_get_version())
+    app.add_middleware(RequestIdMiddleware)
 
     # --- Schemas ---
     schemas = _load_all_schemas()
