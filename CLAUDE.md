@@ -16,7 +16,7 @@ src/
   entrypoint/        # main.py — wires FastAPI, Groq, Redis, and schema loader
   domain/
     model/           # TargetSchema, FieldDefinition, record_factory, ColumnMapping,
-                     # MappingResult, ProcessingResult, ConfidenceReport, RiskRecord,
+                     # MappingResult, ProcessingResult, ConfidenceReport,
                      # Correction, Job, RowError, DateOrderingRule, SLMHint, errors,
                      # MappingSession (interactive mapping workflow),
                      # date_format (column-level date format detection and parsing)
@@ -28,7 +28,8 @@ src/
                      # MappingSessionStorePort, SchemaStorePort
   adapters/
     http/            # FastAPI routes (/upload, /upload/async, /jobs, /sheets,
-                     # /corrections, /schemas, /sessions)
+                     # /corrections, /schemas, /sessions),
+                     # RequestIdMiddleware (request-scoped structlog context)
     slm/             # Groq API implementation
     storage/         # Redis cache, Redis correction cache, in-memory job store,
                      # Redis session store, Redis schema store
