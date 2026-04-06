@@ -28,7 +28,8 @@ src/
                      # MappingSessionStorePort, SchemaStorePort
   adapters/
     http/            # FastAPI routes (/upload, /upload/async, /jobs, /sheets,
-                     # /corrections, /schemas, /sessions)
+                     # /corrections, /schemas, /sessions),
+                     # RequestIdMiddleware (request-scoped structlog context)
     slm/             # Groq API implementation
     storage/         # Redis cache, Redis correction cache, in-memory job store,
                      # Redis session store, Redis schema store
