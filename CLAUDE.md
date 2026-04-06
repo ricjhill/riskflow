@@ -16,7 +16,7 @@ src/
   entrypoint/        # main.py — wires FastAPI, Groq, Redis, and schema loader
   domain/
     model/           # TargetSchema, FieldDefinition, record_factory, ColumnMapping,
-                     # MappingResult, ProcessingResult, ConfidenceReport, RiskRecord,
+                     # MappingResult, ProcessingResult, ConfidenceReport,
                      # Correction, Job, RowError, DateOrderingRule, SLMHint, errors,
                      # MappingSession (interactive mapping workflow),
                      # date_format (column-level date format detection and parsing)
