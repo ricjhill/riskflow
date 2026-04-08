@@ -121,7 +121,7 @@ jobs:
         uses: dorny/test-reporter@v3
         with:
           name: Test Results
-          path: reports/*.xml
+          path: "reports/unit.xml,reports/integration.xml,reports/contract.xml,reports/benchmark.xml,reports/load.xml"
           reporter: java-junit
 
   boot-test:
