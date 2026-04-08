@@ -1,4 +1,4 @@
-# Test Coverage Measurement and Tracking
+# Test Coverage Tracking, Cross-Repo Parity & Housekeeping
 
 **RiskFlow Engineering Session — 8 April 2026**
 
@@ -10,27 +10,42 @@
 |---|---------|------|
 | 1 | What We Did | 3 min |
 | 2 | Why Coverage Tracking | 3 min |
-| 3 | The Coverage Tool | 5 min |
+| 3 | The Coverage Tool (riskflow) | 5 min |
 | 4 | Pre-commit Hook Integration | 3 min |
 | 5 | CI Integration & PR Comments | 5 min |
 | 6 | The CI Fix: Cobertura vs JUnit | 3 min |
-| 7 | By the Numbers | 3 min |
-| 8 | What's Next | 2 min |
+| 7 | Coverage Parity: riskflow-ui | 4 min |
+| 8 | PR Template: Tested-at Version | 2 min |
+| 9 | Session Presentation Update | 2 min |
+| 10 | By the Numbers | 3 min |
+| 11 | What's Next | 2 min |
 
 ---
 
 ## 1. What We Did (3 min)
 
-One PR, two commits, one GitHub issue:
+Four PRs merged across two repos, two GitHub issues created:
+
+**riskflow:**
 
 | PR/Issue | Title | Theme |
 |----------|-------|-------|
 | #127 | Add test coverage measurement and tracking | Issue (plan) |
-| #128 | Add test coverage measurement and tracking | PR |
+| #128 | Add test coverage measurement and tracking | Coverage |
+| #129 | Add tested version info to PR template | Issue (plan) |
+| #130 | Add tested-at version and SHA to PR template | PR template |
 
-Starting point: 729+ unit tests but no way to know which lines they cover, no coverage trends, no coverage data in PRs.
+**riskflow-ui:**
 
-Ending point: pytest-cov integrated, a reporting tool with 22 tests, coverage in pre-commit hook output, CI step summary, and sticky PR comments. Initial baseline: 96.5%.
+| PR/Issue | Title | Theme |
+|----------|-------|-------|
+| #50 | Code coverage gating with vitest | Issue (existing) |
+| #81 | Add vitest code coverage with V8 provider | Coverage |
+| #80 | Auto-invoke issue-lifecycle agent from /create-pr | Merge (rebase fix) |
+
+Starting point: no coverage measurement in either repo, no version tracking in PRs, session presentation missing 4 PRs.
+
+Ending point: both repos have coverage measurement with CI integration and sticky PR comments, PR template includes tested-at version/SHA, session presentation fully up to date.
 
 ---
 
@@ -236,7 +251,82 @@ Coverage XML is still uploaded as an artifact (the `upload-artifact` step uses `
 
 ---
 
-## 7. By the Numbers (3 min)
+## 7. Coverage Parity: riskflow-ui (4 min)
+
+### Why parity matters
+
+Having coverage in the backend but not the frontend creates a blind spot. Reviewers can assess backend test quality from the PR comment but have to guess for the frontend.
+
+### What we added (PR riskflow-ui#81)
+
+Installed `@vitest/coverage-v8` and configured coverage in `vite.config.ts`:
+
+```typescript
+coverage: {
+  provider: 'v8',
+  include: ['src/**/*.{ts,tsx}'],
+  exclude: ['src/test/**', 'src/types/**', '**/*.test.{ts,tsx}', '**/*.d.ts'],
+  reporter: ['text', 'json-summary', 'lcov'],
+  reportsDirectory: 'reports/coverage',
+}
+```
+
+CI changes mirror riskflow's pattern:
+- Tests run with `--coverage` flag
+- Coverage summary written to `$GITHUB_STEP_SUMMARY`
+- Sticky PR comment via `actions/github-script@v7` with `<!-- coverage-report -->` marker
+- `reports/unit.xml` explicitly listed for JUnit reporter (learned from riskflow's Cobertura fix)
+
+### Bonus: Vite security fix
+
+The `npm audit` step caught 3 high-severity CVEs in vite 8.0.4 (path traversal, fs.deny bypass, arbitrary file read via WebSocket). Fixed by upgrading to 8.0.7 in the same PR.
+
+### Initial baseline
+
+```
+Statements  89.8%
+Branches    80.2%
+Functions   89.7%
+Lines       92.4%
+```
+
+---
+
+## 8. PR Template: Tested-at Version (2 min)
+
+### The problem
+
+PRs show test results but not which commit they ran against. If a PR is rebased after tests ran, the reported results may be stale with no way to tell.
+
+### The solution (PR #130)
+
+Two lines added to `.claude/skills/create-pr/SKILL.md`:
+
+1. **Phase 1 step 9:** Gather git SHA and riskflow version
+2. **Phase 4 Checks table:** New `tested at` row showing `v0.1.0 (cef765b)`
+
+No new tools, tests, or dependencies — just a template change. Reviewers can now compare the SHA in the PR against the branch HEAD to verify freshness.
+
+---
+
+## 9. Session Presentation Update (2 min)
+
+The 2026-04-06 presentation was missing coverage of 4 PRs that landed the same day but after the presentation was committed:
+
+| PR | What was missing |
+|----|-----------------|
+| #121 | Structured row errors (`FieldError` model) |
+| #123 | 11 medium-priority test gaps filled |
+| #125 | `RequestIdMiddleware` with structlog contextvars |
+| #126 | CLAUDE.md architecture tree cleanup |
+
+Updated the presentation with new sections, corrected test counts (729 not 716), and revised the "What's Next" section.
+
+---
+
+## 10. By the Numbers (3 min)
+
+### riskflow
 
 | Metric | Before | After | Delta |
 |--------|--------|-------|-------|
@@ -245,18 +335,20 @@ Coverage XML is still uploaded as an artifact (the `upload-artifact` step uses `
 | Coverage in PRs | none | sticky comment | — |
 | Coverage in CI | none | step summary + artifacts | — |
 | Coverage in pre-commit | none | TOTAL line echo | — |
-| Files created | — | 3 | — |
-| Files modified | — | 7 | — |
+| PR version tracking | none | tested-at row | — |
+| PRs merged | — | 2 (#128, #130) | — |
 
-### New files
+### riskflow-ui
 
-```
-tools/coverage_report.py         — 241 lines
-tests/unit/test_coverage_report.py — 310 lines
-coverage-baseline.json           — 11 lines
-```
+| Metric | Before | After | Delta |
+|--------|--------|-------|-------|
+| Coverage measurement | none | 89.8% stmts | — |
+| Coverage in PRs | none | sticky comment | — |
+| Coverage in CI | none | step summary + artifacts | — |
+| Vite CVEs | 3 high | 0 | -3 |
+| PRs merged | — | 2 (#80, #81) | — |
 
-### Coverage by module
+### Coverage by module (riskflow)
 
 ```
 adapters     97.5%   579/594
@@ -269,24 +361,21 @@ TOTAL        96.5%  1277/1324
 
 ---
 
-## 8. What's Next (2 min)
-
-### Immediate
-- Monitor CI run on PR #128 to confirm the Cobertura/JUnit fix works
-- Merge once CI is green
+## 11. What's Next (2 min)
 
 ### Short-term
-- Add `--cov-fail-under` threshold once baseline is stable (ratchet enforcement)
-- Extend coverage to integration tests (separate `--cov-append` step or combined run)
-- Add per-file coverage to PR comments (not just per-module)
+- Add `--cov-fail-under` threshold to both repos once baselines are stable
+- Add vitest coverage thresholds to riskflow-ui (`thresholds` config in vite.config.ts)
+- Extend riskflow coverage to integration tests
 
 ### Medium-term
 - Coverage trend tracking across PRs (store historical baselines)
 - Coverage annotations in GitHub (map uncovered lines to PR diff)
 - Wire `tools/` directory into mypy strict checking in CI
+- riskflow-ui backlog: dependency audit hook (#51), consolidated security checks (#64)
 
 ---
 
 ## Key Takeaway
 
-> You can't improve what you don't measure. 729 tests sounded impressive, but without coverage data we couldn't tell if they were testing the right things. Now every commit shows the TOTAL line, every PR gets a coverage comment, and every CI run records exactly which lines are — and aren't — tested.
+> You can't improve what you don't measure — and you can't measure consistently if only half your stack is instrumented. This session brought coverage parity across both repos, gave PRs version traceability, and caught 3 high-severity CVEs along the way. Every commit, every PR, and every CI run now answers: what's tested, how well, and against which code.
