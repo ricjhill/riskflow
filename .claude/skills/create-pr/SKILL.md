@@ -17,6 +17,7 @@ Create a PR for the current branch. The code-reviewer agent must approve before 
 6. Run `uv run ruff check src/ 2>&1 | tail -1` for ruff status
 7. Run `uv run ruff format --check src/ 2>&1 | tail -1` for format status
 8. Run `uv run python -m tools.coverage_report --no-run` for coverage summary
+9. Run `git rev-parse --short HEAD` for commit SHA and `grep '^version' pyproject.toml` for riskflow version
 
 ### Phase 2: Draft PR body
 
@@ -70,6 +71,7 @@ gh pr create --base main --title "<short title under 70 chars>" --body "$(cat <<
 | ruff check | <clean or errors> |
 | ruff format | <clean or errors> |
 | coverage | <total%> (<delta> vs baseline) |
+| tested at | v<version> (<sha>) |
 
 ## Known limitations
 
