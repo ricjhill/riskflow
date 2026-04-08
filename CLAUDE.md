@@ -49,6 +49,7 @@ tools/
   export_openapi.py    # Export OpenAPI spec to openapi.json (no Redis/Groq needed)
   check_api_changes.py # Detect breaking vs non-breaking changes between two OpenAPI specs
   bump_version.py      # Semantic version bumping based on API change classification
+  coverage_report.py   # Coverage measurement, baseline comparison, PR reporting
   hexagonal_linter.py  # AST-based architecture boundary checker
 openapi.json           # Committed OpenAPI 3.1 spec — CI-enforced, auto-versioned
 gui/

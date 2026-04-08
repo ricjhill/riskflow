@@ -1,4 +1,4 @@
-# Migration Cleanup, Test Coverage Audit & Docker Networking
+# Migration Cleanup, Test Coverage, Structured Errors & Observability
 
 **RiskFlow Engineering Session — 6 April 2026**
 
@@ -10,29 +10,35 @@
 |---|---------|------|
 | 1 | What We Did | 3 min |
 | 2 | RiskRecord Removal: Why Now | 5 min |
-| 3 | Test Coverage Audit | 5 min |
-| 4 | Filling the Gaps: 20 New Tests | 5 min |
-| 5 | Docker Port Conflict Fix | 5 min |
-| 6 | Process Improvement: Merge Gate | 3 min |
-| 7 | By the Numbers | 3 min |
-| 8 | What's Next | 2 min |
+| 3 | Structured Row Errors | 4 min |
+| 4 | Test Coverage Audit | 5 min |
+| 5 | Filling the Gaps: 31 New Tests | 5 min |
+| 6 | Request ID Middleware | 4 min |
+| 7 | Docker Port Conflict Fix | 5 min |
+| 8 | Process Improvement: Merge Gate | 3 min |
+| 9 | By the Numbers | 3 min |
+| 10 | What's Next | 2 min |
 
 ---
 
 ## 1. What We Did (3 min)
 
-Three PRs merged, one issue created:
+Seven PRs merged, one issue created:
 
 | PR/Issue | Title | Theme |
 |----------|-------|-------|
 | #115 | Remove hardcoded RiskRecord class | Cleanup |
 | #119 | Add 20 tests filling high-priority coverage gaps | Quality |
+| #121 | Return structured per-field validation errors in RowError | Feature |
 | #122 | Add named Docker network for cross-stack connectivity | Infrastructure |
+| #123 | Add 11 tests filling medium-priority coverage gaps | Quality |
+| #125 | Inject request_id via structlog contextvars middleware | Observability |
+| #126 | Update CLAUDE.md architecture tree | Cleanup |
 | #120 | Fix Docker port conflict between riskflow and riskflow-ui | Issue (open) |
 
-Starting point: migration scaffolding cluttering the codebase, untested edge cases, and Docker port conflicts blocking simultaneous development.
+Starting point: migration scaffolding cluttering the codebase, untested edge cases, opaque validation errors, no request correlation, and Docker port conflicts blocking simultaneous development.
 
-Ending point: zero dead code from the schema migration, 20 new boundary/edge-case tests, and infrastructure ready for cross-repo Docker networking.
+Ending point: zero dead code from the schema migration, 31 new boundary/edge-case tests, structured per-field validation errors, request-scoped log correlation, and infrastructure ready for cross-repo Docker networking.
 
 ---
 
@@ -68,7 +74,36 @@ The one dropped test (`test_valid_currencies_constant`) asserted a test-local va
 
 ---
 
-## 3. Test Coverage Audit (5 min)
+## 3. Structured Row Errors (4 min)
+
+### The problem
+
+When `_validate_rows` rejected a record, the API returned a flat error string per row — e.g. `"3 validation errors for DynamicRecord"`. The client had no way to tell *which* fields failed, *what* was wrong, or *what* value caused the failure without parsing Pydantic's string representation.
+
+### The solution (PR #121)
+
+New `FieldError` model in `src/domain/model/schema.py`:
+
+```python
+class FieldError(BaseModel):
+    field: str       # e.g. "inception_date"
+    message: str     # e.g. "Input should be a valid date"
+    value: str | None = None  # e.g. "not-a-date"
+```
+
+`RowError` gained a `field_errors: list[FieldError]` field (default `[]` — backwards compatible).
+
+`MappingService._validate_rows` now extracts per-field errors from Pydantic's `ValidationError.errors()`, mapping each `loc`, `msg`, and `input` to a `FieldError`. The flat `error` string is preserved for human-readable display; `field_errors` gives machines structured access.
+
+### Why this matters
+
+- **GUI:** The Flow Mapper can now highlight the specific cell that failed, not just the row.
+- **Corrections:** A future auto-correction pipeline can target the exact field.
+- **Debugging:** Operators see the offending value, not just "validation error".
+
+---
+
+## 4. Test Coverage Audit (5 min)
 
 ### Methodology
 
@@ -92,7 +127,7 @@ Total: ~30-40 specific test cases missing across the codebase.
 
 ---
 
-## 4. Filling the Gaps: 20 New Tests (5 min)
+## 5. Filling the Gaps: 31 New Tests (5 min)
 
 ### Domain models (`test_schema.py`, +3 tests)
 
@@ -140,11 +175,95 @@ The code-reviewer agent flagged:
 - `test_confidence_exactly_at_threshold_passes` — duplicated existing `test_accepts_confidence_at_threshold`
 - `test_validate_against_schema_is_case_sensitive` — duplicated existing parametrized `"gross_premium"` case
 
-Both removed before merge. Final count: 20 net new tests.
+Both removed before merge. First-round count: 20 net new tests.
+
+### Round 2: Medium-priority gaps (PR #123, +11 tests)
+
+**SLM adapter** (`test_slm_adapter.py`, +4 tests):
+
+```
+Empty choices list in response      → SLMUnavailableError
+Invalid confidence (1.5) in response → parse error
+Schema with no SLM hints            → "No known aliases" in prompt
+Custom schema field names            → appear in system prompt
+```
+
+**Correction cache** (`test_correction_cache_adapter.py`, +1 test):
+
+```
+Partial header match (3 headers, 1 corrected) → only matched header returned
+```
+
+**HTTP routes** (`test_http_adapter.py`, +3 tests):
+
+```
+Empty file (0 bytes) with valid extension → 400 (InvalidCedentDataError)
+Empty filename                            → rejected (400/422)
+File at exact 10MB size limit             → accepted (boundary value)
+```
+
+**Ingestor** (`test_ingestor_adapter.py`, +3 tests):
+
+```
+Corrupt .xlsx (garbage bytes) → raises on get_headers
+Corrupt .xlsx                 → raises on get_sheet_names
+Corrupt .xlsx                 → raises on get_preview
+```
+
+Code-reviewer agent tightened assertions: exact status codes instead of broad ranges, `match=` patterns on `pytest.raises`, and a shared `corrupt_xlsx` fixture.
+
+Combined total: **31 net new tests** across both rounds.
 
 ---
 
-## 5. Docker Port Conflict Fix (5 min)
+## 6. Request ID Middleware (4 min)
+
+### The problem
+
+The structlog pipeline in `main.py` already included `merge_contextvars` as a processor, but nothing was binding a `request_id` into the context. Every log event during a request was untagged — there was no way to correlate log lines from the same API call.
+
+### The solution (PR #125)
+
+New `RequestIdMiddleware` in `src/adapters/http/middleware.py`:
+
+```python
+class RequestIdMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        request_id = str(uuid.uuid4())
+        structlog.contextvars.bind_contextvars(request_id=request_id)
+        try:
+            response = await call_next(request)
+            response.headers["X-Request-ID"] = request_id
+            return response
+        finally:
+            structlog.contextvars.clear_contextvars()
+```
+
+Three things happen per request:
+1. **Bind** — UUID4 is bound to structlog contextvars, so every log call during the request includes `request_id` automatically.
+2. **Header** — The same ID is returned as `X-Request-ID` in the response, so clients can quote it in bug reports.
+3. **Cleanup** — `clear_contextvars()` in `finally` prevents context leaking between requests.
+
+### Dependency fix
+
+`starlette` was added as an explicit runtime dependency. It was already installed transitively via FastAPI, but the middleware imports `BaseHTTPMiddleware` and `RequestResponseEndpoint` directly from `starlette` — the import must be backed by a declared dependency.
+
+### Tests (6 integration tests)
+
+Tests were initially written as unit tests but the code-reviewer agent correctly reclassified them as integration tests (they construct the full app via `create_app()` and drive HTTP requests through `TestClient`):
+
+```
+request_id present in log events    → structlog capture confirms
+request_id is valid UUID4           → uuid.UUID(id, version=4)
+request_id consistent within request → all log events share same ID
+request_id unique across requests   → two requests produce different IDs
+context cleared after response      → no leaking between requests
+X-Request-ID in response header     → matches log-bound ID
+```
+
+---
+
+## 7. Docker Port Conflict Fix (5 min)
 
 ### The problem
 
@@ -176,7 +295,7 @@ riskflow stack                    riskflow-ui stack
 
 ---
 
-## 6. Process Improvement: Merge Gate (3 min)
+## 8. Process Improvement: Merge Gate (3 min)
 
 ### What happened
 
@@ -200,16 +319,19 @@ This is now saved in feedback memory so future sessions follow the same rule.
 
 ---
 
-## 7. By the Numbers (3 min)
+## 9. By the Numbers (3 min)
 
 | Metric | Before | After | Delta |
 |--------|--------|-------|-------|
-| Unit tests | 743 | 716 | -27 (scaffolding removed, gaps filled) |
+| Unit tests | 743 | 729 | -14 (scaffolding removed, gaps filled) |
 | Lines of dead code | 960 | 0 | -960 |
 | RiskRecord references in src/ | 3 | 0 | -3 |
 | Test coverage gaps (high priority) | 4 | 0 | -4 |
+| Test coverage gaps (medium priority) | 12 | 1 | -11 |
 | Docker port conflicts | 2 | 0 | -2 |
-| PRs merged | — | 3 | — |
+| Request correlation | none | per-request UUID4 | — |
+| Validation error granularity | per-row | per-field | — |
+| PRs merged | — | 7 | — |
 | Issues created | — | 1 | — |
 
 ### Test count breakdown
@@ -217,28 +339,30 @@ This is now saved in feedback memory so future sessions follow the same rule.
 ```
 743  (start of session)
 -47  (migration scaffolding removed, PR #115)
-+20  (coverage gaps filled, PR #119)
++20  (high-priority coverage gaps, PR #119)
+ +2  (row validation with field errors, PR #121)
++11  (medium-priority coverage gaps, PR #123)
 ───
-716  (end of session)
+729  (end of session)
 ```
 
-The count went down because we removed tests that tested nothing useful (comparing a model against itself). The remaining 716 tests have higher coverage quality than the original 743.
+The count went down net because we removed 47 tests that tested nothing useful (comparing a model against itself). The remaining 729 tests have higher coverage quality than the original 743. An additional 6 integration tests (request ID middleware, PR #125) are not counted in the unit test total.
 
 ---
 
-## 8. What's Next (2 min)
+## 10. What's Next (2 min)
 
 ### Immediate (riskflow-ui)
 - Complete issue #120: strip duplicate Docker services from riskflow-ui, use external network
 - Wire `openapi-typescript` to auto-generate TypeScript types from committed spec (Step 2 of OpenAPI sync)
 
 ### Medium-term (riskflow)
-- ~10-20 medium/low-priority test gaps remain (SLM prompt edge cases, Redis adapter boundaries, HTTP route file validation)
-- Interactive mapping sessions — richer multi-step workflow
-- Observability — request timing, SLM latency, mapping success rate metrics
+- ~5-10 low-priority test gaps remain (Redis adapter boundaries, session deduplication edge cases)
+- Observability — request timing, SLM latency, mapping success rate metrics (request_id middleware is the foundation)
+- Auto-correction pipeline — leverage structured `FieldError` data to suggest fixes for common validation failures
 
 ---
 
 ## Key Takeaway
 
-> Cleaning up after a migration is as important as the migration itself. Dead code confuses future readers, migration scaffolding obscures real test coverage, and port conflicts block development. Today's session was about **finishing what we started**.
+> Cleaning up after a migration is as important as the migration itself. Dead code confuses future readers, migration scaffolding obscures real test coverage, and opaque errors slow debugging. Today's session was about **finishing what we started** — removing dead code, filling test gaps, structuring error output, and wiring observability so every request is traceable end-to-end.

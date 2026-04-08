@@ -12,6 +12,7 @@ jobs:
     permissions:
       contents: read
       checks: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v6
 
@@ -27,7 +28,13 @@ jobs:
         run: uv sync --frozen
 
       - name: Run unit tests
-        run: uv run pytest -x -v tests/unit/ --junitxml=reports/unit.xml
+        run: >-
+          uv run pytest -x -v tests/unit/
+          --junitxml=reports/unit.xml
+          --cov=src
+          --cov-report=xml:reports/coverage.xml
+          --cov-report=json:reports/coverage.json
+          --cov-report=term-missing
 
       - name: Run integration tests
         run: uv run pytest -x -v tests/integration/ --junitxml=reports/integration.xml
@@ -60,6 +67,47 @@ jobs:
           diff openapi.json openapi.generated.json || (echo "openapi.json is stale — run: uv run python -m tools.export_openapi" && exit 1)
           rm openapi.generated.json
 
+      - name: Coverage summary
+        if: always() && hashFiles('reports/coverage.json') != ''
+        run: uv run python -m tools.coverage_report --no-run >> $GITHUB_STEP_SUMMARY
+
+      - name: Comment coverage on PR
+        if: github.event_name == 'pull_request' && hashFiles('reports/coverage.json') != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { execSync } = require('child_process');
+            const mdBody = execSync(
+              'uv run python -m tools.coverage_report --no-run --markdown',
+              { encoding: 'utf-8', cwd: process.cwd() }
+            ).trim();
+
+            const marker = '<!-- coverage-report -->';
+            const body = marker + '\n' + mdBody + '\n\n_Updated by CI on every push._';
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body.includes(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body: body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body,
+              });
+            }
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v7
@@ -73,7 +121,7 @@ jobs:
         uses: dorny/test-reporter@v3
         with:
           name: Test Results
-          path: reports/*.xml
+          path: "reports/unit.xml,reports/integration.xml,reports/contract.xml,reports/benchmark.xml,reports/load.xml"
           reporter: java-junit
 
   boot-test:

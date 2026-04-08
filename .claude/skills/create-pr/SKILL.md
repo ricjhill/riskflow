@@ -16,6 +16,7 @@ Create a PR for the current branch. The code-reviewer agent must approve before 
 5. Run `uv run mypy src/ 2>&1 | tail -1` for mypy status
 6. Run `uv run ruff check src/ 2>&1 | tail -1` for ruff status
 7. Run `uv run ruff format --check src/ 2>&1 | tail -1` for format status
+8. Run `uv run python -m tools.coverage_report --no-run` for coverage summary
 
 ### Phase 2: Draft PR body
 
@@ -68,6 +69,7 @@ gh pr create --base main --title "<short title under 70 chars>" --body "$(cat <<
 | mypy | <clean or errors> |
 | ruff check | <clean or errors> |
 | ruff format | <clean or errors> |
+| coverage | <total%> (<delta> vs baseline) |
 
 ## Known limitations
 

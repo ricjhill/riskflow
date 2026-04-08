@@ -18,9 +18,9 @@ if [ $? -ne 0 ]; then
 fi
 
 # 2. pytest
-OUTPUT=$(uv run pytest -x -v tests/unit/ 2>&1)
+PYTEST_OUTPUT=$(uv run pytest -x -v tests/unit/ --cov=src --cov-report=term-missing 2>&1)
 if [ $? -ne 0 ]; then
-  ERRORS+="pytest failed:\n$OUTPUT\n\n"
+  ERRORS+="pytest failed:\n$PYTEST_OUTPUT\n\n"
 fi
 
 # 3. ruff check
@@ -39,6 +39,12 @@ if [ -n "$ERRORS" ]; then
   echo -e "$ERRORS" >&2
   echo "Fix the above before committing." >&2
   exit 2
+fi
+
+# Show coverage summary (non-blocking, informational only)
+COV_LINE=$(echo "$PYTEST_OUTPUT" | grep "^TOTAL" | head -1)
+if [ -n "$COV_LINE" ]; then
+  echo "Coverage: $COV_LINE" >&2
 fi
 
 exit 0

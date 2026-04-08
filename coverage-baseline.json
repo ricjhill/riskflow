@@ -1,0 +1,11 @@
+{
+  "total_pct": 96.45,
+  "total_covered": 1277,
+  "total_statements": 1324,
+  "modules": {
+    "adapters": 97.47,
+    "domain": 97.18,
+    "entrypoint": 87.88,
+    "ports": 100.0
+  }
+}
