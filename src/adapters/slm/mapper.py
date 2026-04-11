@@ -77,7 +77,7 @@ class GroqMapper:
         user_message = self._build_user_message(source_headers, preview_rows)
 
         try:
-            start = time.perf_counter()
+            start = time.monotonic()
             response = await self._client.chat.completions.create(
                 model=self._model,
                 messages=[
@@ -86,7 +86,7 @@ class GroqMapper:
                 ],
                 response_format={"type": "json_object"},
             )
-            duration_ms = int((time.perf_counter() - start) * 1000)
+            duration_ms = int((time.monotonic() - start) * 1000)
         except Exception as e:
             raise SLMUnavailableError(str(e)) from e
 

@@ -119,9 +119,9 @@ class MappingService:
 
         cache_key = self._build_cache_key(headers)
 
-        start = time.perf_counter()
+        start = time.monotonic()
         cached = self._cache.get_mapping(cache_key)
-        duration_ms = int((time.perf_counter() - start) * 1000)
+        duration_ms = int((time.monotonic() - start) * 1000)
         if cached is not None:
             self._logger.info(
                 "cache_lookup", result="hit", cache_key=cache_key, duration_ms=duration_ms
