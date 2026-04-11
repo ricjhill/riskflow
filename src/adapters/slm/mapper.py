@@ -10,8 +10,10 @@ dynamically from the TargetSchema:
 """
 
 import json
+import time
 
 import openai
+import structlog
 
 from src.domain.model.errors import SLMUnavailableError
 from src.domain.model.schema import MappingResult
@@ -64,6 +66,7 @@ class GroqMapper:
         self._model = model
         self._schema = schema or DEFAULT_TARGET_SCHEMA
         self._system_prompt = _build_system_prompt(self._schema)
+        self._logger = structlog.get_logger()
 
     async def map_headers(
         self,
@@ -74,6 +77,7 @@ class GroqMapper:
         user_message = self._build_user_message(source_headers, preview_rows)
 
         try:
+            start = time.perf_counter()
             response = await self._client.chat.completions.create(
                 model=self._model,
                 messages=[
@@ -82,8 +86,16 @@ class GroqMapper:
                 ],
                 response_format={"type": "json_object"},
             )
+            duration_ms = int((time.perf_counter() - start) * 1000)
         except Exception as e:
             raise SLMUnavailableError(str(e)) from e
+
+        self._logger.info(
+            "slm_call",
+            duration_ms=duration_ms,
+            model=self._model,
+            headers_count=len(source_headers),
+        )
 
         return self._parse_response(response)
 

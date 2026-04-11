@@ -1,6 +1,7 @@
 """Orchestrates spreadsheet mapping: ingest, cache, SLM map, validate rows."""
 
 import hashlib
+import time
 
 import polars as pl
 import structlog
@@ -118,12 +119,18 @@ class MappingService:
 
         cache_key = self._build_cache_key(headers)
 
+        start = time.perf_counter()
         cached = self._cache.get_mapping(cache_key)
+        duration_ms = int((time.perf_counter() - start) * 1000)
         if cached is not None:
-            self._logger.info("cache_lookup", result="hit", cache_key=cache_key)
+            self._logger.info(
+                "cache_lookup", result="hit", cache_key=cache_key, duration_ms=duration_ms
+            )
             mapping = cached
         else:
-            self._logger.info("cache_lookup", result="miss", cache_key=cache_key)
+            self._logger.info(
+                "cache_lookup", result="miss", cache_key=cache_key, duration_ms=duration_ms
+            )
             mapping = await self._map_with_corrections(headers, preview, cedent_id)
             self._cache.set_mapping(cache_key, mapping)
 
