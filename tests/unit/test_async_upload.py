@@ -5,10 +5,14 @@ GET /jobs/{job_id} → returns job status and result when complete
 GET /jobs → list all jobs with filename and upload date
 """
 
+import asyncio
 import datetime
 import io
+import time
 from unittest.mock import AsyncMock
 
+import httpx
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -304,3 +308,61 @@ class TestAsyncBackend:
         )
         assert response.status_code == 202
         assert "job_id" in response.json()
+
+    @pytest.mark.asyncio
+    async def test_concurrent_uploads_overlap(self) -> None:
+        """Prove create_task runs uploads concurrently, not serially.
+
+        Two uploads each sleep 0.1s in the mock service. If serial,
+        total time >= 0.2s. If concurrent, both overlap and total < 0.2s.
+        We assert overlap by recording start/end times per task.
+        """
+        timestamps: list[tuple[str, float, float]] = []
+
+        async def slow_process_file(
+            file_path: str, *, sheet_name: str | None = None, cedent_id: str | None = None
+        ) -> AsyncMock:
+            start = time.monotonic()
+            await asyncio.sleep(0.1)
+            end = time.monotonic()
+            timestamps.append((file_path, start, end))
+            # Return a minimal ProcessingResult-like mock
+            mock_result = AsyncMock()
+            mock_result.model_dump.return_value = {"mapping": {}, "valid_records": []}
+            return mock_result
+
+        service = AsyncMock()
+        service.process_file.side_effect = slow_process_file
+
+        app = _create_test_app(service, async_backend="tasks")
+
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            # Fire two uploads concurrently
+            task_a = asyncio.create_task(
+                client.post(
+                    "/upload/async",
+                    files={"file": ("a.csv", b"ID\n1\n", "text/csv")},
+                )
+            )
+            task_b = asyncio.create_task(
+                client.post(
+                    "/upload/async",
+                    files={"file": ("b.csv", b"ID\n2\n", "text/csv")},
+                )
+            )
+            resp_a, resp_b = await asyncio.gather(task_a, task_b)
+
+        assert resp_a.status_code == 202
+        assert resp_b.status_code == 202
+
+        # Wait for background tasks to complete
+        await asyncio.sleep(0.3)
+
+        # Prove overlap: task A started before task B ended, and vice versa
+        assert len(timestamps) == 2
+        (_, start_a, end_a) = timestamps[0]
+        (_, start_b, end_b) = timestamps[1]
+        assert start_a < end_b, "Task A should start before task B ends (overlap)"
+        assert start_b < end_a, "Task B should start before task A ends (overlap)"
