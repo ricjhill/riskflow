@@ -29,7 +29,7 @@ from src.adapters.storage.correction_cache import (
     NullCorrectionCache,
     RedisCorrectionCache,
 )
-from src.adapters.storage.job_store import InMemoryJobStore
+from src.adapters.storage.job_store import InMemoryJobStore, RedisJobStore
 from src.domain.model.target_schema import TargetSchema
 from src.domain.service.mapping_service import MappingService
 from src.ports.output.correction_cache import CorrectionCachePort
@@ -132,12 +132,7 @@ def create_app() -> FastAPI:
     correction_cache = _create_correction_cache(redis_client)
     groq_client = _create_groq_client()
 
-    logger.info(
-        "app_configured",
-        cache_type=type(cache).__name__,
-        correction_cache_type=type(correction_cache).__name__,
-        schema_count=len(schemas),
-    )
+    # app_configured is logged after all components are created (see below)
 
     # --- Build a MappingService per schema ---
     # Each schema gets its own GroqMapper so the SLM prompt is
@@ -198,7 +193,19 @@ def create_app() -> FastAPI:
         )
 
     # --- Job store for async uploads ---
-    job_store = InMemoryJobStore()
+    job_store_type = os.environ.get("JOB_STORE", "redis")
+    if job_store_type == "redis" and redis_client:
+        job_store: InMemoryJobStore | RedisJobStore = RedisJobStore(client=redis_client)
+    else:
+        job_store = InMemoryJobStore()
+
+    logger.info(
+        "app_configured",
+        cache_type=type(cache).__name__,
+        correction_cache_type=type(correction_cache).__name__,
+        schema_count=len(schemas),
+        job_store_type=type(job_store).__name__,
+    )
 
     # --- Session store for interactive mapping ---
     session_store = _create_session_store(redis_client)

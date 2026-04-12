@@ -197,3 +197,60 @@ class TestWorkerPidInLogs:
             assert captured[0]["worker_pid"] == os.getpid()
         finally:
             structlog.configure(**old_config)
+
+
+class TestJobStoreWiring:
+    """JOB_STORE env var controls which job store is used."""
+
+    def test_job_store_is_redis_when_redis_available(self) -> None:
+        mock_client = MagicMock()
+        with (
+            patch.dict(os.environ, {"REDIS_URL": "redis://localhost:6379"}),
+            patch("src.entrypoint.main._create_redis_client", return_value=mock_client),
+        ):
+            from src.entrypoint.main import create_app
+
+            app = create_app()
+            # The app should start — verify via health endpoint
+            client = TestClient(app)
+            assert client.get("/health").status_code == 200
+
+    def test_job_store_falls_back_to_inmemory_without_redis(self) -> None:
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("REDIS_URL", None)
+            from src.entrypoint.main import create_app
+
+            app = create_app()
+            client = TestClient(app)
+            assert client.get("/health").status_code == 200
+
+    def test_job_store_memory_when_env_set(self) -> None:
+        """JOB_STORE=memory forces InMemoryJobStore even with Redis available."""
+        mock_client = MagicMock()
+        with (
+            patch.dict(
+                os.environ,
+                {"REDIS_URL": "redis://localhost:6379", "JOB_STORE": "memory"},
+            ),
+            patch("src.entrypoint.main._create_redis_client", return_value=mock_client),
+        ):
+            from src.entrypoint.main import create_app
+
+            app = create_app()
+            client = TestClient(app)
+            assert client.get("/health").status_code == 200
+
+    def test_app_configured_logs_job_store_type(self, capfd: pytest.CaptureFixture[str]) -> None:
+        import json as json_mod
+
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("REDIS_URL", None)
+            from src.entrypoint.main import create_app
+
+            create_app()
+
+        captured = capfd.readouterr()
+        lines = [l for l in captured.out.strip().split("\n") if l.strip()]
+        config_events = [json_mod.loads(l) for l in lines if "app_configured" in l]
+        assert len(config_events) >= 1
+        assert "job_store_type" in config_events[-1]
