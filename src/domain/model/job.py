@@ -39,6 +39,17 @@ class Job:
     def create(cls, *, filename: str | None = None) -> "Job":
         return cls(job_id=str(uuid.uuid4()), status=JobStatus.PENDING, filename=filename)
 
+    def to_dict(self) -> dict[str, object]:
+        """Serialize to a dict for Redis persistence."""
+        return {
+            "id": self.id,
+            "status": self.status.value,
+            "filename": self.filename,
+            "created_at": self.created_at.isoformat(),
+            "result": self.result,
+            "error": self.error,
+        }
+
     def start(self) -> None:
         if self.status != JobStatus.PENDING:
             msg = f"Can only start a PENDING job, got {self.status.value}"
