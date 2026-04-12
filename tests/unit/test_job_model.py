@@ -108,3 +108,50 @@ class TestJobMetadata:
         job.start()
         job.complete(result={"data": []})
         assert job.created_at == original
+
+
+class TestJobSerialization:
+    """Tests for to_dict() / from_dict() round-trip serialization."""
+
+    def test_to_dict_contains_all_fields(self) -> None:
+        job = Job.create(filename="test.csv")
+        d = job.to_dict()
+        assert set(d.keys()) == {"id", "status", "filename", "created_at", "result", "error"}
+        assert d["id"] == job.id
+        assert d["status"] == "pending"
+        assert d["filename"] == "test.csv"
+        assert d["result"] is None
+        assert d["error"] is None
+
+    def test_to_dict_with_result(self) -> None:
+        job = Job.create()
+        job.start()
+        job.complete(result={"mapping": {}, "valid_records": []})
+        d = job.to_dict()
+        assert d["status"] == "complete"
+        assert d["result"] == {"mapping": {}, "valid_records": []}
+
+    def test_to_dict_with_error(self) -> None:
+        job = Job.create()
+        job.start()
+        job.fail(error="SLM timeout")
+        d = job.to_dict()
+        assert d["status"] == "failed"
+        assert d["error"] == "SLM timeout"
+
+    def test_from_dict_round_trip(self) -> None:
+        original = Job.create(filename="report.csv")
+        original.start()
+        original.complete(result={"mapping": {"a": "b"}, "valid_records": [1, 2]})
+        restored = Job.from_dict(original.to_dict())
+        assert restored.id == original.id
+        assert restored.status == original.status
+        assert restored.filename == original.filename
+        assert restored.result == original.result
+        assert restored.error == original.error
+
+    def test_from_dict_preserves_created_at(self) -> None:
+        original = Job.create()
+        restored = Job.from_dict(original.to_dict())
+        assert restored.created_at == original.created_at
+        assert restored.created_at.tzinfo is not None
