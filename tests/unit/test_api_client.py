@@ -394,6 +394,43 @@ class TestCreateSchema:
         mock_response.raise_for_status.assert_called_once()
 
 
+class TestListJobs:
+    """GET /jobs — list uploaded files with metadata."""
+
+    @patch("gui.api_client.httpx.get")
+    def test_list_jobs_returns_list(self, mock_get: MagicMock, client: RiskFlowClient) -> None:
+        jobs = [
+            {
+                "job_id": "abc",
+                "filename": "report.csv",
+                "created_at": "2026-04-12T10:00:00+00:00",
+                "status": "complete",
+            }
+        ]
+        mock_get.return_value = MagicMock(
+            json=lambda: {"jobs": jobs},
+            raise_for_status=MagicMock(),
+        )
+        result = client.list_jobs()
+        assert mock_get.call_args[0][0] == "http://test:8000/jobs"
+        assert result == jobs
+
+    @patch("gui.api_client.httpx.get")
+    def test_list_jobs_empty(self, mock_get: MagicMock, client: RiskFlowClient) -> None:
+        mock_get.return_value = MagicMock(
+            json=lambda: {"jobs": []},
+            raise_for_status=MagicMock(),
+        )
+        assert client.list_jobs() == []
+
+    @patch("gui.api_client.httpx.get")
+    def test_calls_raise_for_status(self, mock_get: MagicMock, client: RiskFlowClient) -> None:
+        mock_response = MagicMock()
+        mock_get.return_value = mock_response
+        client.list_jobs()
+        mock_response.raise_for_status.assert_called_once()
+
+
 class TestDeleteSession:
     """DELETE /sessions/{id} — cleanup session + temp file."""
 

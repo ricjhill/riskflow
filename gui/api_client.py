@@ -153,6 +153,12 @@ class RiskFlowClient:
         r.raise_for_status()
         return r.json()
 
+    def list_jobs(self) -> list[dict]:
+        """GET /jobs → list of job summaries with filename and upload date."""
+        r = httpx.get(f"{self.base_url}/jobs", timeout=5)
+        r.raise_for_status()
+        return r.json()["jobs"]
+
     def delete_session(self, session_id: str) -> None:
         """DELETE /sessions/{id} → cleanup session + temp file."""
         r = httpx.delete(f"{self.base_url}/sessions/{session_id}", timeout=5)
