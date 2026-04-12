@@ -5,6 +5,7 @@ functional. Tests use environment variable mocking — no real Redis
 or Groq connections.
 """
 
+import logging
 import os
 from unittest.mock import MagicMock, patch
 
@@ -117,3 +118,29 @@ class TestSessionStoreWiring:
         assert "/sessions/{session_id}" in routes
         assert "/sessions/{session_id}/mappings" in routes
         assert "/sessions/{session_id}/finalise" in routes
+
+
+class TestConfigurableLogLevel:
+    """LOG_LEVEL env var controls the root logger level."""
+
+    def test_default_log_level_is_info(self) -> None:
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("LOG_LEVEL", None)
+            from src.entrypoint.main import configure_logging
+
+            configure_logging()
+            assert logging.getLogger().level == logging.INFO
+
+    def test_log_level_from_env(self) -> None:
+        with patch.dict(os.environ, {"LOG_LEVEL": "DEBUG"}):
+            from src.entrypoint.main import configure_logging
+
+            configure_logging()
+            assert logging.getLogger().level == logging.DEBUG
+
+    def test_invalid_log_level_falls_back_to_info(self) -> None:
+        with patch.dict(os.environ, {"LOG_LEVEL": "GARBAGE"}):
+            from src.entrypoint.main import configure_logging
+
+            configure_logging()
+            assert logging.getLogger().level == logging.INFO

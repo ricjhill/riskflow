@@ -71,7 +71,11 @@ def configure_logging() -> None:
     root = logging.getLogger()
     root.handlers.clear()
     root.addHandler(handler)
-    root.setLevel(logging.INFO)
+    log_level_name = os.environ.get("LOG_LEVEL", "INFO").upper()
+    log_level = getattr(logging, log_level_name, None)
+    if not isinstance(log_level, int):
+        log_level = logging.INFO
+    root.setLevel(log_level)
 
     structlog.configure(
         processors=[
