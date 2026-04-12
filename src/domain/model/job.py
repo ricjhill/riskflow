@@ -4,6 +4,7 @@ A Job moves through: PENDING → PROCESSING → COMPLETE or FAILED.
 Invalid transitions raise ValueError.
 """
 
+import datetime
 import enum
 import uuid
 from typing import Any
@@ -19,15 +20,24 @@ class JobStatus(enum.StrEnum):
 class Job:
     """Tracks the state of an async file processing task."""
 
-    def __init__(self, job_id: str, status: JobStatus) -> None:
+    def __init__(
+        self,
+        job_id: str,
+        status: JobStatus,
+        *,
+        filename: str | None = None,
+        created_at: datetime.datetime | None = None,
+    ) -> None:
         self.id = job_id
         self.status = status
+        self.filename = filename
+        self.created_at = created_at or datetime.datetime.now(datetime.UTC)
         self.result: dict[str, Any] | None = None
         self.error: str | None = None
 
     @classmethod
-    def create(cls) -> "Job":
-        return cls(job_id=str(uuid.uuid4()), status=JobStatus.PENDING)
+    def create(cls, *, filename: str | None = None) -> "Job":
+        return cls(job_id=str(uuid.uuid4()), status=JobStatus.PENDING, filename=filename)
 
     def start(self) -> None:
         if self.status != JobStatus.PENDING:

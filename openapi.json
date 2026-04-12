@@ -684,6 +684,25 @@
         }
       }
     },
+    "/jobs": {
+      "get": {
+        "summary": "List Jobs",
+        "description": "List all async jobs with filename and upload date.",
+        "operationId": "list_jobs_jobs_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/jobs/{job_id}": {
       "get": {
         "summary": "Get Job Status",
@@ -1098,6 +1117,23 @@
         "title": "HealthResponse",
         "description": "GET /health response."
       },
+      "JobListResponse": {
+        "properties": {
+          "jobs": {
+            "items": {
+              "$ref": "#/components/schemas/JobSummary"
+            },
+            "type": "array",
+            "title": "Jobs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "jobs"
+        ],
+        "title": "JobListResponse",
+        "description": "GET /jobs response."
+      },
       "JobStatusResponse": {
         "properties": {
           "job_id": {
@@ -1130,6 +1166,28 @@
               }
             ],
             "title": "Error"
+          },
+          "filename": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filename"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
           }
         },
         "type": "object",
@@ -1139,6 +1197,42 @@
         ],
         "title": "JobStatusResponse",
         "description": "GET /jobs/{job_id} response."
+      },
+      "JobSummary": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id"
+          },
+          "filename": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filename"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "filename",
+          "created_at",
+          "status"
+        ],
+        "title": "JobSummary",
+        "description": "One item in the GET /jobs list."
       },
       "MappingResult": {
         "properties": {

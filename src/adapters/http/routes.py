@@ -128,6 +128,23 @@ class JobStatusResponse(BaseModel):
     status: str
     result: dict[str, object] | None = None
     error: str | None = None
+    filename: str | None = None
+    created_at: str | None = None
+
+
+class JobSummary(BaseModel):
+    """One item in the GET /jobs list."""
+
+    job_id: str
+    filename: str | None
+    created_at: str
+    status: str
+
+
+class JobListResponse(BaseModel):
+    """GET /jobs response."""
+
+    jobs: list[JobSummary]
 
 
 _SCHEMA_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
@@ -720,7 +737,7 @@ def create_router(
             """Accept a file for async processing, return job ID immediately."""
             _validate_file(file)
 
-            job = Job.create()
+            job = Job.create(filename=file.filename)
             job_store.save(job)
 
             temp_path = _save_temp_file(file)
@@ -737,6 +754,22 @@ def create_router(
 
             return AsyncJobResponse(job_id=job.id)
 
+        @router.get("/jobs")
+        async def list_jobs() -> JobListResponse:
+            """List all async jobs with filename and upload date."""
+            jobs = job_store.list_all()
+            return JobListResponse(
+                jobs=[
+                    JobSummary(
+                        job_id=j.id,
+                        filename=j.filename,
+                        created_at=j.created_at.isoformat(),
+                        status=j.status.value,
+                    )
+                    for j in jobs
+                ]
+            )
+
         @router.get("/jobs/{job_id}")
         async def get_job_status(job_id: str) -> JobStatusResponse:
             """Get the status and result of an async job."""
@@ -748,6 +781,8 @@ def create_router(
                 status=job.status.value,
                 result=job.result,
                 error=job.error,
+                filename=job.filename,
+                created_at=job.created_at.isoformat(),
             )
 
     return router

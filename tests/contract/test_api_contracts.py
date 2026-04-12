@@ -95,6 +95,18 @@ JOB_STATUS_CONTRACT = ResponseContract(
     required_fields=frozenset({"job_id", "status", "result", "error"}),
 )
 
+# GET /jobs → 200
+JOB_LIST_CONTRACT = ResponseContract(
+    status_code=200,
+    required_fields=frozenset({"jobs"}),
+)
+
+# GET /jobs → item shape
+JOB_SUMMARY_CONTRACT = ResponseContract(
+    status_code=200,
+    required_fields=frozenset({"job_id", "filename", "created_at", "status"}),
+)
+
 # GET /schemas → 200
 SCHEMAS_LIST_CONTRACT = ResponseContract(
     status_code=200,
@@ -164,32 +176,24 @@ class TestProviderUploadContract:
         with open(csv_path, "rb") as f:
             return client.post("/upload", files={"file": ("test.csv", f, "text/csv")})
 
-    def test_upload_success_matches_contract(
-        self, client: TestClient, tmp_path: Path
-    ) -> None:
+    def test_upload_success_matches_contract(self, client: TestClient, tmp_path: Path) -> None:
         resp = self._upload_csv(client, tmp_path)
         assert resp.status_code == UPLOAD_SUCCESS_CONTRACT.status_code
         body = resp.json()
         for field_name in UPLOAD_SUCCESS_CONTRACT.required_fields:
             assert field_name in body, f"Missing required field: {field_name}"
 
-    def test_mapping_field_matches_contract(
-        self, client: TestClient, tmp_path: Path
-    ) -> None:
+    def test_mapping_field_matches_contract(self, client: TestClient, tmp_path: Path) -> None:
         resp = self._upload_csv(client, tmp_path)
         mapping = resp.json()["mapping"]
         for field_name in MAPPING_FIELD_CONTRACT.required_fields:
             assert field_name in mapping, f"Missing field in mapping: {field_name}"
 
-    def test_confidence_report_matches_contract(
-        self, client: TestClient, tmp_path: Path
-    ) -> None:
+    def test_confidence_report_matches_contract(self, client: TestClient, tmp_path: Path) -> None:
         resp = self._upload_csv(client, tmp_path)
         report = resp.json()["confidence_report"]
         for field_name in CONFIDENCE_REPORT_CONTRACT.required_fields:
-            assert field_name in report, (
-                f"Missing field in confidence_report: {field_name}"
-            )
+            assert field_name in report, f"Missing field in confidence_report: {field_name}"
 
     def test_schemas_list_matches_contract(self, client: TestClient) -> None:
         resp = client.get("/schemas")
@@ -199,35 +203,27 @@ class TestProviderUploadContract:
             assert field_name in body, f"Missing required field: {field_name}"
         assert isinstance(body["schemas"], list)
 
-    def test_async_upload_matches_contract(
-        self, client: TestClient, tmp_path: Path
-    ) -> None:
+    def test_async_upload_matches_contract(self, client: TestClient, tmp_path: Path) -> None:
         csv_path = tmp_path / "async_test.csv"
         with open(csv_path, "w", newline="") as f:
             writer = csv.writer(f)
             writer.writerow(["Policy No.", "GWP", "Extra"])
             writer.writerow(["P001", "50000", "x"])
         with open(csv_path, "rb") as f:
-            resp = client.post(
-                "/upload/async", files={"file": ("test.csv", f, "text/csv")}
-            )
+            resp = client.post("/upload/async", files={"file": ("test.csv", f, "text/csv")})
         assert resp.status_code == ASYNC_UPLOAD_CONTRACT.status_code
         body = resp.json()
         for field_name in ASYNC_UPLOAD_CONTRACT.required_fields:
             assert field_name in body, f"Missing required field: {field_name}"
 
-    def test_job_status_matches_contract(
-        self, client: TestClient, tmp_path: Path
-    ) -> None:
+    def test_job_status_matches_contract(self, client: TestClient, tmp_path: Path) -> None:
         csv_path = tmp_path / "job_test.csv"
         with open(csv_path, "w", newline="") as f:
             writer = csv.writer(f)
             writer.writerow(["Policy No.", "GWP", "Extra"])
             writer.writerow(["P001", "50000", "x"])
         with open(csv_path, "rb") as f:
-            post_resp = client.post(
-                "/upload/async", files={"file": ("test.csv", f, "text/csv")}
-            )
+            post_resp = client.post("/upload/async", files={"file": ("test.csv", f, "text/csv")})
         job_id = post_resp.json()["job_id"]
         resp = client.get(f"/jobs/{job_id}")
         assert resp.status_code == JOB_STATUS_CONTRACT.status_code
@@ -235,9 +231,7 @@ class TestProviderUploadContract:
         for field_name in JOB_STATUS_CONTRACT.required_fields:
             assert field_name in body, f"Missing required field: {field_name}"
 
-    def test_error_response_matches_contract(
-        self, client: TestClient, tmp_path: Path
-    ) -> None:
+    def test_error_response_matches_contract(self, client: TestClient, tmp_path: Path) -> None:
         """Structured error responses must have error_code, message, suggestion.
 
         Triggers a LOW_CONFIDENCE error (422) which goes through _error_detail(),
@@ -275,9 +269,7 @@ class TestProviderUploadContract:
             writer.writerow(["Policy No.", "GWP", "Extra"])
             writer.writerow(["P001", "50000", "x"])
         with open(csv_path, "rb") as f:
-            resp = low_conf_client.post(
-                "/upload", files={"file": ("test.csv", f, "text/csv")}
-            )
+            resp = low_conf_client.post("/upload", files={"file": ("test.csv", f, "text/csv")})
 
         assert resp.status_code == 422
         detail = resp.json()["detail"]
@@ -289,15 +281,35 @@ class TestProviderUploadContract:
             "/corrections",
             json={
                 "cedent_id": "test-cedent",
-                "corrections": [
-                    {"source_header": "GWP", "target_field": "Gross_Premium"}
-                ],
+                "corrections": [{"source_header": "GWP", "target_field": "Gross_Premium"}],
             },
         )
         assert resp.status_code == CORRECTIONS_CONTRACT.status_code
         body = resp.json()
         for field_name in CORRECTIONS_CONTRACT.required_fields:
             assert field_name in body, f"Missing required field: {field_name}"
+
+    def test_job_list_matches_contract(self, client: TestClient, tmp_path: Path) -> None:
+        # Upload a file to create a job
+        csv_path = tmp_path / "list_test.csv"
+        with open(csv_path, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["Policy No.", "GWP", "Extra"])
+            writer.writerow(["P001", "50000", "x"])
+        with open(csv_path, "rb") as f:
+            client.post("/upload/async", files={"file": ("test.csv", f, "text/csv")})
+
+        resp = client.get("/jobs")
+        assert resp.status_code == JOB_LIST_CONTRACT.status_code
+        body = resp.json()
+        for field_name in JOB_LIST_CONTRACT.required_fields:
+            assert field_name in body, f"Missing required field: {field_name}"
+
+        # Verify item shape
+        assert len(body["jobs"]) >= 1
+        item = body["jobs"][0]
+        for field_name in JOB_SUMMARY_CONTRACT.required_fields:
+            assert field_name in item, f"Missing field in job summary: {field_name}"
 
 
 # ---------------------------------------------------------------------------
@@ -373,3 +385,21 @@ class TestConsumerUploadContract:
 
         assert "error_code" in error_body
         assert "suggestion" in error_body
+
+    def test_consumer_parses_job_list(self) -> None:
+        """Simulate consumer parsing the job list response."""
+        response_body = {
+            "jobs": [
+                {
+                    "job_id": "abc-123",
+                    "filename": "report.csv",
+                    "created_at": "2026-04-12T10:00:00+00:00",
+                    "status": "complete",
+                }
+            ]
+        }
+
+        jobs = response_body["jobs"]
+        assert len(jobs) == 1
+        assert jobs[0]["filename"] == "report.csv"
+        assert jobs[0]["status"] in ("pending", "processing", "complete", "failed")
