@@ -9,6 +9,7 @@ import logging
 import os
 from unittest.mock import MagicMock, patch
 
+import pytest
 import structlog
 from fastapi.testclient import TestClient
 
@@ -124,6 +125,24 @@ class TestSessionStoreWiring:
 class TestConfigurableLogLevel:
     """LOG_LEVEL env var controls the root logger level."""
 
+    @pytest.mark.parametrize(
+        ("env_value", "expected_level"),
+        [
+            ("DEBUG", logging.DEBUG),
+            ("debug", logging.DEBUG),
+            ("WARNING", logging.WARNING),
+            ("ERROR", logging.ERROR),
+            ("CRITICAL", logging.CRITICAL),
+        ],
+        ids=["uppercase-debug", "lowercase-debug", "warning", "error", "critical"],
+    )
+    def test_log_level_from_env(self, env_value: str, expected_level: int) -> None:
+        with patch.dict(os.environ, {"LOG_LEVEL": env_value}):
+            from src.entrypoint.main import configure_logging
+
+            configure_logging()
+            assert logging.getLogger().level == expected_level
+
     def test_default_log_level_is_info(self) -> None:
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("LOG_LEVEL", None)
@@ -132,15 +151,13 @@ class TestConfigurableLogLevel:
             configure_logging()
             assert logging.getLogger().level == logging.INFO
 
-    def test_log_level_from_env(self) -> None:
-        with patch.dict(os.environ, {"LOG_LEVEL": "DEBUG"}):
-            from src.entrypoint.main import configure_logging
-
-            configure_logging()
-            assert logging.getLogger().level == logging.DEBUG
-
-    def test_invalid_log_level_falls_back_to_info(self) -> None:
-        with patch.dict(os.environ, {"LOG_LEVEL": "GARBAGE"}):
+    @pytest.mark.parametrize(
+        "env_value",
+        ["GARBAGE", "NOTSET", ""],
+        ids=["invalid-string", "notset-is-zero", "empty-string"],
+    )
+    def test_invalid_log_level_falls_back_to_info(self, env_value: str) -> None:
+        with patch.dict(os.environ, {"LOG_LEVEL": env_value}):
             from src.entrypoint.main import configure_logging
 
             configure_logging()

@@ -73,7 +73,7 @@ def configure_logging() -> None:
     root.addHandler(handler)
     log_level_name = os.environ.get("LOG_LEVEL", "INFO").upper()
     log_level = getattr(logging, log_level_name, None)
-    if not isinstance(log_level, int):
+    if not isinstance(log_level, int) or log_level == logging.NOTSET:
         log_level = logging.INFO
     root.setLevel(log_level)
 
