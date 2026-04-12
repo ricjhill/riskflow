@@ -8,6 +8,7 @@ Error mapping:
 - InvalidCedentDataError → 400 Bad Request
 - MappingConfidenceLowError → 422 Unprocessable Entity
 - SchemaValidationError → 422 Unprocessable Entity
+- InvalidCorrectionError → 422 Unprocessable Entity
 - SLMUnavailableError → 503 Service Unavailable
 - Unexpected errors → 500 Internal Server Error
 """

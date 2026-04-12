@@ -24,7 +24,7 @@ Scan the RiskFlow codebase for entropy and open a cleanup PR if needed. This is 
 - Flag any source file with no test coverage
 
 ### 4. Dependency hygiene
-- Run `uv run pip-audit --ignore-vuln CVE-2026-4539` for new CVEs
+- Run `uv run pip-audit` for new CVEs
 - Run `uv run bandit -r src/ -q` for new security findings
 - Check for outdated packages: `uv pip list --outdated` if available
 
