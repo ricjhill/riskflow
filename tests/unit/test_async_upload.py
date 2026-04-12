@@ -310,12 +310,11 @@ class TestAsyncBackend:
         assert "job_id" in response.json()
 
     @pytest.mark.asyncio
-    async def test_concurrent_uploads_overlap(self) -> None:
-        """Prove create_task runs uploads concurrently, not serially.
+    async def test_5_concurrent_uploads_overlap(self) -> None:
+        """Prove 5 uploads run concurrently via create_task, not serially.
 
-        Two uploads each sleep 0.1s in the mock service. If serial,
-        total time >= 0.2s. If concurrent, both overlap and total < 0.2s.
-        We assert overlap by recording start/end times per task.
+        5 uploads each sleep 0.1s. If serial, total >= 0.5s. If concurrent,
+        all overlap. We record start/end times and assert every pair overlaps.
         """
         timestamps: list[tuple[str, float, float]] = []
 
@@ -326,7 +325,6 @@ class TestAsyncBackend:
             await asyncio.sleep(0.1)
             end = time.monotonic()
             timestamps.append((file_path, start, end))
-            # Return a minimal ProcessingResult-like mock
             mock_result = AsyncMock()
             mock_result.model_dump.return_value = {"mapping": {}, "valid_records": []}
             return mock_result
@@ -339,30 +337,152 @@ class TestAsyncBackend:
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=app), base_url="http://test"
         ) as client:
-            # Fire two uploads concurrently
-            task_a = asyncio.create_task(
-                client.post(
-                    "/upload/async",
-                    files={"file": ("a.csv", b"ID\n1\n", "text/csv")},
+            tasks = [
+                asyncio.create_task(
+                    client.post(
+                        "/upload/async",
+                        files={"file": (f"file{i}.csv", f"ID\n{i}\n".encode(), "text/csv")},
+                    )
                 )
-            )
-            task_b = asyncio.create_task(
-                client.post(
-                    "/upload/async",
-                    files={"file": ("b.csv", b"ID\n2\n", "text/csv")},
-                )
-            )
-            resp_a, resp_b = await asyncio.gather(task_a, task_b)
+                for i in range(5)
+            ]
+            responses = await asyncio.gather(*tasks)
 
-        assert resp_a.status_code == 202
-        assert resp_b.status_code == 202
+        for resp in responses:
+            assert resp.status_code == 202
 
-        # Wait for background tasks to complete
-        await asyncio.sleep(0.3)
+        # Wait for all background tasks to complete
+        await asyncio.sleep(0.5)
 
-        # Prove overlap: task A started before task B ended, and vice versa
-        assert len(timestamps) == 2
-        (_, start_a, end_a) = timestamps[0]
-        (_, start_b, end_b) = timestamps[1]
-        assert start_a < end_b, "Task A should start before task B ends (overlap)"
-        assert start_b < end_a, "Task B should start before task A ends (overlap)"
+        assert len(timestamps) == 5
+
+        # Prove overlap: the earliest end is after the latest start
+        # (meaning all 5 were running at the same time)
+        earliest_end = min(end for _, _, end in timestamps)
+        latest_start = max(start for _, start, _ in timestamps)
+        assert latest_start < earliest_end, (
+            f"Not all 5 tasks overlapped: latest start {latest_start:.3f} "
+            f">= earliest end {earliest_end:.3f}"
+        )
+
+
+class TestTaskLifecycleLogging:
+    """Tests for task_started, task_completed, and error shielding logs."""
+
+    def test_task_started_event_logged(self, capfd: pytest.CaptureFixture[str]) -> None:
+        """_process_job emits task_started with job_id and filename."""
+        import json as json_mod
+
+        from src.entrypoint.main import configure_logging
+
+        configure_logging()
+
+        service = AsyncMock()
+        store = InMemoryJobStore()
+        app = _create_test_app(service, job_store=store, async_backend="background")
+        client = TestClient(app)
+
+        client.post(
+            "/upload/async",
+            files={"file": ("report.csv", io.BytesIO(b"ID\n1\n"), "text/csv")},
+        )
+
+        captured = capfd.readouterr()
+        lines = [l for l in captured.out.strip().split("\n") if l.strip()]
+        started_events = []
+        for line in lines:
+            try:
+                parsed = json_mod.loads(line)
+                if parsed.get("event") == "task_started":
+                    started_events.append(parsed)
+            except json_mod.JSONDecodeError:
+                continue
+
+        assert len(started_events) == 1
+        assert "job_id" in started_events[0]
+        assert started_events[0]["filename"] == "report.csv"
+
+    def test_task_completed_event_logged(self, capfd: pytest.CaptureFixture[str]) -> None:
+        """_process_job emits task_completed with job_id, duration_ms, status."""
+        import json as json_mod
+
+        from src.entrypoint.main import configure_logging
+
+        configure_logging()
+
+        service = AsyncMock()
+        store = InMemoryJobStore()
+        app = _create_test_app(service, job_store=store, async_backend="background")
+        client = TestClient(app)
+
+        client.post(
+            "/upload/async",
+            files={"file": ("report.csv", io.BytesIO(b"ID\n1\n"), "text/csv")},
+        )
+
+        captured = capfd.readouterr()
+        lines = [l for l in captured.out.strip().split("\n") if l.strip()]
+        completed_events = []
+        for line in lines:
+            try:
+                parsed = json_mod.loads(line)
+                if parsed.get("event") == "task_completed":
+                    completed_events.append(parsed)
+            except json_mod.JSONDecodeError:
+                continue
+
+        assert len(completed_events) == 1
+        assert "job_id" in completed_events[0]
+        assert "duration_ms" in completed_events[0]
+        assert isinstance(completed_events[0]["duration_ms"], int)
+        assert completed_events[0]["status"] in ("complete", "failed")
+
+    def test_task_completed_shows_failed_status(self, capfd: pytest.CaptureFixture[str]) -> None:
+        """When service raises, task_completed status is 'failed'."""
+        import json as json_mod
+
+        from src.entrypoint.main import configure_logging
+
+        configure_logging()
+
+        service = AsyncMock()
+        service.process_file.side_effect = Exception("SLM timeout")
+        store = InMemoryJobStore()
+        app = _create_test_app(service, job_store=store, async_backend="background")
+        client = TestClient(app)
+
+        client.post(
+            "/upload/async",
+            files={"file": ("bad.csv", io.BytesIO(b"ID\n1\n"), "text/csv")},
+        )
+
+        captured = capfd.readouterr()
+        lines = [l for l in captured.out.strip().split("\n") if l.strip()]
+        completed_events = []
+        for line in lines:
+            try:
+                parsed = json_mod.loads(line)
+                if parsed.get("event") == "task_completed":
+                    completed_events.append(parsed)
+            except json_mod.JSONDecodeError:
+                continue
+
+        assert len(completed_events) == 1
+        assert completed_events[0]["status"] == "failed"
+
+    def test_task_exception_does_not_crash_server(self) -> None:
+        """Server continues responding after a background task fails."""
+        service = AsyncMock()
+        service.process_file.side_effect = Exception("catastrophic")
+        app = _create_test_app(service, async_backend="background")
+        client = TestClient(app)
+
+        # Upload that triggers failure
+        client.post(
+            "/upload/async",
+            files={"file": ("bad.csv", io.BytesIO(b"ID\n1\n"), "text/csv")},
+        )
+
+        # Server should still respond to subsequent requests
+        response = client.get("/jobs")
+        assert response.status_code == 200
