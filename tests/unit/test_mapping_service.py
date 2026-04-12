@@ -217,6 +217,48 @@ class TestCacheLogging:
         assert len(log_events) == 1
         assert log_events[0]["result"] == "hit"
 
+    @pytest.mark.asyncio
+    async def test_cache_miss_includes_duration_ms(
+        self,
+        service: MappingService,
+        cache: MagicMock,
+        tmp_path: Path,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Issue #117: cache_lookup events must include duration_ms."""
+        import json
+
+        path = _write_csv(tmp_path)
+        cache.get_mapping.return_value = None
+        with caplog.at_level("INFO"):
+            await service.process_file(path)
+        log_events = [json.loads(r.message) for r in caplog.records if "cache_lookup" in r.message]
+        assert len(log_events) == 1
+        assert "duration_ms" in log_events[0]
+        assert isinstance(log_events[0]["duration_ms"], int)
+        assert log_events[0]["duration_ms"] >= 0
+
+    @pytest.mark.asyncio
+    async def test_cache_hit_includes_duration_ms(
+        self,
+        service: MappingService,
+        cache: MagicMock,
+        tmp_path: Path,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Issue #117: cache_lookup events must include duration_ms."""
+        import json
+
+        path = _write_csv(tmp_path)
+        cache.get_mapping.return_value = _make_mapping_result()
+        with caplog.at_level("INFO"):
+            await service.process_file(path)
+        log_events = [json.loads(r.message) for r in caplog.records if "cache_lookup" in r.message]
+        assert len(log_events) == 1
+        assert "duration_ms" in log_events[0]
+        assert isinstance(log_events[0]["duration_ms"], int)
+        assert log_events[0]["duration_ms"] >= 0
+
 
 class TestConfidenceThreshold:
     """Test that low-confidence mappings are rejected."""

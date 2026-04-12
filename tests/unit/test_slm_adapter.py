@@ -1,13 +1,15 @@
 """Tests for GroqMapper SLM adapter.
 
 All tests mock the openai.AsyncOpenAI client — no real API calls.
-Tests verify prompt construction, response parsing, and error handling.
+Tests verify prompt construction, response parsing, error handling,
+and duration logging.
 """
 
 import json
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+import structlog
 
 from src.adapters.slm.mapper import GroqMapper
 from src.domain.model.errors import SLMUnavailableError
@@ -304,3 +306,111 @@ class TestErrorHandling:
 
         with pytest.raises(SLMUnavailableError, match="unreachable"):
             await mapper.map_headers(["ID"], [{"ID": "P001"}])
+
+
+class TestSLMCallDurationLogging:
+    """Issue #116: map_headers should log slm_call with duration_ms, model, headers_count."""
+
+    @pytest.fixture(autouse=True)
+    def _capture_logs(self) -> None:  # type: ignore[misc]
+        """Configure structlog to capture log events, restoring config after."""
+        self.captured_events: list[dict[str, object]] = []
+        old_config = structlog.get_config()
+
+        def capture(
+            logger: object, method_name: str, event_dict: dict[str, object]
+        ) -> dict[str, object]:
+            self.captured_events.append(event_dict.copy())
+            raise structlog.DropEvent
+
+        structlog.configure(
+            processors=[capture],
+            wrapper_class=structlog.stdlib.BoundLogger,
+            cache_logger_on_first_use=False,
+        )
+        yield
+        structlog.configure(**old_config)
+
+    @pytest.mark.asyncio
+    async def test_logs_slm_call_event(self) -> None:
+        """Successful SLM call emits an slm_call log event."""
+        client = AsyncMock()
+        client.chat.completions.create.return_value = _mock_completion(_valid_response_json())
+        mapper = GroqMapper(client=client)
+
+        await mapper.map_headers(
+            ["Policy No.", "GWP"],
+            [{"Policy No.": "P001", "GWP": 50000}],
+        )
+
+        slm_events = [e for e in self.captured_events if e.get("event") == "slm_call"]
+        assert len(slm_events) == 1
+
+    @pytest.mark.asyncio
+    async def test_slm_call_includes_duration_ms(self) -> None:
+        """slm_call event must contain duration_ms as a non-negative int."""
+        client = AsyncMock()
+        client.chat.completions.create.return_value = _mock_completion(_valid_response_json())
+        mapper = GroqMapper(client=client)
+
+        await mapper.map_headers(["GWP"], [{"GWP": 50000}])
+
+        slm_event = next(e for e in self.captured_events if e.get("event") == "slm_call")
+        assert "duration_ms" in slm_event
+        assert isinstance(slm_event["duration_ms"], int)
+        assert slm_event["duration_ms"] >= 0
+
+    @pytest.mark.asyncio
+    async def test_slm_call_includes_model(self) -> None:
+        """slm_call event must contain the model name."""
+        client = AsyncMock()
+        client.chat.completions.create.return_value = _mock_completion(_valid_response_json())
+        mapper = GroqMapper(client=client, model="llama-3.3-70b-versatile")
+
+        await mapper.map_headers(["GWP"], [{"GWP": 50000}])
+
+        slm_event = next(e for e in self.captured_events if e.get("event") == "slm_call")
+        assert slm_event["model"] == "llama-3.3-70b-versatile"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("headers", "preview", "expected_count"),
+        [
+            ([], [], 0),
+            (["GWP"], [{"GWP": 50000}], 1),
+            (
+                ["Policy No.", "GWP", "Extra"],
+                [{"Policy No.": "P001", "GWP": 50000, "Extra": "x"}],
+                3,
+            ),
+        ],
+        ids=["zero_headers", "one_header", "three_headers"],
+    )
+    async def test_slm_call_includes_headers_count(
+        self,
+        headers: list[str],
+        preview: list[dict[str, object]],
+        expected_count: int,
+    ) -> None:
+        """slm_call event must contain the correct number of source headers."""
+        client = AsyncMock()
+        client.chat.completions.create.return_value = _mock_completion(_valid_response_json())
+        mapper = GroqMapper(client=client)
+
+        await mapper.map_headers(headers, preview)
+
+        slm_event = next(e for e in self.captured_events if e.get("event") == "slm_call")
+        assert slm_event["headers_count"] == expected_count
+
+    @pytest.mark.asyncio
+    async def test_no_slm_call_log_on_api_error(self) -> None:
+        """When the API call raises, no slm_call event should be emitted."""
+        client = AsyncMock()
+        client.chat.completions.create.side_effect = Exception("timeout")
+        mapper = GroqMapper(client=client)
+
+        with pytest.raises(SLMUnavailableError):
+            await mapper.map_headers(["ID"], [{"ID": "P001"}])
+
+        slm_events = [e for e in self.captured_events if e.get("event") == "slm_call"]
+        assert len(slm_events) == 0
