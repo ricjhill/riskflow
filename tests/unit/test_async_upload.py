@@ -112,3 +112,97 @@ class TestJobStatus:
 
         response = client.get("/jobs/nonexistent-id")
         assert response.status_code == 404
+
+    def test_get_job_includes_filename(self) -> None:
+        service = AsyncMock()
+        store = InMemoryJobStore()
+        job = Job.create(filename="report.csv")
+        store.save(job)
+
+        app = _create_test_app(service, job_store=store)
+        client = TestClient(app)
+
+        response = client.get(f"/jobs/{job.id}")
+        assert response.status_code == 200
+        assert response.json()["filename"] == "report.csv"
+
+    def test_get_job_includes_created_at(self) -> None:
+        service = AsyncMock()
+        store = InMemoryJobStore()
+        job = Job.create()
+        store.save(job)
+
+        app = _create_test_app(service, job_store=store)
+        client = TestClient(app)
+
+        response = client.get(f"/jobs/{job.id}")
+        assert response.status_code == 200
+        assert response.json()["created_at"] is not None
+
+
+class TestListJobs:
+    def test_list_jobs_empty(self) -> None:
+        service = AsyncMock()
+        app = _create_test_app(service)
+        client = TestClient(app)
+
+        response = client.get("/jobs")
+        assert response.status_code == 200
+        assert response.json() == {"jobs": []}
+
+    def test_list_jobs_returns_jobs(self) -> None:
+        service = AsyncMock()
+        store = InMemoryJobStore()
+        for i in range(2):
+            job = Job.create(filename=f"file{i}.csv")
+            store.save(job)
+
+        app = _create_test_app(service, job_store=store)
+        client = TestClient(app)
+
+        response = client.get("/jobs")
+        assert response.status_code == 200
+        assert len(response.json()["jobs"]) == 2
+
+    def test_list_jobs_includes_filename(self) -> None:
+        service = AsyncMock()
+        store = InMemoryJobStore()
+        job = Job.create(filename="report.csv")
+        store.save(job)
+
+        app = _create_test_app(service, job_store=store)
+        client = TestClient(app)
+
+        response = client.get("/jobs")
+        jobs = response.json()["jobs"]
+        assert len(jobs) == 1
+        assert jobs[0]["filename"] == "report.csv"
+
+    def test_list_jobs_includes_created_at_iso(self) -> None:
+        from datetime import datetime
+
+        service = AsyncMock()
+        store = InMemoryJobStore()
+        job = Job.create()
+        store.save(job)
+
+        app = _create_test_app(service, job_store=store)
+        client = TestClient(app)
+
+        response = client.get("/jobs")
+        jobs = response.json()["jobs"]
+        # Should be parseable as ISO 8601
+        datetime.fromisoformat(jobs[0]["created_at"])
+
+    def test_list_jobs_includes_status(self) -> None:
+        service = AsyncMock()
+        store = InMemoryJobStore()
+        job = Job.create()
+        store.save(job)
+
+        app = _create_test_app(service, job_store=store)
+        client = TestClient(app)
+
+        response = client.get("/jobs")
+        jobs = response.json()["jobs"]
+        assert jobs[0]["status"] == "pending"
