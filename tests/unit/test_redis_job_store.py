@@ -64,3 +64,98 @@ class TestSaveAndGet:
         store = RedisJobStore(client=client)
 
         assert store.get("some-id") is None
+
+
+class TestTTL:
+    def test_save_calls_setex_with_default_ttl(self) -> None:
+        client = MagicMock()
+        store = RedisJobStore(client=client)
+        job = Job.create()
+
+        store.save(job)
+
+        ttl_arg = client.setex.call_args[0][1]
+        assert ttl_arg == 86400
+
+    def test_save_refreshes_ttl_on_update(self) -> None:
+        client = MagicMock()
+        store = RedisJobStore(client=client)
+        job = Job.create()
+
+        store.save(job)
+        job.start()
+        store.save(job)
+
+        assert client.setex.call_count == 2
+
+    def test_custom_ttl_from_constructor(self) -> None:
+        client = MagicMock()
+        store = RedisJobStore(client=client, ttl=3600)
+        job = Job.create()
+
+        store.save(job)
+
+        ttl_arg = client.setex.call_args[0][1]
+        assert ttl_arg == 3600
+
+
+class TestListAll:
+    def test_list_all_uses_scan(self) -> None:
+        client = MagicMock()
+        job = Job.create(filename="a.csv")
+        client.scan.return_value = (0, [f"riskflow:job:{job.id}".encode()])
+        client.get.return_value = json.dumps(job.to_dict()).encode()
+        store = RedisJobStore(client=client)
+
+        result = store.list_all()
+
+        client.scan.assert_called_once()
+        assert len(result) == 1
+        assert result[0].filename == "a.csv"
+
+    def test_list_all_empty(self) -> None:
+        client = MagicMock()
+        client.scan.return_value = (0, [])
+        store = RedisJobStore(client=client)
+
+        assert store.list_all() == []
+
+    def test_list_all_skips_corrupt_entries(self) -> None:
+        client = MagicMock()
+        job = Job.create(filename="good.csv")
+        client.scan.return_value = (
+            0,
+            [b"riskflow:job:good", b"riskflow:job:bad"],
+        )
+        client.get.side_effect = [
+            json.dumps(job.to_dict()).encode(),
+            b"not-json",
+        ]
+        store = RedisJobStore(client=client)
+
+        result = store.list_all()
+        assert len(result) == 1
+        assert result[0].filename == "good.csv"
+
+
+class TestGracefulDegradation:
+    def test_save_swallows_connection_error(self) -> None:
+        client = MagicMock()
+        client.setex.side_effect = ConnectionError("gone")
+        store = RedisJobStore(client=client)
+
+        store.save(Job.create())  # should not raise
+
+    def test_get_swallows_connection_error(self) -> None:
+        client = MagicMock()
+        client.get.side_effect = ConnectionError("gone")
+        store = RedisJobStore(client=client)
+
+        assert store.get("some-id") is None
+
+    def test_list_all_swallows_connection_error(self) -> None:
+        client = MagicMock()
+        client.scan.side_effect = ConnectionError("gone")
+        store = RedisJobStore(client=client)
+
+        assert store.list_all() == []

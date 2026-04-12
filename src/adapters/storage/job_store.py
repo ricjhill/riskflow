@@ -3,6 +3,8 @@
 import json
 from typing import Any
 
+import redis as redis_lib
+
 from src.domain.model.job import Job
 
 
@@ -43,14 +45,20 @@ class RedisJobStore:
         self._ttl = ttl
 
     def save(self, job: Job) -> None:
-        self._client.setex(
-            f"{KEY_PREFIX}{job.id}",
-            self._ttl,
-            json.dumps(job.to_dict()),
-        )
+        try:
+            self._client.setex(
+                f"{KEY_PREFIX}{job.id}",
+                self._ttl,
+                json.dumps(job.to_dict()),
+            )
+        except (ConnectionError, redis_lib.RedisError):
+            pass
 
     def get(self, job_id: str) -> Job | None:
-        data = self._client.get(f"{KEY_PREFIX}{job_id}")
+        try:
+            data = self._client.get(f"{KEY_PREFIX}{job_id}")
+        except (ConnectionError, redis_lib.RedisError):
+            return None
         if data is None:
             return None
         try:
@@ -61,16 +69,19 @@ class RedisJobStore:
 
     def list_all(self) -> list[Job]:
         jobs: list[Job] = []
-        cursor = 0
-        while True:
-            cursor, keys = self._client.scan(cursor, match=f"{KEY_PREFIX}*")
-            for key in keys:
-                data = self._client.get(key)
-                if data is not None:
-                    try:
-                        jobs.append(Job.from_dict(json.loads(data)))
-                    except (ValueError, TypeError, json.JSONDecodeError, KeyError):
-                        continue
-            if cursor == 0:
-                break
+        try:
+            cursor = 0
+            while True:
+                cursor, keys = self._client.scan(cursor, match=f"{KEY_PREFIX}*")
+                for key in keys:
+                    data = self._client.get(key)
+                    if data is not None:
+                        try:
+                            jobs.append(Job.from_dict(json.loads(data)))
+                        except (ValueError, TypeError, json.JSONDecodeError, KeyError):
+                            continue
+                if cursor == 0:
+                    break
+        except (ConnectionError, redis_lib.RedisError):
+            return []
         return sorted(jobs, key=lambda j: j.created_at, reverse=True)
