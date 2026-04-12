@@ -61,3 +61,22 @@ class TestJobTransitions:
         job.complete(result={})
         with pytest.raises(ValueError, match="PENDING"):
             job.start()
+
+
+class TestJobMetadata:
+    """Tests for filename and created_at metadata on Job."""
+
+    def test_create_with_filename(self) -> None:
+        job = Job.create(filename="report.csv")
+        assert job.filename == "report.csv"
+
+    def test_create_without_filename_defaults_to_none(self) -> None:
+        job = Job.create()
+        assert job.filename is None
+
+    def test_filename_with_special_chars(self) -> None:
+        """Filenames with spaces, unicode, and special chars are preserved."""
+        job = Job.create(filename="Q1 bordereaux (final).xlsx")
+        assert job.filename == "Q1 bordereaux (final).xlsx"
+        job2 = Job.create(filename="données_réassurance.csv")
+        assert job2.filename == "données_réassurance.csv"

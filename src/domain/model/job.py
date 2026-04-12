@@ -19,15 +19,22 @@ class JobStatus(enum.StrEnum):
 class Job:
     """Tracks the state of an async file processing task."""
 
-    def __init__(self, job_id: str, status: JobStatus) -> None:
+    def __init__(
+        self,
+        job_id: str,
+        status: JobStatus,
+        *,
+        filename: str | None = None,
+    ) -> None:
         self.id = job_id
         self.status = status
+        self.filename = filename
         self.result: dict[str, Any] | None = None
         self.error: str | None = None
 
     @classmethod
-    def create(cls) -> "Job":
-        return cls(job_id=str(uuid.uuid4()), status=JobStatus.PENDING)
+    def create(cls, *, filename: str | None = None) -> "Job":
+        return cls(job_id=str(uuid.uuid4()), status=JobStatus.PENDING, filename=filename)
 
     def start(self) -> None:
         if self.status != JobStatus.PENDING:
