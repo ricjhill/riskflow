@@ -18,3 +18,6 @@ class InMemoryJobStore:
 
     def get(self, job_id: str) -> Job | None:
         return self._jobs.get(job_id)
+
+    def list_all(self) -> list[Job]:
+        return sorted(self._jobs.values(), key=lambda j: j.created_at, reverse=True)

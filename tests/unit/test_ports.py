@@ -3,9 +3,11 @@
 from typing import runtime_checkable
 
 from src.domain.model.correction import Correction
+from src.domain.model.job import Job
 from src.domain.model.schema import MappingResult
 from src.ports.input.ingestor import IngestorPort
 from src.ports.output.correction_cache import CorrectionCachePort
+from src.ports.output.job_store import JobStorePort
 from src.ports.output.mapper import MapperPort
 from src.ports.output.repo import CachePort
 
@@ -60,9 +62,7 @@ class TestCachePort:
             def get_mapping(self, cache_key: str) -> MappingResult | None:
                 return None
 
-            def set_mapping(
-                self, cache_key: str, result: MappingResult, ttl: int = 3600
-            ) -> None:
+            def set_mapping(self, cache_key: str, result: MappingResult, ttl: int = 3600) -> None:
                 pass
 
         assert isinstance(FakeCache(), CachePort)
@@ -78,9 +78,7 @@ class TestCachePort:
 class TestCorrectionCachePort:
     def test_concrete_class_satisfies_protocol(self) -> None:
         class FakeCorrectionCache:
-            def get_corrections(
-                self, cedent_id: str, headers: list[str]
-            ) -> dict[str, str]:
+            def get_corrections(self, cedent_id: str, headers: list[str]) -> dict[str, str]:
                 return {}
 
             def set_correction(self, correction: Correction) -> None:
@@ -90,10 +88,32 @@ class TestCorrectionCachePort:
 
     def test_incomplete_class_does_not_satisfy(self) -> None:
         class BadCorrectionCache:
-            def get_corrections(
-                self, cedent_id: str, headers: list[str]
-            ) -> dict[str, str]:
+            def get_corrections(self, cedent_id: str, headers: list[str]) -> dict[str, str]:
                 return {}
 
         assert not isinstance(BadCorrectionCache(), CorrectionCachePort)
 
+
+class TestJobStorePort:
+    def test_concrete_class_satisfies_protocol(self) -> None:
+        class FakeJobStore:
+            def save(self, job: Job) -> None:
+                pass
+
+            def get(self, job_id: str) -> Job | None:
+                return None
+
+            def list_all(self) -> list[Job]:
+                return []
+
+        assert isinstance(FakeJobStore(), JobStorePort)
+
+    def test_incomplete_class_does_not_satisfy(self) -> None:
+        class BadJobStore:
+            def save(self, job: Job) -> None:
+                pass
+
+            def get(self, job_id: str) -> Job | None:
+                return None
+
+        assert not isinstance(BadJobStore(), JobStorePort)
