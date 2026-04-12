@@ -71,7 +71,11 @@ def configure_logging() -> None:
     root = logging.getLogger()
     root.handlers.clear()
     root.addHandler(handler)
-    root.setLevel(logging.INFO)
+    log_level_name = os.environ.get("LOG_LEVEL", "INFO").upper()
+    log_level = getattr(logging, log_level_name, None)
+    if not isinstance(log_level, int) or log_level == logging.NOTSET:
+        log_level = logging.INFO
+    root.setLevel(log_level)
 
     structlog.configure(
         processors=[
@@ -89,6 +93,9 @@ def configure_logging() -> None:
     # Suppress noisy third-party loggers
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
+
+    # Bind worker PID so multi-worker logs can be filtered per process
+    structlog.contextvars.bind_contextvars(worker_pid=os.getpid())
 
 
 def create_app() -> FastAPI:
