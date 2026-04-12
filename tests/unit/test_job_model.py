@@ -138,3 +138,20 @@ class TestJobSerialization:
         d = job.to_dict()
         assert d["status"] == "failed"
         assert d["error"] == "SLM timeout"
+
+    def test_from_dict_round_trip(self) -> None:
+        original = Job.create(filename="report.csv")
+        original.start()
+        original.complete(result={"mapping": {"a": "b"}, "valid_records": [1, 2]})
+        restored = Job.from_dict(original.to_dict())
+        assert restored.id == original.id
+        assert restored.status == original.status
+        assert restored.filename == original.filename
+        assert restored.result == original.result
+        assert restored.error == original.error
+
+    def test_from_dict_preserves_created_at(self) -> None:
+        original = Job.create()
+        restored = Job.from_dict(original.to_dict())
+        assert restored.created_at == original.created_at
+        assert restored.created_at.tzinfo is not None
