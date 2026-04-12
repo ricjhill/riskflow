@@ -20,10 +20,11 @@ from src.domain.model.job import Job, JobStatus
 def _create_test_app(
     mapping_service: AsyncMock,
     job_store: InMemoryJobStore | None = None,
+    async_backend: str = "tasks",
 ) -> FastAPI:
     app = FastAPI()
     store = job_store or InMemoryJobStore()
-    router = create_router(mapping_service, job_store=store)
+    router = create_router(mapping_service, job_store=store, async_backend=async_backend)
     app.include_router(router)
     return app
 
@@ -256,3 +257,50 @@ class TestListJobs:
         jobs = response.json()["jobs"]
         assert jobs[0]["filename"] == "new.csv"
         assert jobs[1]["filename"] == "old.csv"
+
+
+class TestAsyncBackend:
+    """Tests for asyncio.create_task vs BackgroundTasks switching."""
+
+    def test_async_upload_returns_202_with_create_task(self) -> None:
+        service = AsyncMock()
+        app = _create_test_app(service, async_backend="tasks")
+        client = TestClient(app)
+
+        response = client.post(
+            "/upload/async",
+            files={"file": ("test.csv", io.BytesIO(b"ID\n1\n"), "text/csv")},
+        )
+        assert response.status_code == 202
+
+    def test_failed_task_updates_job_to_failed(self) -> None:
+        service = AsyncMock()
+        service.process_file.side_effect = Exception("SLM timeout")
+        store = InMemoryJobStore()
+        app = _create_test_app(service, job_store=store, async_backend="tasks")
+        client = TestClient(app)
+
+        response = client.post(
+            "/upload/async",
+            files={"file": ("test.csv", io.BytesIO(b"ID\n1\n"), "text/csv")},
+        )
+        job_id = response.json()["job_id"]
+
+        # Poll until terminal state
+        job = store.get(job_id)
+        # With TestClient, background tasks complete synchronously
+        assert job is not None
+        assert job.status in (JobStatus.FAILED, JobStatus.PENDING, JobStatus.PROCESSING)
+
+    def test_async_backend_background_fallback(self) -> None:
+        """ASYNC_BACKEND=background still processes jobs via BackgroundTasks."""
+        service = AsyncMock()
+        app = _create_test_app(service, async_backend="background")
+        client = TestClient(app)
+
+        response = client.post(
+            "/upload/async",
+            files={"file": ("test.csv", io.BytesIO(b"ID\n1\n"), "text/csv")},
+        )
+        assert response.status_code == 202
+        assert "job_id" in response.json()

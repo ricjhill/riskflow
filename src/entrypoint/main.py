@@ -210,6 +210,9 @@ def create_app() -> FastAPI:
     # --- Session store for interactive mapping ---
     session_store = _create_session_store(redis_client)
 
+    # --- Async backend for background tasks ---
+    async_backend = os.environ.get("ASYNC_BACKEND", "tasks")
+
     # --- Routes ---
     router = create_router(
         mapping_service,
@@ -220,6 +223,7 @@ def create_app() -> FastAPI:
         schema_store=schema_store,
         service_factory=_make_service,
         session_store=session_store,
+        async_backend=async_backend,
     )
     app.include_router(router)
 

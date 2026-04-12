@@ -13,6 +13,7 @@ Error mapping:
 - Unexpected errors → 500 Internal Server Error
 """
 
+import asyncio
 import os
 import re
 import tempfile
@@ -173,6 +174,7 @@ def create_router(
     schema_store: SchemaStorePort | None = None,
     service_factory: Callable[[TargetSchema], MappingService] | None = None,
     session_store: MappingSessionStorePort | None = None,
+    async_backend: str = "tasks",
 ) -> APIRouter:
     """Create a FastAPI router wired to the given MappingService.
 
@@ -749,9 +751,15 @@ def create_router(
                 sheet_name=sheet_name,
             )
 
-            background_tasks.add_task(
-                _process_job, job, temp_path, sheet_name, mapping_service, job_store
-            )
+            if async_backend == "tasks":
+                task = asyncio.create_task(
+                    _process_job(job, temp_path, sheet_name, mapping_service, job_store)
+                )
+                task.add_done_callback(_log_task_exception)
+            else:
+                background_tasks.add_task(
+                    _process_job, job, temp_path, sheet_name, mapping_service, job_store
+                )
 
             return AsyncJobResponse(job_id=job.id)
 
@@ -789,6 +797,19 @@ def create_router(
     return router
 
 
+def _log_task_exception(task: asyncio.Task[None]) -> None:
+    """Safety net: log unhandled exceptions from fire-and-forget tasks."""
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is not None:
+        structlog.get_logger().error(
+            "task_unhandled_exception",
+            error=str(exc),
+            error_type=type(exc).__name__,
+        )
+
+
 async def _process_job(
     job: Job,
     temp_path: str,
@@ -797,6 +818,9 @@ async def _process_job(
     job_store: JobStorePort,
 ) -> None:
     """Background task that processes the file and updates the job."""
+    logger = structlog.get_logger()
+    start = time.monotonic()
+    logger.info("task_started", job_id=job.id, filename=job.filename)
     job.start()
     job_store.save(job)
     try:
@@ -806,6 +830,13 @@ async def _process_job(
         job.fail(error=str(e))
     finally:
         job_store.save(job)
+        duration_ms = int((time.monotonic() - start) * 1000)
+        logger.info(
+            "task_completed",
+            job_id=job.id,
+            duration_ms=duration_ms,
+            status=job.status.value,
+        )
         if os.path.exists(temp_path):
             os.remove(temp_path)
 
