@@ -116,6 +116,27 @@ Upload a file for asynchronous processing. Returns immediately with a job ID.
 
 ---
 
+### GET /jobs
+
+List all async jobs with filename and upload date. Jobs are sorted newest-first by `created_at`.
+
+**Response:** `200 OK`
+
+```json
+{
+  "jobs": [
+    {
+      "job_id": "a1b2c3d4-...",
+      "filename": "bordereaux_q1.csv",
+      "created_at": "2026-04-12T10:30:00+00:00",
+      "status": "complete"
+    }
+  ]
+}
+```
+
+---
+
 ### GET /jobs/{job_id}
 
 Get the status and result of an async job.
@@ -131,13 +152,15 @@ Get the status and result of an async job.
 ```json
 {
   "job_id": "a1b2c3d4-...",
-  "status": "COMPLETE",
+  "status": "complete",
   "result": { ... },
-  "error": null
+  "error": null,
+  "filename": "bordereaux_q1.csv",
+  "created_at": "2026-04-12T10:30:00+00:00"
 }
 ```
 
-**Status values:** PENDING, PROCESSING, COMPLETE, FAILED
+**Status values:** `pending`, `processing`, `complete`, `failed`
 
 **Errors:** `404 Not Found` if job_id doesn't exist.
 

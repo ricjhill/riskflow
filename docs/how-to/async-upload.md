@@ -36,7 +36,7 @@ Response while processing:
 ```json
 {
   "job_id": "a1b2c3d4-...",
-  "status": "PROCESSING",
+  "status": "processing",
   "result": null,
   "error": null
 }
@@ -44,12 +44,12 @@ Response while processing:
 
 ### 3. Get the result
 
-When status is "COMPLETE":
+When status is `"complete"`:
 
 ```json
 {
   "job_id": "a1b2c3d4-...",
-  "status": "COMPLETE",
+  "status": "complete",
   "result": {
     "mapping": { ... },
     "valid_records": [ ... ],
@@ -57,20 +57,30 @@ When status is "COMPLETE":
     "errors": [ ... ],
     "confidence_report": { ... }
   },
-  "error": null
+  "error": null,
+  "filename": "large_bordereaux.csv",
+  "created_at": "2026-04-12T10:30:00+00:00"
 }
 ```
 
 The `result` object has the same shape as the synchronous `/upload` response.
 
+### 4. List all jobs
+
+```bash
+curl http://localhost:8000/jobs
+```
+
+Returns all jobs with filenames and upload dates, newest first.
+
 ## Job statuses
 
 | Status | Meaning |
 |--------|---------|
-| PENDING | Job created, not yet started |
-| PROCESSING | File is being mapped and validated |
-| COMPLETE | Results ready in the `result` field |
-| FAILED | Processing failed — check the `error` field |
+| `pending` | Job created, not yet started |
+| `processing` | File is being mapped and validated |
+| `complete` | Results ready in the `result` field |
+| `failed` | Processing failed — check the `error` field |
 
 ## What if the job ID doesn't exist?
 

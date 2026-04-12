@@ -98,8 +98,9 @@ RiskFlow automates the mapping step. Upload a bordereaux spreadsheet, and RiskFl
 
 **How to use it:**
 1. `POST /upload/async` → returns `{"job_id": "abc-123"}`
-2. `GET /jobs/abc-123` → returns status (PENDING, PROCESSING, COMPLETE, FAILED)
-3. When COMPLETE, the response includes the full mapping and validation results
+2. `GET /jobs/abc-123` → returns status (`pending`, `processing`, `complete`, `failed`)
+3. `GET /jobs` → lists all jobs with filename and upload date (newest first)
+4. When `complete`, the response includes the full mapping and validation results
 
 ### 7. Configurable Target Schema
 
@@ -153,7 +154,8 @@ For testers validating RiskFlow, here are the key scenarios to verify:
 | 10 | Upload file larger than 10MB | 400 error: "File size exceeds limit" |
 | 11 | Use ?schema=nonexistent | 404 error: "Schema not found" |
 | 12 | GET /schemas | Returns list of available schema names |
-| 13 | POST /upload/async then GET /jobs/{id} | Job progresses from PENDING → PROCESSING → COMPLETE |
+| 13 | POST /upload/async then GET /jobs/{id} | Job progresses from pending → processing → complete |
+| 13b | GET /jobs after async upload | Job appears with filename and created_at |
 | 14 | POST /sessions → GET → PUT mappings → POST finalise | Interactive session workflow completes |
 | 15 | PATCH /sessions/{id}/target-fields with custom field | Custom field appears in target_fields |
 | 16 | POST /schemas with new schema body | Schema created, appears in GET /schemas |

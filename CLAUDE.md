@@ -27,8 +27,8 @@ src/
                      # CorrectionCachePort, JobStorePort, SchemaLoaderPort,
                      # MappingSessionStorePort, SchemaStorePort
   adapters/
-    http/            # FastAPI routes (/upload, /upload/async, /jobs, /sheets,
-                     # /corrections, /schemas, /sessions),
+    http/            # FastAPI routes (/upload, /upload/async, /jobs, /jobs/{id},
+                     # /sheets, /corrections, /schemas, /sessions),
                      # RequestIdMiddleware (request-scoped structlog context)
     slm/             # Groq API implementation
     storage/         # Redis cache, Redis correction cache, in-memory job store,
@@ -53,7 +53,7 @@ tools/
   hexagonal_linter.py  # AST-based architecture boundary checker
 openapi.json           # Committed OpenAPI 3.1 spec — CI-enforced, auto-versioned
 gui/
-  app.py             # Streamlit dashboard (3 tabs: mapping, debugger, corrections)
+  app.py             # Streamlit dashboard (4 tabs: mapping, debugger, corrections, flow mapper)
   api_client.py      # Thin httpx wrapper — GUI talks to API via HTTP, not imports
   Dockerfile         # Separate image with dev deps (includes streamlit)
 ```

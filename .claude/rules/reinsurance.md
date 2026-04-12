@@ -7,11 +7,11 @@ paths:
 # Reinsurance Domain Rules
 
 ## Target Schema
-The default schema maps to 6 fields: `Policy_ID`, `Inception_Date`, `Expiry_Date`, `Sum_Insured`, `Gross_Premium`, `Currency`. Custom schemas can define different fields via YAML in `schemas/`. The active schema is loaded from `schemas/default.yaml` (or `SCHEMA_PATH` env var) at startup.
+The default schema maps to 6 fields: `Policy_ID`, `Inception_Date`, `Expiry_Date`, `Sum_Insured`, `Gross_Premium`, `Currency`. Custom schemas can define different fields via YAML in `schemas/`. The active schema is loaded from `schemas/standard_reinsurance.yaml` (or `SCHEMA_PATH` env var) at startup.
 
 ## Validation
 - Field constraints (non_negative, not_empty, allowed_values) are defined per field in the schema YAML
-- Dates: flexible parsing via `coerce_date()` — accepts ISO 8601, DD-Mon-YYYY, DD/MM/YYYY, YYYY/MM/DD, verbose formats. Uses `dayfirst=True` (London market convention)
+- Dates: flexible parsing via `parse_date()` in `src/domain/model/date_format.py` — accepts ISO 8601, DD-Mon-YYYY, DD/MM/YYYY, YYYY/MM/DD, verbose formats. Uses `dayfirst=True` (London market convention)
 - Cross-field rules (e.g., Expiry_Date must not precede Inception_Date) are defined in the schema
 - Validation uses the dynamic model from `build_record_model(schema)`, not hardcoded classes
 

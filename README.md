@@ -156,6 +156,7 @@ graph LR
 |----------|--------|-------------|
 | `/upload` | POST | Synchronous upload with optional `?sheet_name`, `?cedent_id`, `?schema` |
 | `/upload/async` | POST | Async upload, returns job ID for polling |
+| `/jobs` | GET | List all async jobs with filename and upload date |
 | `/jobs/{id}` | GET | Poll async job status and result |
 | `/sheets` | POST | List sheet names in an Excel file |
 | `/corrections` | POST | Submit human-verified mapping corrections |
