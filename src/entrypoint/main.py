@@ -94,6 +94,9 @@ def configure_logging() -> None:
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
 
+    # Bind worker PID so multi-worker logs can be filtered per process
+    structlog.contextvars.bind_contextvars(worker_pid=os.getpid())
+
 
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application.

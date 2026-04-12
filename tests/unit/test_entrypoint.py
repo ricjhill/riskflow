@@ -9,6 +9,7 @@ import logging
 import os
 from unittest.mock import MagicMock, patch
 
+import structlog
 from fastapi.testclient import TestClient
 
 
@@ -144,3 +145,38 @@ class TestConfigurableLogLevel:
 
             configure_logging()
             assert logging.getLogger().level == logging.INFO
+
+
+class TestWorkerPidInLogs:
+    """Worker PID is bound into structlog context for multi-worker identification."""
+
+    def test_worker_pid_bound_in_structlog(self) -> None:
+        from src.entrypoint.main import configure_logging
+
+        configure_logging()
+
+        # Capture the log event to check for worker_pid
+        captured: list[dict] = []
+
+        def capture(
+            logger: object, method_name: str, event_dict: dict[str, object]
+        ) -> dict[str, object]:
+            captured.append(event_dict.copy())
+            raise structlog.DropEvent
+
+        old_config = structlog.get_config()
+        structlog.configure(
+            processors=[
+                structlog.contextvars.merge_contextvars,
+                capture,
+            ],
+            wrapper_class=structlog.stdlib.BoundLogger,
+            cache_logger_on_first_use=False,
+        )
+        try:
+            structlog.get_logger().info("test_event")
+            assert len(captured) == 1
+            assert "worker_pid" in captured[0]
+            assert captured[0]["worker_pid"] == os.getpid()
+        finally:
+            structlog.configure(**old_config)
