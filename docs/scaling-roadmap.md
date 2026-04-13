@@ -3,7 +3,7 @@
 ## Current State
 
 RiskFlow is a well-structured hexagonal architecture monolith with:
-- **695 unit tests** (all passing, ~12s single-threaded)
+- **~940 tests** across unit, integration, contract, benchmark, and load tiers
 - **Clean dependency direction**: domain → ports → adapters → entrypoint
 - **Full async pipeline**: FastAPI → MappingService → Groq SLM
 - **Graceful degradation**: Redis failures don't crash the system
@@ -188,15 +188,15 @@ The Python dataclass contracts migrate to Pact with minimal changes.
 
 ```
                     ╱╲
-                   ╱E2E╲          1 test   — real Groq API
+                   ╱E2E╲          5 tests  — real Groq API
                   ╱──────╲
-                 ╱Integr. ╲       1 file   — full pipeline, mocked SLM
+                 ╱Integr. ╲      10 files  — real Redis via testcontainers
                 ╱──────────╲
-               ╱  Contract  ╲     11 tests — API shape verification
+               ╱  Contract  ╲    13 tests  — API shape verification
               ╱──────────────╲
-             ╱   Guardrails   ╲   9 tests  — performance regression
+             ╱   Guardrails   ╲  16 tests  — performance + memory regression
             ╱──────────────────╲
-           ╱      695 Unit      ╲ 695 tests — all dependencies mocked
+           ╱      ~840 Unit     ╲ ~840 tests — all dependencies mocked
           ╱──────────────────────╲
 ```
 
@@ -403,11 +403,19 @@ def test_ttl_actually_applied(real_redis):
 - [x] Mock vs. Reality tests with testcontainers
 - [x] Locust load test skeleton
 
-### Phase 3: Background Processing (Next)
-- [ ] Replace `BackgroundTasks` with a `TaskRunnerPort`
-- [ ] Implement `CeleryTaskRunner` adapter
-- [ ] Add Redis Streams adapter for event sourcing
-- [ ] Job persistence: replace `InMemoryJobStore` with Redis/Postgres
+### Phase 3: Background Processing & Job Persistence (Implemented — simpler path)
+- [x] Replace `BackgroundTasks` with `asyncio.create_task` (PR #149 — lighter than Celery)
+- [x] Job persistence: `RedisJobStore` adapter (PR #148)
+- [x] `asyncio.Semaphore` on GroqMapper for rate limiting (PR #152)
+- [x] `asyncio.Lock` on schema registry (PR #156)
+- [x] Multi-worker Uvicorn (PR #157 — `--workers 2`)
+- [x] Configurable `LOG_LEVEL` + `worker_pid` in logs (PR #147)
+- [x] DEBUG-level observability events (PR #158)
+- [x] Performance guardrails for scaling code (PR #159)
+- [x] Integration tests with real Redis concurrency (PR #160)
+- [x] CI concurrency test: 5-user Locust against Docker stack
+- [ ] ~~CeleryTaskRunner~~ (deferred — asyncio.create_task sufficient for 5 users)
+- [ ] ~~Redis Streams~~ (deferred — not needed at this scale)
 
 ### Phase 4: Horizontal Scaling
 - [ ] Stateless API (move all state to Redis/DB)
