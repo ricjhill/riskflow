@@ -10,6 +10,7 @@ Nothing in domain/, ports/, or adapters/ reads env vars or constructs
 other adapters. All wiring happens here.
 """
 
+import asyncio
 import logging
 import os
 import sys
@@ -132,6 +133,10 @@ def create_app() -> FastAPI:
     correction_cache = _create_correction_cache(redis_client)
     groq_client = _create_groq_client()
 
+    # --- SLM concurrency limiter ---
+    slm_concurrency = int(os.environ.get("SLM_CONCURRENCY", "3"))
+    slm_semaphore = asyncio.Semaphore(slm_concurrency) if slm_concurrency > 0 else None
+
     # app_configured is logged after all components are created (see below)
 
     # --- Build a MappingService per schema ---
@@ -139,7 +144,7 @@ def create_app() -> FastAPI:
     # tailored to that schema's fields and hints.
     schema_registry: dict[str, MappingService] = {}
     for name, schema in schemas.items():
-        mapper = GroqMapper(client=groq_client, schema=schema)
+        mapper = GroqMapper(client=groq_client, schema=schema, semaphore=slm_semaphore)
         schema_registry[name] = MappingService(
             ingestor=ingestor,
             mapper=mapper,
@@ -166,7 +171,9 @@ def create_app() -> FastAPI:
         if runtime_name not in schemas:
             runtime_schema = schema_store.get(runtime_name)
             if runtime_schema:
-                mapper = GroqMapper(client=groq_client, schema=runtime_schema)
+                mapper = GroqMapper(
+                    client=groq_client, schema=runtime_schema, semaphore=slm_semaphore
+                )
                 schema_registry[runtime_name] = MappingService(
                     ingestor=ingestor,
                     mapper=mapper,
@@ -183,7 +190,7 @@ def create_app() -> FastAPI:
 
     # Factory closure for creating MappingService at runtime
     def _make_service(schema: TargetSchema) -> MappingService:
-        mapper = GroqMapper(client=groq_client, schema=schema)
+        mapper = GroqMapper(client=groq_client, schema=schema, semaphore=slm_semaphore)
         return MappingService(
             ingestor=ingestor,
             mapper=mapper,
