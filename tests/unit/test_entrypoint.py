@@ -254,3 +254,36 @@ class TestJobStoreWiring:
         config_events = [json_mod.loads(l) for l in lines if "app_configured" in l]
         assert len(config_events) >= 1
         assert "job_store_type" in config_events[-1]
+
+
+class TestSemaphoreWiring:
+    """SLM_CONCURRENCY env var controls the Groq semaphore."""
+
+    def test_groq_mapper_created_with_semaphore(self) -> None:
+        """Default SLM_CONCURRENCY=3 creates a semaphore on the mapper."""
+        with (
+            patch.dict(os.environ, {}, clear=False),
+            patch("src.entrypoint.main.GroqMapper") as MockMapper,
+        ):
+            os.environ.pop("SLM_CONCURRENCY", None)
+            from src.entrypoint.main import create_app
+
+            create_app()
+            # Verify GroqMapper was called with a semaphore kwarg
+            assert MockMapper.call_count >= 1
+            first_call_kwargs = MockMapper.call_args_list[0].kwargs
+            assert "semaphore" in first_call_kwargs
+            assert first_call_kwargs["semaphore"] is not None
+
+    def test_semaphore_disabled_when_zero(self) -> None:
+        """SLM_CONCURRENCY=0 disables the semaphore (no concurrency limit)."""
+        with (
+            patch.dict(os.environ, {"SLM_CONCURRENCY": "0"}),
+            patch("src.entrypoint.main.GroqMapper") as MockMapper,
+        ):
+            from src.entrypoint.main import create_app
+
+            create_app()
+            assert MockMapper.call_count >= 1
+            first_call_kwargs = MockMapper.call_args_list[0].kwargs
+            assert first_call_kwargs.get("semaphore") is None

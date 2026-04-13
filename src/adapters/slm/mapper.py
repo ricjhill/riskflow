@@ -9,6 +9,7 @@ dynamically from the TargetSchema:
 - Requests JSON-only output via response_format
 """
 
+import asyncio
 import json
 import time
 
@@ -61,12 +62,14 @@ class GroqMapper:
         client: openai.AsyncOpenAI,
         model: str = DEFAULT_MODEL,
         schema: TargetSchema | None = None,
+        semaphore: asyncio.Semaphore | None = None,
     ) -> None:
         self._client = client
         self._model = model
         self._schema = schema or DEFAULT_TARGET_SCHEMA
         self._system_prompt = _build_system_prompt(self._schema)
         self._logger = structlog.get_logger()
+        self._semaphore = semaphore
 
     async def map_headers(
         self,
@@ -78,14 +81,25 @@ class GroqMapper:
 
         try:
             start = time.monotonic()
-            response = await self._client.chat.completions.create(
-                model=self._model,
-                messages=[
-                    {"role": "system", "content": self._system_prompt},
-                    {"role": "user", "content": user_message},
-                ],
-                response_format={"type": "json_object"},
-            )
+            if self._semaphore:
+                async with self._semaphore:
+                    response = await self._client.chat.completions.create(
+                        model=self._model,
+                        messages=[
+                            {"role": "system", "content": self._system_prompt},
+                            {"role": "user", "content": user_message},
+                        ],
+                        response_format={"type": "json_object"},
+                    )
+            else:
+                response = await self._client.chat.completions.create(
+                    model=self._model,
+                    messages=[
+                        {"role": "system", "content": self._system_prompt},
+                        {"role": "user", "content": user_message},
+                    ],
+                    response_format={"type": "json_object"},
+                )
             duration_ms = int((time.monotonic() - start) * 1000)
         except Exception as e:
             raise SLMUnavailableError(str(e)) from e

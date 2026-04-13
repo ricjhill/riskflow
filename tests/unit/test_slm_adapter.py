@@ -2,10 +2,12 @@
 
 All tests mock the openai.AsyncOpenAI client — no real API calls.
 Tests verify prompt construction, response parsing, error handling,
-and duration logging.
+duration logging, and semaphore-based concurrency limiting.
 """
 
+import asyncio
 import json
+import time
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -414,3 +416,64 @@ class TestSLMCallDurationLogging:
 
         slm_events = [e for e in self.captured_events if e.get("event") == "slm_call"]
         assert len(slm_events) == 0
+
+
+class TestSemaphoreConcurrencyLimiting:
+    """GroqMapper accepts an optional asyncio.Semaphore to limit concurrent API calls."""
+
+    @pytest.mark.asyncio
+    async def test_mapper_accepts_optional_semaphore(self) -> None:
+        """Constructing GroqMapper with a semaphore does not raise."""
+        client = AsyncMock()
+        sem = asyncio.Semaphore(3)
+        mapper = GroqMapper(client=client, semaphore=sem)
+        assert mapper is not None
+
+    @pytest.mark.asyncio
+    async def test_mapper_without_semaphore_still_works(self) -> None:
+        """Backward compat: no semaphore means no concurrency limit."""
+        client = AsyncMock()
+        client.chat.completions.create.return_value = _mock_completion(_valid_response_json())
+        mapper = GroqMapper(client=client)
+
+        result = await mapper.map_headers(["GWP"], [{"GWP": 50000}])
+        assert len(result.mappings) == 2
+
+    @pytest.mark.asyncio
+    async def test_semaphore_limits_concurrency(self) -> None:
+        """With Semaphore(1), two concurrent calls are serialized, not parallel.
+
+        We record timestamps to prove the second call doesn't start until
+        the first completes — the opposite of test_5_concurrent_uploads_overlap.
+        """
+        timestamps: list[tuple[str, float, float]] = []
+
+        async def slow_api_call(**kwargs: object) -> MagicMock:
+            start = time.monotonic()
+            await asyncio.sleep(0.1)
+            end = time.monotonic()
+            call_id = f"call_{len(timestamps)}"
+            timestamps.append((call_id, start, end))
+            return _mock_completion(_valid_response_json())
+
+        client = AsyncMock()
+        client.chat.completions.create.side_effect = slow_api_call
+
+        sem = asyncio.Semaphore(1)
+        mapper = GroqMapper(client=client, semaphore=sem)
+
+        # Fire two calls concurrently
+        await asyncio.gather(
+            mapper.map_headers(["A"], [{"A": 1}]),
+            mapper.map_headers(["B"], [{"B": 2}]),
+        )
+
+        assert len(timestamps) == 2
+        (_, start_0, end_0) = timestamps[0]
+        (_, start_1, end_1) = timestamps[1]
+
+        # With Semaphore(1), the second call starts AFTER the first ends
+        assert start_1 >= end_0 - 0.01, (
+            f"Second call started at {start_1:.3f} before first ended at {end_0:.3f} "
+            "— semaphore did not serialize"
+        )
