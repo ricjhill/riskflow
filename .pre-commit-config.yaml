@@ -13,7 +13,14 @@ repos:
 
       - id: pytest-unit
         name: pytest unit tests
-        entry: uv run pytest -x tests/unit/ -q --benchmark-disable
+        entry: uv run pytest -x tests/unit/ -q --benchmark-disable --cov=src --cov-report=xml:.coverage-delta.xml --cov-report=
+        language: system
+        pass_filenames: false
+        types: [python]
+
+      - id: coverage-delta
+        name: coverage delta check
+        entry: bash -c 'if git diff --cached --name-only --diff-filter=ACM -- "src/*.py" | grep -q .; then uv run diff-cover .coverage-delta.xml --compare-branch=HEAD --fail-under=80 --quiet || { echo ""; echo "New src/ lines must have >= 80% coverage. Write tests for uncovered lines."; exit 1; }; fi; rm -f .coverage-delta.xml'
         language: system
         pass_filenames: false
         types: [python]
