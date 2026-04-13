@@ -169,15 +169,29 @@ class TestConfidenceAnchoring:
         await mapper.map_headers(["GWP"], [{"GWP": 50000}])
 
         system_msg = client.chat.completions.create.call_args.kwargs["messages"][0]["content"]
-        # Must contain guidance about different confidence levels
-        assert "exact" in system_msg.lower() or "1.0" in system_msg, (
+        assert "exact or near-exact name match" in system_msg, (
             "Prompt must explain that exact matches should be high confidence"
         )
-        assert (
-            "guess" in system_msg.lower()
-            or "uncertain" in system_msg.lower()
-            or "0.5" in system_msg
-        ), "Prompt must explain that uncertain matches should be low confidence"
+        assert "guess, low certainty" in system_msg, (
+            "Prompt must explain that uncertain matches should be low confidence"
+        )
+        assert "Do NOT default all confidences to the same value" in system_msg, (
+            "Prompt must instruct SLM to vary confidence values"
+        )
+
+    @pytest.mark.asyncio
+    async def test_prompt_uses_float_placeholder(self) -> None:
+        """Example JSON must use <float> placeholder, not a literal number."""
+        client = AsyncMock()
+        client.chat.completions.create.return_value = _mock_completion(_valid_response_json())
+        mapper = GroqMapper(client=client)
+
+        await mapper.map_headers(["GWP"], [{"GWP": 50000}])
+
+        system_msg = client.chat.completions.create.call_args.kwargs["messages"][0]["content"]
+        assert "<float>" in system_msg, (
+            "Example JSON must use <float> placeholder to avoid anchoring"
+        )
 
 
 class TestResponseParsing:
