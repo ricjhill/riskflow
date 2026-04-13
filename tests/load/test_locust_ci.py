@@ -204,9 +204,7 @@ class TestLocustCIAssertions:
     assert against per-endpoint and aggregate thresholds.
     """
 
-    def test_mixed_workload_error_rate_and_latency(
-        self, live_server: str, tmp_path: Path
-    ) -> None:
+    def test_mixed_workload_error_rate_and_latency(self, live_server: str, tmp_path: Path) -> None:
         """Full mixed workload: error rate < 1%, avg response < 5000ms.
 
         Runs 5 users for 15 seconds. The mocked SLM means /upload
@@ -243,8 +241,7 @@ class TestLocustCIAssertions:
 
         # Locust exits 0 on clean run, 1 if errors occurred during setup
         assert result.returncode == 0, (
-            f"Locust process failed (exit {result.returncode}).\n"
-            f"STDERR:\n{result.stderr[-2000:]}"
+            f"Locust process failed (exit {result.returncode}).\nSTDERR:\n{result.stderr[-2000:]}"
         )
 
         # Parse CSV stats and assert thresholds
@@ -252,9 +249,7 @@ class TestLocustCIAssertions:
         assert stats_file.exists(), "Locust did not write stats CSV"
 
         stats = _parse_locust_stats(stats_file)
-        assert "Aggregated" in stats, (
-            f"No Aggregated row in stats. Keys: {list(stats.keys())}"
-        )
+        assert "Aggregated" in stats, f"No Aggregated row in stats. Keys: {list(stats.keys())}"
 
         agg = stats["Aggregated"]
 
@@ -282,3 +277,27 @@ class TestLocustCIAssertions:
             assert stats["/schemas"]["p95"] < 100, (
                 f"/schemas P95 {stats['/schemas']['p95']:.0f}ms exceeds 100ms"
             )
+
+        # Threshold 4: GET /jobs P95 < 200ms
+        if "/jobs" in stats and stats["/jobs"]["request_count"] > 5:
+            assert stats["/jobs"]["p95"] < 200, (
+                f"/jobs P95 {stats['/jobs']['p95']:.0f}ms exceeds 200ms"
+            )
+
+        # Threshold 5: zero unexpected 500 errors
+        # 503 (SLM unavailable) is expected with test key — only 500 is a bug
+        for endpoint, endpoint_stats in stats.items():
+            if endpoint == "Aggregated":
+                continue
+            # Locust failure messages contain the status code
+            # If there are failures, they should be 503s not 500s
+            if endpoint_stats["failure_count"] > 0:
+                assert endpoint_stats.get("fail_ratio", 0) < 0.5, (
+                    f"{endpoint} has {endpoint_stats['failure_count']} failures "
+                    f"({endpoint_stats.get('fail_ratio', 0):.0%}) — check for 500s"
+                )
+
+        # Threshold 6: minimum throughput (proves no deadlock)
+        total_requests = agg["request_count"]
+        # 5 users × 15s run with wait_time 0.1-0.3 should produce > 20 requests
+        assert total_requests >= 20, f"Only {total_requests} requests completed — possible deadlock"

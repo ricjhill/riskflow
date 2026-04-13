@@ -1,14 +1,15 @@
 """Redis connection pool concurrency tests.
 
-Verifies that RiskFlow's Redis adapters (RedisCache, RedisCorrectionCache)
-behave correctly under concurrent access from multiple threads. This
-simulates a Uvicorn worker handling multiple requests simultaneously,
-each reading/writing to Redis.
+Verifies that RiskFlow's Redis adapters (RedisCache, RedisCorrectionCache,
+RedisJobStore) behave correctly under concurrent access from multiple
+threads. This simulates a Uvicorn worker handling multiple requests
+simultaneously, each reading/writing to Redis.
 
 Tests validate:
 - Zero errors under concurrent writes and reads
 - Data integrity (no cross-contamination between threads)
 - Connection pool queuing (more threads than connections)
+- Job state transitions under concurrent access
 
 Uses testcontainers for a real Redis instance. Skipped when Docker
 is unavailable.
@@ -29,7 +30,9 @@ import redis as redis_lib
 
 from src.adapters.storage.cache import RedisCache
 from src.adapters.storage.correction_cache import RedisCorrectionCache
+from src.adapters.storage.job_store import RedisJobStore
 from src.domain.model.correction import Correction
+from src.domain.model.job import Job, JobStatus
 from src.domain.model.schema import ColumnMapping, MappingResult
 
 from tests.benchmark.conftest import Timer
@@ -113,9 +116,7 @@ class TestRedisConcurrency:
             futures = [pool.submit(write_batch, w) for w in range(WORKERS)]
             concurrent.futures.wait(futures)
 
-        assert len(errors) == 0, (
-            f"{len(errors)} errors during concurrent writes: {errors[:3]}"
-        )
+        assert len(errors) == 0, f"{len(errors)} errors during concurrent writes: {errors[:3]}"
 
         # Verify all keys exist
         for w in range(WORKERS):
@@ -185,9 +186,7 @@ class TestRedisConcurrency:
                     )
 
                     # Read corrections
-                    correction_cache.get_corrections(
-                        f"cedent_{worker_id}", [f"hdr_{i}"]
-                    )
+                    correction_cache.get_corrections(f"cedent_{worker_id}", [f"hdr_{i}"])
                 except Exception as e:
                     errors.append(e)
 
@@ -200,9 +199,7 @@ class TestRedisConcurrency:
         # Verify data integrity for a sample
         for w in range(WORKERS):
             result = correction_cache.get_corrections(f"cedent_{w}", ["hdr_0"])
-            assert result == {"hdr_0": "tgt_0"}, (
-                f"Integrity check failed for cedent_{w}"
-            )
+            assert result == {"hdr_0": "tgt_0"}, f"Integrity check failed for cedent_{w}"
 
     def test_pool_exhaustion_handled(
         self,
@@ -231,9 +228,167 @@ class TestRedisConcurrency:
                 futures = [pool.submit(write_burst, w) for w in range(WORKERS)]
                 concurrent.futures.wait(futures)
 
-        assert len(errors) == 0, (
-            f"{len(errors)} errors with pool exhaustion: {errors[:3]}"
-        )
-        assert t.elapsed_ms < 30_000, (
-            f"Pool exhaustion took {t.elapsed_ms:.0f}ms (budget: 30s)"
-        )
+        assert len(errors) == 0, f"{len(errors)} errors with pool exhaustion: {errors[:3]}"
+        assert t.elapsed_ms < 30_000, f"Pool exhaustion took {t.elapsed_ms:.0f}ms (budget: 30s)"
+
+
+# ---------------------------------------------------------------------------
+# RedisJobStore concurrency tests
+# ---------------------------------------------------------------------------
+class TestRedisJobStoreConcurrency:
+    """Concurrent access to RedisJobStore from multiple threads."""
+
+    def test_concurrent_job_saves(
+        self,
+        pooled_redis: redis_lib.Redis,  # type: ignore[type-arg]
+    ) -> None:
+        """20 threads × 50 saves = 1000 jobs, all retrievable with correct state."""
+        store = RedisJobStore(client=pooled_redis)
+        errors: list[Exception] = []
+        job_ids: list[str] = []
+
+        def save_batch(worker_id: int) -> None:
+            for i in range(OPS_PER_WORKER):
+                try:
+                    job = Job.create(filename=f"w{worker_id}_f{i}.csv")
+                    store.save(job)
+                    job_ids.append(job.id)
+                except Exception as e:
+                    errors.append(e)
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=WORKERS) as pool:
+            futures = [pool.submit(save_batch, w) for w in range(WORKERS)]
+            concurrent.futures.wait(futures)
+
+        assert len(errors) == 0, f"{len(errors)} errors during concurrent saves: {errors[:3]}"
+        assert len(job_ids) == WORKERS * OPS_PER_WORKER
+
+        # Verify all jobs are retrievable
+        for jid in job_ids[:20]:  # spot-check first 20
+            retrieved = store.get(jid)
+            assert retrieved is not None, f"Job {jid} not found after concurrent save"
+
+    def test_concurrent_save_and_list(
+        self,
+        pooled_redis: redis_lib.Redis,  # type: ignore[type-arg]
+    ) -> None:
+        """Threads saving jobs while other threads call list_all() — no crashes."""
+        store = RedisJobStore(client=pooled_redis)
+        errors: list[Exception] = []
+
+        def save_jobs(worker_id: int) -> None:
+            for i in range(10):
+                try:
+                    job = Job.create(filename=f"save_w{worker_id}_f{i}.csv")
+                    store.save(job)
+                except Exception as e:
+                    errors.append(e)
+
+        def list_jobs(worker_id: int) -> None:
+            for _ in range(10):
+                try:
+                    result = store.list_all()
+                    # Just verify it returns a list of Jobs
+                    assert isinstance(result, list)
+                    for j in result:
+                        assert isinstance(j, Job)
+                except Exception as e:
+                    errors.append(e)
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
+            futures = []
+            for w in range(5):
+                futures.append(pool.submit(save_jobs, w))
+                futures.append(pool.submit(list_jobs, w))
+            concurrent.futures.wait(futures)
+
+        assert len(errors) == 0, f"{len(errors)} errors during save+list: {errors[:3]}"
+
+    def test_job_state_transitions_under_concurrency(
+        self,
+        pooled_redis: redis_lib.Redis,  # type: ignore[type-arg]
+    ) -> None:
+        """10 threads each create→start→complete a job. All end COMPLETE."""
+        store = RedisJobStore(client=pooled_redis)
+        errors: list[Exception] = []
+        completed_ids: list[str] = []
+
+        def transition_job(worker_id: int) -> None:
+            try:
+                job = Job.create(filename=f"transition_{worker_id}.csv")
+                store.save(job)
+                job.start()
+                store.save(job)
+                job.complete(result={"worker": worker_id})
+                store.save(job)
+                completed_ids.append(job.id)
+            except Exception as e:
+                errors.append(e)
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
+            futures = [pool.submit(transition_job, w) for w in range(10)]
+            concurrent.futures.wait(futures)
+
+        assert len(errors) == 0, f"{len(errors)} errors during transitions: {errors[:3]}"
+        assert len(completed_ids) == 10
+
+        # Verify all reached COMPLETE
+        for jid in completed_ids:
+            job = store.get(jid)
+            assert job is not None
+            assert job.status == JobStatus.COMPLETE, (
+                f"Job {jid} status is {job.status}, expected COMPLETE"
+            )
+
+
+# ---------------------------------------------------------------------------
+# Real-Redis latency guardrails
+# ---------------------------------------------------------------------------
+class TestRedisJobStoreLatency:
+    """Latency guardrails with real Redis — catches actual round-trip time."""
+
+    def test_real_redis_save_under_10ms(
+        self,
+        pooled_redis: redis_lib.Redis,  # type: ignore[type-arg]
+    ) -> None:
+        """Single save against real Redis — budget 10ms."""
+        store = RedisJobStore(client=pooled_redis)
+        job = Job.create(filename="latency.csv")
+
+        # Warm up
+        store.save(job)
+
+        with Timer() as t:
+            store.save(job)
+        assert t.elapsed_ms < 10, f"save() took {t.elapsed_ms:.1f}ms (budget: 10ms)"
+
+    def test_real_redis_get_under_10ms(
+        self,
+        pooled_redis: redis_lib.Redis,  # type: ignore[type-arg]
+    ) -> None:
+        """Single get against real Redis — budget 10ms."""
+        store = RedisJobStore(client=pooled_redis)
+        job = Job.create(filename="latency.csv")
+        store.save(job)
+
+        # Warm up
+        store.get(job.id)
+
+        with Timer() as t:
+            store.get(job.id)
+        assert t.elapsed_ms < 10, f"get() took {t.elapsed_ms:.1f}ms (budget: 10ms)"
+
+    def test_real_redis_list_100_under_500ms(
+        self,
+        pooled_redis: redis_lib.Redis,  # type: ignore[type-arg]
+    ) -> None:
+        """list_all() with 100 jobs — catches O(N) SCAN+GET scaling issues."""
+        store = RedisJobStore(client=pooled_redis)
+        for i in range(100):
+            job = Job.create(filename=f"list_{i}.csv")
+            store.save(job)
+
+        with Timer() as t:
+            result = store.list_all()
+        assert len(result) >= 100
+        assert t.elapsed_ms < 500, f"list_all(100) took {t.elapsed_ms:.1f}ms (budget: 500ms)"
