@@ -1,9 +1,11 @@
 """Job store adapters for async upload tracking."""
 
 import json
+import time
 from typing import Any
 
 import redis as redis_lib
+import structlog
 
 from src.domain.model.job import Job
 
@@ -43,8 +45,10 @@ class RedisJobStore:
     def __init__(self, client: Any, ttl: int = DEFAULT_TTL) -> None:
         self._client = client
         self._ttl = ttl
+        self._logger = structlog.get_logger()
 
     def save(self, job: Job) -> None:
+        start = time.monotonic()
         try:
             self._client.setex(
                 f"{KEY_PREFIX}{job.id}",
@@ -53,6 +57,8 @@ class RedisJobStore:
             )
         except (ConnectionError, redis_lib.RedisError):
             pass
+        duration_ms = int((time.monotonic() - start) * 1000)
+        self._logger.debug("job_store_save", job_id=job.id, duration_ms=duration_ms)
 
     def get(self, job_id: str) -> Job | None:
         try:
@@ -68,6 +74,7 @@ class RedisJobStore:
             return None
 
     def list_all(self) -> list[Job]:
+        start = time.monotonic()
         jobs: list[Job] = []
         try:
             cursor = 0
@@ -84,4 +91,7 @@ class RedisJobStore:
                     break
         except (ConnectionError, redis_lib.RedisError):
             return []
-        return sorted(jobs, key=lambda j: j.created_at, reverse=True)
+        result = sorted(jobs, key=lambda j: j.created_at, reverse=True)
+        duration_ms = int((time.monotonic() - start) * 1000)
+        self._logger.debug("job_store_list", count=len(result), duration_ms=duration_ms)
+        return result
