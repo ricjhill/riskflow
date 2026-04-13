@@ -99,15 +99,11 @@ class TestRecordModelBuildPerformance:
         fields: dict[str, FieldDefinition] = {}
         for i in range(n_fields):
             if i % 4 == 0:
-                fields[f"Field_{i}"] = FieldDefinition(
-                    type=FieldType.STRING, not_empty=True
-                )
+                fields[f"Field_{i}"] = FieldDefinition(type=FieldType.STRING, not_empty=True)
             elif i % 4 == 1:
                 fields[f"Field_{i}"] = FieldDefinition(type=FieldType.DATE)
             elif i % 4 == 2:
-                fields[f"Field_{i}"] = FieldDefinition(
-                    type=FieldType.FLOAT, non_negative=True
-                )
+                fields[f"Field_{i}"] = FieldDefinition(type=FieldType.FLOAT, non_negative=True)
             else:
                 fields[f"Field_{i}"] = FieldDefinition(
                     type=FieldType.CURRENCY,
@@ -125,9 +121,7 @@ class TestRecordModelBuildPerformance:
         with Timer() as t:
             build_record_model(schema)
 
-        assert t.elapsed_ms < 100, (
-            f"Model build took {t.elapsed_ms:.1f}ms (budget: 100ms)"
-        )
+        assert t.elapsed_ms < 100, f"Model build took {t.elapsed_ms:.1f}ms (budget: 100ms)"
 
     def test_cached_build_under_1ms(self) -> None:
         schema = DEFAULT_TARGET_SCHEMA
@@ -137,9 +131,7 @@ class TestRecordModelBuildPerformance:
         with Timer() as t:
             build_record_model(schema)
 
-        assert t.elapsed_ms < 1, (
-            f"Cached model lookup took {t.elapsed_ms:.3f}ms (budget: 1ms)"
-        )
+        assert t.elapsed_ms < 1, f"Cached model lookup took {t.elapsed_ms:.3f}ms (budget: 1ms)"
 
 
 # ---------------------------------------------------------------------------
@@ -171,9 +163,7 @@ class TestRowValidationThroughput:
             for row in rows:
                 model.model_validate(row)
 
-        assert t.elapsed_ms < 500, (
-            f"1000 rows took {t.elapsed_ms:.1f}ms (budget: 500ms)"
-        )
+        assert t.elapsed_ms < 500, f"1000 rows took {t.elapsed_ms:.1f}ms (budget: 500ms)"
 
     def test_validation_scales_linearly(self) -> None:
         model = build_record_model(DEFAULT_TARGET_SCHEMA)
@@ -196,9 +186,7 @@ class TestRowValidationThroughput:
         t500 = validate_n(500)
         t1000 = validate_n(1000)
         ratio = t1000 / max(t500, 0.001)
-        assert ratio < 3, (
-            f"Scaling ratio {ratio:.1f}x (500={t500:.1f}ms, 1000={t1000:.1f}ms)"
-        )
+        assert ratio < 3, f"Scaling ratio {ratio:.1f}x (500={t500:.1f}ms, 1000={t1000:.1f}ms)"
 
 
 # ---------------------------------------------------------------------------
@@ -281,3 +269,142 @@ class TestSchemaFingerprintPerformance:
                 _ = DEFAULT_TARGET_SCHEMA.fingerprint
         per_call = t.elapsed_ms / 100
         assert per_call < 10, f"Fingerprint took {per_call:.3f}ms/call (budget: 10ms)"
+
+
+# ---------------------------------------------------------------------------
+# Guardrail 7: Job serialization round-trip speed
+# ---------------------------------------------------------------------------
+@pytest.mark.perf_guardrail
+class TestJobSerializationPerformance:
+    """Job.to_dict() → Job.from_dict() round-trip.
+
+    Budget: 1ms per round-trip. Typical: <0.1ms.
+    Catches: accidental deep-copy or expensive datetime parsing.
+    """
+
+    def test_job_serialization_round_trip_under_1ms(self) -> None:
+        from src.domain.model.job import Job
+
+        job = Job.create(filename="test.csv")
+        job.start()
+        job.complete(result={"mapping": {}, "valid_records": [1, 2, 3]})
+
+        with Timer() as t:
+            for _ in range(100):
+                d = job.to_dict()
+                Job.from_dict(d)
+        per_call = t.elapsed_ms / 100
+        assert per_call < 1, f"Round-trip took {per_call:.3f}ms (budget: 1ms)"
+
+
+# ---------------------------------------------------------------------------
+# Guardrail 8: RedisJobStore mocked latency
+# ---------------------------------------------------------------------------
+@pytest.mark.perf_guardrail
+class TestRedisJobStorePerformance:
+    """RedisJobStore save/get/list_all with mocked Redis client.
+
+    Measures JSON serialization + deserialization overhead without
+    network I/O. Real Redis latency is tested in integration tests.
+    """
+
+    def test_redis_job_save_under_5ms(self) -> None:
+        """save() serializes to JSON and calls setex — budget 5ms."""
+        from unittest.mock import MagicMock
+
+        from src.adapters.storage.job_store import RedisJobStore
+        from src.domain.model.job import Job
+
+        client = MagicMock()
+        store = RedisJobStore(client=client)
+        job = Job.create(filename="perf.csv")
+
+        # Warm up
+        store.save(job)
+
+        with Timer() as t:
+            store.save(job)
+        assert t.elapsed_ms < 5, f"save() took {t.elapsed_ms:.1f}ms (budget: 5ms)"
+
+    def test_redis_job_get_under_5ms(self) -> None:
+        """get() deserializes from JSON — budget 5ms."""
+        import json
+        from unittest.mock import MagicMock
+
+        from src.adapters.storage.job_store import RedisJobStore
+        from src.domain.model.job import Job
+
+        client = MagicMock()
+        job = Job.create(filename="perf.csv")
+        client.get.return_value = json.dumps(job.to_dict()).encode()
+        store = RedisJobStore(client=client)
+
+        # Warm up
+        store.get(job.id)
+
+        with Timer() as t:
+            store.get(job.id)
+        assert t.elapsed_ms < 5, f"get() took {t.elapsed_ms:.1f}ms (budget: 5ms)"
+
+    def test_redis_job_list_10_under_50ms(self) -> None:
+        """list_all() with 10 jobs: SCAN + 10×GET + sort — budget 50ms."""
+        import json
+        from unittest.mock import MagicMock
+
+        from src.adapters.storage.job_store import RedisJobStore
+        from src.domain.model.job import Job
+
+        jobs = [Job.create(filename=f"file{i}.csv") for i in range(10)]
+        client = MagicMock()
+        client.scan.return_value = (
+            0,
+            [f"riskflow:job:{j.id}".encode() for j in jobs],
+        )
+        client.get.side_effect = [json.dumps(j.to_dict()).encode() for j in jobs]
+        store = RedisJobStore(client=client)
+
+        with Timer() as t:
+            result = store.list_all()
+        assert len(result) == 10
+        assert t.elapsed_ms < 50, f"list_all(10) took {t.elapsed_ms:.1f}ms (budget: 50ms)"
+
+
+# ---------------------------------------------------------------------------
+# Guardrail 9: Job serialization memory usage
+# ---------------------------------------------------------------------------
+@pytest.mark.perf_guardrail
+class TestJobSerializationMemory:
+    """Serialize/deserialize 1000 jobs — must not leak memory.
+
+    Budget: 5 MiB growth. Typical: ~0 (eligible for GC).
+    Catches: JSON string accumulation or reference retention in to_dict/from_dict.
+    """
+
+    def test_job_serialization_memory_bounded(self) -> None:
+        import gc
+        import tracemalloc
+
+        from src.domain.model.job import Job
+
+        job = Job.create(filename="mem_test.csv")
+        job.start()
+        job.complete(result={"mapping": {}, "valid_records": list(range(50))})
+
+        gc.collect()
+        tracemalloc.start()
+        before = tracemalloc.take_snapshot()
+
+        for _ in range(1000):
+            d = job.to_dict()
+            Job.from_dict(d)
+
+        gc.collect()
+        after = tracemalloc.take_snapshot()
+        tracemalloc.stop()
+
+        stats = after.compare_to(before, "lineno")
+        growth = sum(s.size_diff for s in stats if s.size_diff > 0)
+        growth_mib = growth / (1024 * 1024)
+        assert growth_mib < 5, (
+            f"Memory grew {growth_mib:.2f} MiB after 1000 round-trips (budget: 5 MiB)"
+        )
