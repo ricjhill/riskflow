@@ -11,6 +11,11 @@ services:
     volumes:
       - .:/app
       - /app/.venv
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - riskflow
   gui:
