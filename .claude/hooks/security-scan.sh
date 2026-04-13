@@ -22,9 +22,7 @@ if [ $? -ne 0 ]; then
 fi
 
 # 2. pip-audit — dependency vulnerabilities
-# Uses --ignore-vuln for known CVEs with no available fix
-KNOWN_IGNORES="--ignore-vuln CVE-2026-4539"
-OUTPUT=$(uv run pip-audit $KNOWN_IGNORES 2>&1)
+OUTPUT=$(uv run pip-audit 2>&1)
 if [ $? -ne 0 ]; then
   ERRORS+="SECURITY: pip-audit found vulnerable dependencies:\n$OUTPUT\n"
   ERRORS+="FIX: Update the vulnerable package or add to --ignore-vuln if no fix available.\n\n"
