@@ -248,18 +248,18 @@ Merge → e2e (real Groq API)
 
 ## 14. By the Numbers (3 min)
 
-| Metric | Session 1 | Session 2 | Session 3 |
-|--------|-----------|-----------|-----------|
-| PRs merged | 19 | 22 | 73 |
-| Tests | 148 | 148 | 461 |
-| Hooks | 5 | 5 | 5 |
-| Agents | 2 | 2 | 2 (reviewer checks PR text + accuracy) |
-| Skills | 2 | 3 | 2 (create-pr has 4 phases, cleanup) |
-| CI jobs | 0 | 2 | 5 (quality, boot-test, security, e2e, CD) |
-| Source files | 25 | 25 | 21 |
-| Manual code written | 0 | 0 | 0 |
-| Endpoints | 2 | 2 | 7 (health, upload, upload/async, jobs, sheets, corrections, schemas) |
-| Features | Upload + health | + logging, validation | + configurable schema, correction cache, async upload, sheets, confidence report, structured errors, schema selection |
+| Metric | Session 1 | Session 3 | Session 5 | Session 8 |
+|--------|-----------|-----------|-----------|-----------|
+| PRs merged | 19 | 49 | 113 | 134 |
+| Tests | 148 | 383 | 540 | 876 |
+| Hooks | 5 | 5 | 9 | 9 |
+| Agents | 2 | 2 | 2 | 2 |
+| Skills | 2 | 3 | 2 | 2 |
+| CI jobs | 0 | 5 | 5 | 5 |
+| Endpoints | 2 | 7 | 14 | 15 |
+| Coverage | — | — | — | 96.5% |
+| Version | — | — | — | v0.2.0 |
+| Manual code | 0 | 0 | 0 | 0 |
 
 ---
 
@@ -440,3 +440,145 @@ The full sequence of questions across all three sessions:
 | 25 | "Which features are most useful for RiskFlow?" | Reprioritized: configurable schema first (foundation), then correction cache (feedback loop) |
 | 26 | "Can you plan implementation of configurable schema?" | 20-loop Expand and Contract migration plan with safety nets |
 | 27 | "Feedback Loop: Redis Correction Cache" | 9-loop plan for human-verified mapping corrections |
+| 28 | "Which features are most useful for RiskFlow?" | Benchmarks, contracts, guardrails, load testing |
+| 29 | "Run the doc-gardener" (session 4) | Fixed 10 stale items, added flexible date parsing |
+| 30 | "Plan interactive session API" | 5 REST endpoints for step-by-step mapping workflow |
+| 31 | "Add a Flow Mapper to the GUI" | Tab 4: interactive schema creation with save-as-schema |
+| 32 | "Export the OpenAPI spec" | Committed spec with CI staleness check, API versioning |
+| 33 | "Remove RiskRecord — migration cleanup" | Deleted hardcoded class, converted equivalence tests |
+| 34 | "Add test coverage measurement" | coverage_report.py tool, baseline tracking, PR reporting |
+| 35 | "What issues are still open?" (session 8) | Found #116, #117 — merged both, then built file listing feature |
+| 36 | "Display file names and upload dates" | 8-loop feature: Job metadata, GET /jobs, GUI client |
+| 37 | "Run doc-gardener" (session 8) | Found 14 stale items across 9 files — all fixed |
+
+---
+
+## Appendix D: Sessions 4–5 — Scaling & Interactive Workflows (2026-03-31 to 2026-04-02)
+
+Two intensive sessions that added performance infrastructure, the interactive session API, and the Streamlit Flow Mapper.
+
+### Session 4 (31 Mar): Performance & Hardening
+
+| PR | What |
+|----|------|
+| #82 | Benchmarks, contract tests, performance guardrails, load tests |
+| #83 | TTFB, memory endurance, concurrency, Locust load tests |
+| #84 | Cleanup: 21 unused imports and stale docs |
+| #85 | Doc-gardener: 10 stale items fixed |
+| #86 | Hardened harness: non-root Docker, strict mypy/ruff |
+| #88 | Hook to enforce /create-pr skill for all PRs |
+| #89 | Expanded boot-test to 8 functional smoke tests |
+| #90 | Flexible date parsing for common broker date formats |
+
+### Session 5 (2 Apr): Interactive Session API & Flow Mapper
+
+| PR | What |
+|----|------|
+| #91 | Runtime dependency check hook |
+| #92 | Post-rename stale reference detection hook |
+| #93 | Fixture upload integration tests, ISO date fix |
+| #94 | Column-level date format detection |
+| #95–#97 | Schema CRUD endpoints with Redis persistence |
+| #99 | Interactive mapping session API (5 REST endpoints) |
+| #100 | Empty file 500 fix, DELETE cleanup, session edge cases |
+| #101 | PostToolUse failure context hook |
+| #104 | Session methods in RiskFlowClient |
+| #105 | Flow Mapper GUI tab (interactive session workflow) |
+| #107 | Custom target fields + save-as-schema in Flow Mapper |
+| #108 | Full diataxis docs update |
+
+**Key outcome:** Hooks grew from 5 to 9. Endpoints grew from 7 to 14. The GUI gained its 4th tab.
+
+---
+
+## Appendix E: Sessions 6–7 — OpenAPI, Coverage & Housekeeping (2026-04-04 to 2026-04-08)
+
+### Session 6 (4 Apr): OpenAPI Spec & API Versioning
+
+| PR | What |
+|----|------|
+| #109 | OpenAPI spec export with 30 typed component schemas |
+| #110 | Committed openapi.json with CI staleness check |
+| #111 | API versioning: breaking change detection, GitHub releases |
+| #112 | Diataxis docs for OpenAPI and versioning |
+| #113 | Advisory docs-reminder hook for API changes |
+
+### Session 7 (5–8 Apr): Migration Cleanup & Test Coverage
+
+| PR | What |
+|----|------|
+| #115 | Removed hardcoded RiskRecord class (migration complete) |
+| #119 | 20 tests filling high-priority coverage gaps |
+| #121 | Structured per-field validation errors in RowError |
+| #122 | Named Docker network for cross-stack connectivity |
+| #123 | 11 tests filling medium-priority coverage gaps |
+| #125 | Request-scoped structlog context via middleware |
+| #126 | Cleanup: updated CLAUDE.md architecture tree |
+| #128 | Test coverage measurement tool (coverage_report.py) |
+| #130 | Tested-at version and SHA in PR template |
+
+**Key outcome:** Coverage measurement became a first-class tool. The configurable schema migration was fully cleaned up — zero RiskRecord references remain.
+
+---
+
+## Appendix F: Session 8 — Observability, File Listing & Doc Gardening (2026-04-12)
+
+### What we shipped
+
+Three PRs merged, closing all open issues and fixing all stale documentation.
+
+### PR #132 — Observability: SLM and cache duration logging
+
+**Issues closed:** #116, #117
+
+| Change | File |
+|--------|------|
+| New `slm_call` structlog event with `duration_ms`, `model`, `headers_count` | `src/adapters/slm/mapper.py` |
+| `duration_ms` added to existing `cache_lookup` events (hit + miss) | `src/domain/service/mapping_service.py` |
+| Both use `time.monotonic()` matching routes.py convention | — |
+
+9 tests added. Code reviewer approved after one REVISE round (fixed test isolation, timer consistency, boundary coverage).
+
+### PR #133 — Feature: Job file metadata and GET /jobs list endpoint
+
+8 TDD loops across all hexagonal layers:
+
+| Loop | Layer | Change |
+|------|-------|--------|
+| 1 | Domain | `filename: str \| None` on Job |
+| 2 | Domain | `created_at: datetime` (UTC, immutable) |
+| 3 | Port | `list_all() -> list[Job]` on JobStorePort |
+| 4 | Adapter | `InMemoryJobStore.list_all()` sorted newest-first |
+| 5 | HTTP | `GET /jobs` endpoint, `JobSummary` model |
+| 6 | HTTP | Wired `file.filename` into `Job.create()`, enriched `GET /jobs/{id}` |
+| 7 | Contract | Provider + consumer tests for response shape |
+| 8 | GUI | `list_jobs()` on RiskFlowClient |
+
+30 tests added. Code reviewer approved after one REVISE round (added null-filename and sort-order tests).
+
+### PR #134 — Doc gardener: 14 stale items fixed
+
+| File | Issues |
+|------|--------|
+| `CLAUDE.md` | Tab count 3→4, routes list disambiguation |
+| `reinsurance.md` | Wrong schema path, wrong function name |
+| `routes.py` | Missing error in docstring |
+| `README.md` | Missing GET /jobs endpoint |
+| `api.md` | Undocumented endpoint, missing fields, uppercase status |
+| `features.md` | Status casing, missing GET /jobs |
+| `async-upload.md` | Uppercase status values throughout |
+| `cleanup/SKILL.md` | Fabricated CVE number |
+
+### Session 8 metrics
+
+| Metric | Value |
+|--------|-------|
+| PRs merged | 3 (#132, #133, #134) |
+| Issues closed | 2 (#116, #117) |
+| Tests added | ~39 |
+| Total tests | 876 |
+| Coverage | 96.5% |
+| Docs items fixed | 14 |
+| Code review rounds | 3 (2x REVISE→APPROVE) |
+| Open issues remaining | 0 |
+| Open PRs remaining | 0 |
