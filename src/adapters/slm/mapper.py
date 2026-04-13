@@ -43,11 +43,16 @@ def _build_system_prompt(schema: TargetSchema) -> str:
 
     prompt += (
         "\nRespond ONLY with valid JSON matching this structure:\n"
-        '{"mappings": [{"source_header": "...", "target_field": "...", "confidence": 0.95}], '
+        '{"mappings": [{"source_header": "...", "target_field": "...", "confidence": <float>}], '
         '"unmapped_headers": ["..."]}\n\n'
         "Rules:\n"
         f"- target_field MUST be one of: {fields_str}\n"
-        "- confidence is a float between 0.0 and 1.0\n"
+        "- confidence is a float between 0.0 and 1.0 — estimate YOUR certainty:\n"
+        "  - 0.9-1.0: exact or near-exact name match\n"
+        "  - 0.7-0.9: strong match via known alias or clear context\n"
+        "  - 0.4-0.7: uncertain, plausible but ambiguous\n"
+        "  - below 0.4: guess, low certainty\n"
+        "- Do NOT default all confidences to the same value — vary based on match quality\n"
         "- Headers that don't map to any target field go in unmapped_headers"
     )
 
