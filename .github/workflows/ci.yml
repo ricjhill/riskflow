@@ -251,6 +251,72 @@ jobs:
         if: steps.changes.outputs.app == 'true' && always()
         run: docker compose down
 
+  concurrency-test:
+    needs: boot-test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    # Only run on PRs when app code changes
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Check for app changes
+        id: changes
+        uses: dorny/paths-filter@v4
+        with:
+          filters: |
+            app:
+              - 'src/**'
+              - 'Dockerfile'
+              - 'docker-compose.yml'
+
+      - name: Build and start stack
+        if: steps.changes.outputs.app == 'true'
+        run: |
+          echo "GROQ_API_KEY=test_key" > .env
+          docker compose up -d --build
+          curl --fail --retry 10 --retry-delay 2 --retry-all-errors http://localhost:8000/health
+
+      - name: Install uv and deps
+        if: steps.changes.outputs.app == 'true'
+        uses: astral-sh/setup-uv@v7
+
+      - name: Run Locust 5-user test against Docker stack
+        if: steps.changes.outputs.app == 'true'
+        run: |
+          uv python install 3.12
+          uv sync --frozen
+          uv run locust -f tests/load/locustfile.py \
+            --host http://localhost:8000 \
+            --headless --users 5 --spawn-rate 5 --run-time 30s \
+            --csv=reports/concurrency
+          # Assert results
+          uv run python -c "
+          import csv, sys
+          with open('reports/concurrency_stats.csv') as f:
+              rows = list(csv.DictReader(f))
+          agg = next(r for r in rows if r['Name'] == 'Aggregated')
+          total = int(agg['Request Count'])
+          rps = float(agg.get('Requests/s', 0))
+          print(f'Requests: {total}, RPS: {rps:.1f}')
+          assert total >= 20, f'Only {total} requests in 30s — possible deadlock'
+          assert rps >= 2.0, f'RPS {rps:.1f} below 2.0 — possible deadlock'
+          print('PASS: 5-user concurrency test')
+          "
+
+      - name: Upload Locust results
+        if: steps.changes.outputs.app == 'true' && always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: concurrency-test-results
+          path: reports/concurrency*
+          retention-days: 30
+
+      - name: Tear down
+        if: steps.changes.outputs.app == 'true' && always()
+        run: docker compose down
+
   security:
     needs: quality
     runs-on: ubuntu-latest
@@ -272,10 +338,7 @@ jobs:
         run: uv run bandit -r src/ -q
 
       - name: Dependency audit
-        # CVE-2026-4539: pygments 2.19.2 — no patched version available as of 2026-03-26.
-        # Tracked in security-scan.sh hook with the same ignore.
-        # pygments is a dev dep (via rich) not exposed to users. Low risk.
-        run: uv run pip-audit --ignore-vuln CVE-2026-4539
+        run: uv run pip-audit
 
   e2e:
     needs: quality
