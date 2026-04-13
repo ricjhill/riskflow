@@ -197,6 +197,7 @@ def create_router(
     _builtins = builtin_schema_names or set()
     _store = schema_store
     _factory = service_factory
+    _schema_lock = asyncio.Lock()
 
     def _resolve_service(schema_name: str | None) -> MappingService:
         """Resolve which MappingService to use based on ?schema= param."""
@@ -241,88 +242,90 @@ def create_router(
         """Create a new runtime schema from a JSON definition."""
         from pydantic import ValidationError as PydanticValidationError
 
-        if not body:
-            raise HTTPException(
-                status_code=422,
-                detail=_error_detail(
-                    "INVALID_SCHEMA",
-                    "Request body must not be empty.",
-                    "Provide a JSON object with 'name' and 'fields' keys.",
-                ),
+        async with _schema_lock:
+            if not body:
+                raise HTTPException(
+                    status_code=422,
+                    detail=_error_detail(
+                        "INVALID_SCHEMA",
+                        "Request body must not be empty.",
+                        "Provide a JSON object with 'name' and 'fields' keys.",
+                    ),
+                )
+
+            try:
+                schema = TargetSchema.model_validate(body)
+            except PydanticValidationError as e:
+                raise HTTPException(
+                    status_code=422,
+                    detail=_error_detail(
+                        "INVALID_SCHEMA",
+                        str(e),
+                        "Check the schema format: name (string), fields (dict of field definitions).",
+                    ),
+                ) from e
+
+            _validate_schema_name(schema.name)
+
+            if schema.name in _registry or schema.name in _definitions:
+                raise HTTPException(
+                    status_code=409,
+                    detail=_error_detail(
+                        "SCHEMA_ALREADY_EXISTS",
+                        f"Schema '{schema.name}' already exists.",
+                        "Use DELETE /schemas/{name} first, or choose a different name.",
+                    ),
+                )
+
+            # Persist to store
+            if _store:
+                _store.save(schema)
+
+            # Create service and register
+            if _factory:
+                _registry[schema.name] = _factory(schema)
+            _definitions[schema.name] = schema
+
+            logger.info(
+                "schema_created",
+                schema_name=schema.name,
+                fingerprint=schema.fingerprint,
+                field_count=len(schema.fields),
             )
-
-        try:
-            schema = TargetSchema.model_validate(body)
-        except PydanticValidationError as e:
-            raise HTTPException(
-                status_code=422,
-                detail=_error_detail(
-                    "INVALID_SCHEMA",
-                    str(e),
-                    "Check the schema format: name (string), fields (dict of field definitions).",
-                ),
-            ) from e
-
-        _validate_schema_name(schema.name)
-
-        if schema.name in _registry or schema.name in _definitions:
-            raise HTTPException(
-                status_code=409,
-                detail=_error_detail(
-                    "SCHEMA_ALREADY_EXISTS",
-                    f"Schema '{schema.name}' already exists.",
-                    "Use DELETE /schemas/{name} first, or choose a different name.",
-                ),
-            )
-
-        # Persist to store
-        if _store:
-            _store.save(schema)
-
-        # Create service and register
-        if _factory:
-            _registry[schema.name] = _factory(schema)
-        _definitions[schema.name] = schema
-
-        logger.info(
-            "schema_created",
-            schema_name=schema.name,
-            fingerprint=schema.fingerprint,
-            field_count=len(schema.fields),
-        )
-        return SchemaCreatedResponse(name=schema.name, fingerprint=schema.fingerprint)
+            return SchemaCreatedResponse(name=schema.name, fingerprint=schema.fingerprint)
 
     @router.delete("/schemas/{name}", status_code=204)
     async def delete_schema(name: str) -> None:
         """Delete a runtime schema. Built-in schemas cannot be deleted."""
-        _validate_schema_name(name)
+        async with _schema_lock:
+            _validate_schema_name(name)
 
-        if name in _builtins:
-            raise HTTPException(
-                status_code=403,
-                detail=_error_detail(
-                    "PROTECTED_SCHEMA",
-                    f"Schema '{name}' is a built-in schema and cannot be deleted.",
-                    "Only runtime schemas created via POST /schemas can be deleted.",
-                ),
-            )
+            if name in _builtins:
+                raise HTTPException(
+                    status_code=403,
+                    detail=_error_detail(
+                        "PROTECTED_SCHEMA",
+                        f"Schema '{name}' is a built-in schema and cannot be deleted.",
+                        "Only runtime schemas created via POST /schemas can be deleted.",
+                    ),
+                )
 
-        if name not in _registry and name not in _definitions:
-            raise HTTPException(
-                status_code=404,
-                detail=_error_detail(
-                    "SCHEMA_NOT_FOUND",
-                    f"Schema '{name}' not found.",
-                    "Use GET /schemas to list available schemas.",
-                ),
-            )
+            if name not in _registry and name not in _definitions:
+                raise HTTPException(
+                    status_code=404,
+                    detail=_error_detail(
+                        "SCHEMA_NOT_FOUND",
+                        f"Schema '{name}' not found.",
+                        "Use GET /schemas to list available schemas.",
+                    ),
+                )
 
-        _registry.pop(name, None)
-        _definitions.pop(name, None)
-        if _store:
-            _store.delete(name)
+            _registry.pop(name, None)
+            _definitions.pop(name, None)
+            if _store:
+                _store.delete(name)
 
-        logger.info("schema_deleted", schema_name=name)
+            logger.info("schema_deleted", schema_name=name)
 
     @router.post(
         "/upload",
