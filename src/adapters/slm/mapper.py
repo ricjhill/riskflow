@@ -82,7 +82,14 @@ class GroqMapper:
         try:
             start = time.monotonic()
             if self._semaphore:
+                sem_start = time.monotonic()
                 async with self._semaphore:
+                    sem_duration_ms = int((time.monotonic() - sem_start) * 1000)
+                    self._logger.debug(
+                        "semaphore_wait",
+                        duration_ms=sem_duration_ms,
+                        model=self._model,
+                    )
                     response = await self._client.chat.completions.create(
                         model=self._model,
                         messages=[

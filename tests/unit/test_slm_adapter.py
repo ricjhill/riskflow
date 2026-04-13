@@ -477,3 +477,56 @@ class TestSemaphoreConcurrencyLimiting:
             f"Second call started at {start_1:.3f} before first ended at {end_0:.3f} "
             "— semaphore did not serialize"
         )
+
+
+class TestSemaphoreWaitLogging:
+    """DEBUG-level semaphore_wait event shows time spent waiting for the semaphore."""
+
+    @pytest.fixture(autouse=True)
+    def _capture_logs(self) -> None:  # type: ignore[misc]
+        """Configure structlog to capture log events, restoring config after."""
+        self.captured_events: list[dict[str, object]] = []
+        old_config = structlog.get_config()
+
+        def capture(
+            logger: object, method_name: str, event_dict: dict[str, object]
+        ) -> dict[str, object]:
+            self.captured_events.append(event_dict.copy())
+            raise structlog.DropEvent
+
+        structlog.configure(
+            processors=[capture],
+            wrapper_class=structlog.stdlib.BoundLogger,
+            cache_logger_on_first_use=False,
+        )
+        yield
+        structlog.configure(**old_config)
+
+    @pytest.mark.asyncio
+    async def test_semaphore_wait_logged_with_duration(self) -> None:
+        """When semaphore is present, a semaphore_wait DEBUG event is emitted."""
+        client = AsyncMock()
+        client.chat.completions.create.return_value = _mock_completion(_valid_response_json())
+        sem = asyncio.Semaphore(3)
+        mapper = GroqMapper(client=client, semaphore=sem)
+
+        await mapper.map_headers(["GWP"], [{"GWP": 50000}])
+
+        wait_events = [e for e in self.captured_events if e.get("event") == "semaphore_wait"]
+        assert len(wait_events) == 1
+        assert "duration_ms" in wait_events[0]
+        assert isinstance(wait_events[0]["duration_ms"], int)
+        assert wait_events[0]["duration_ms"] >= 0
+        assert wait_events[0]["model"] == "llama-3.3-70b-versatile"
+
+    @pytest.mark.asyncio
+    async def test_no_semaphore_wait_without_semaphore(self) -> None:
+        """Without a semaphore, no semaphore_wait event is emitted."""
+        client = AsyncMock()
+        client.chat.completions.create.return_value = _mock_completion(_valid_response_json())
+        mapper = GroqMapper(client=client)
+
+        await mapper.map_headers(["GWP"], [{"GWP": 50000}])
+
+        wait_events = [e for e in self.captured_events if e.get("event") == "semaphore_wait"]
+        assert len(wait_events) == 0
