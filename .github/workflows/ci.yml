@@ -256,6 +256,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      pull-requests: read
     # Only run on PRs when app code changes
     if: github.event_name == 'pull_request'
     steps:
