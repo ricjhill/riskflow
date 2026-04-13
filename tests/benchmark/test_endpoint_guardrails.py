@@ -136,9 +136,7 @@ class TestEndpointTTFBGuardrails:
         assert resp.status_code == 200
         assert t.elapsed_ms < 500, f"/upload took {t.elapsed_ms:.1f}ms (budget: 500ms)"
 
-    def test_upload_async_enqueue_under_200ms(
-        self, client: TestClient, tmp_path: Path
-    ) -> None:
+    def test_upload_async_enqueue_under_200ms(self, client: TestClient, tmp_path: Path) -> None:
         """POST /upload/async — measures enqueue time only.
 
         TestClient normally runs BackgroundTasks synchronously, which
@@ -176,6 +174,36 @@ class TestEndpointTTFBGuardrails:
             resp = client.get(f"/jobs/{job_id}")
 
         assert resp.status_code == 200
-        assert t.elapsed_ms < 50, (
-            f"/jobs/{{id}} took {t.elapsed_ms:.1f}ms (budget: 50ms)"
-        )
+        assert t.elapsed_ms < 50, f"/jobs/{{id}} took {t.elapsed_ms:.1f}ms (budget: 50ms)"
+
+    def test_list_jobs_empty_under_50ms(self, client: TestClient) -> None:
+        """GET /jobs with empty store — same budget as /schemas."""
+        # Warm up
+        client.get("/jobs")
+
+        with Timer() as t:
+            resp = client.get("/jobs")
+
+        assert resp.status_code == 200
+        assert t.elapsed_ms < 50, f"/jobs (empty) took {t.elapsed_ms:.1f}ms (budget: 50ms)"
+
+    def test_list_jobs_10_items_under_100ms(self, client: TestClient) -> None:
+        """GET /jobs with 10 pre-populated jobs."""
+        import io
+
+        # Create 10 jobs via async upload
+        for i in range(10):
+            client.post(
+                "/upload/async",
+                files={"file": (f"file{i}.csv", io.BytesIO(b"ID\n1\n"), "text/csv")},
+            )
+
+        # Warm up
+        client.get("/jobs")
+
+        with Timer() as t:
+            resp = client.get("/jobs")
+
+        assert resp.status_code == 200
+        assert len(resp.json()["jobs"]) == 10
+        assert t.elapsed_ms < 100, f"/jobs (10 items) took {t.elapsed_ms:.1f}ms (budget: 100ms)"
