@@ -36,6 +36,14 @@ jobs:
           --cov-report=json:reports/coverage.json
           --cov-report=term-missing
 
+      - name: Coverage delta check
+        if: github.event_name == 'pull_request'
+        run: >-
+          uv run diff-cover reports/coverage.xml
+          --compare-branch=origin/main
+          --fail-under=80
+          --include "src/adapters/*" "src/domain/*" "src/ports/*"
+
       - name: Run integration tests
         run: uv run pytest -x -v tests/integration/ --junitxml=reports/integration.xml
 
