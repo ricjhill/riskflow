@@ -8,6 +8,8 @@ and test_session_store (not yet in unit/).
 import json
 from unittest.mock import MagicMock
 
+import structlog
+
 from src.adapters.storage.job_store import RedisJobStore
 from src.domain.model.job import Job
 from src.ports.output.job_store import JobStorePort
@@ -159,3 +161,61 @@ class TestGracefulDegradation:
         store = RedisJobStore(client=client)
 
         assert store.list_all() == []
+
+
+class TestDebugLogging:
+    """DEBUG-level log events for RedisJobStore operations."""
+
+    def _capture_structlog(self) -> tuple[list[dict[str, object]], dict]:
+        """Set up structlog capture, return (events_list, old_config)."""
+        captured: list[dict[str, object]] = []
+        old_config = structlog.get_config()
+
+        def capture(
+            logger: object, method_name: str, event_dict: dict[str, object]
+        ) -> dict[str, object]:
+            captured.append(event_dict.copy())
+            raise structlog.DropEvent
+
+        structlog.configure(
+            processors=[capture],
+            wrapper_class=structlog.stdlib.BoundLogger,
+            cache_logger_on_first_use=False,
+        )
+        return captured, old_config
+
+    def test_job_store_save_logged(self) -> None:
+        """save() emits job_store_save DEBUG event with job_id and duration_ms."""
+        captured, old_config = self._capture_structlog()
+        try:
+            client = MagicMock()
+            store = RedisJobStore(client=client)
+            job = Job.create(filename="test.csv")
+            store.save(job)
+
+            save_events = [e for e in captured if e.get("event") == "job_store_save"]
+            assert len(save_events) == 1
+            assert save_events[0]["job_id"] == job.id
+            assert "duration_ms" in save_events[0]
+            assert isinstance(save_events[0]["duration_ms"], int)
+        finally:
+            structlog.configure(**old_config)
+
+    def test_job_store_list_logged(self) -> None:
+        """list_all() emits job_store_list DEBUG event with count and duration_ms."""
+        captured, old_config = self._capture_structlog()
+        try:
+            client = MagicMock()
+            job = Job.create()
+            client.scan.return_value = (0, [f"riskflow:job:{job.id}".encode()])
+            client.get.return_value = json.dumps(job.to_dict()).encode()
+            store = RedisJobStore(client=client)
+            store.list_all()
+
+            list_events = [e for e in captured if e.get("event") == "job_store_list"]
+            assert len(list_events) == 1
+            assert list_events[0]["count"] == 1
+            assert "duration_ms" in list_events[0]
+            assert isinstance(list_events[0]["duration_ms"], int)
+        finally:
+            structlog.configure(**old_config)
