@@ -5,8 +5,10 @@ and delete them without restarting the service. Built-in schemas
 loaded from YAML at startup are protected from deletion.
 """
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
+import httpx
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -191,3 +193,86 @@ class TestDeleteSchema:
     def test_rejects_delete_invalid_name(self, client: TestClient, bad_name: str) -> None:
         resp = client.delete(f"/schemas/{bad_name}")
         assert resp.status_code == 400
+
+
+class TestConcurrentSchemaOperations:
+    """asyncio.Lock prevents race conditions on concurrent create/delete."""
+
+    @pytest.fixture
+    def app(self) -> FastAPI:
+        """Fresh app for async tests — separate from the sync TestClient fixture."""
+        default_schema = _make_schema("builtin_schema")
+        default_service = _make_service(default_schema)
+        registry: dict[str, MappingService] = {"builtin_schema": default_service}
+        definitions: dict[str, TargetSchema] = {"builtin_schema": default_schema}
+
+        router = create_router(
+            default_service,
+            schema_registry=registry,
+            schema_definitions=definitions,
+            builtin_schema_names={"builtin_schema"},
+            schema_store=NullSchemaStore(),
+            service_factory=_service_factory,
+        )
+
+        fastapi_app = FastAPI()
+        fastapi_app.include_router(router)
+        return fastapi_app
+
+    @pytest.mark.asyncio
+    async def test_concurrent_schema_creation_same_name(self, app: FastAPI) -> None:
+        """5 concurrent POSTs with the same name: exactly 1 gets 201, rest get 409."""
+        schema_body = {"name": "race_test", "fields": {"X": {"type": "string"}}}
+
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            tasks = [
+                asyncio.create_task(client.post("/schemas", json=schema_body)) for _ in range(5)
+            ]
+            responses = await asyncio.gather(*tasks)
+
+        status_codes = [r.status_code for r in responses]
+        assert status_codes.count(201) == 1, f"Expected exactly 1 x 201, got {status_codes}"
+        assert status_codes.count(409) == 4, f"Expected 4 x 409, got {status_codes}"
+
+    @pytest.mark.asyncio
+    async def test_concurrent_schema_creation_different_names(self, app: FastAPI) -> None:
+        """3 concurrent POSTs with different names: all 3 get 201."""
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            tasks = [
+                asyncio.create_task(
+                    client.post(
+                        "/schemas",
+                        json={"name": f"schema_{i}", "fields": {"X": {"type": "string"}}},
+                    )
+                )
+                for i in range(3)
+            ]
+            responses = await asyncio.gather(*tasks)
+
+        status_codes = [r.status_code for r in responses]
+        assert all(s == 201 for s in status_codes), f"Expected all 201, got {status_codes}"
+
+    @pytest.mark.asyncio
+    async def test_concurrent_create_and_delete_no_crash(self, app: FastAPI) -> None:
+        """Concurrent create + delete for same schema produces no 500 errors."""
+        schema_body = {"name": "volatile", "fields": {"X": {"type": "string"}}}
+
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            # Create it first
+            await client.post("/schemas", json=schema_body)
+
+            # Fire concurrent create (should 409) + delete (should 204)
+            tasks = [
+                asyncio.create_task(client.post("/schemas", json=schema_body)),
+                asyncio.create_task(client.delete("/schemas/volatile")),
+            ]
+            responses = await asyncio.gather(*tasks)
+
+        for resp in responses:
+            assert resp.status_code != 500, f"Got 500: {resp.text}"
