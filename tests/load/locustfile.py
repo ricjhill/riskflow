@@ -81,3 +81,44 @@ class RiskFlowUser(HttpUser):
             "/upload?schema=standard_reinsurance",
             files={"file": ("load_test.csv", self._csv_content, "text/csv")},
         )
+
+    @task(2)
+    def list_jobs(self) -> None:
+        """List all async jobs — exercises RedisJobStore.list_all()."""
+        self.client.get("/jobs")
+
+    @task(1)
+    def poll_async_job(self) -> None:
+        """Upload async, then poll until terminal state.
+
+        Marks 503 as success (expected with dummy/test Groq key).
+        """
+        with self.client.post(
+            "/upload/async",
+            files={"file": ("async_test.csv", self._csv_content, "text/csv")},
+            catch_response=True,
+        ) as resp:
+            if resp.status_code == 503:
+                resp.success()
+            elif resp.status_code != 202:
+                resp.failure(f"Expected 202 or 503, got {resp.status_code}")
+                return
+
+        if resp.status_code != 202:
+            return
+
+        job_id = resp.json()["job_id"]
+
+        # Poll up to 10 times
+        for _ in range(10):
+            with self.client.get(
+                f"/jobs/{job_id}", name="/jobs/[id]", catch_response=True
+            ) as poll_resp:
+                if poll_resp.status_code != 200:
+                    poll_resp.failure(f"Poll got {poll_resp.status_code}")
+                    return
+                status = poll_resp.json().get("status", "")
+                if status in ("complete", "failed"):
+                    poll_resp.success()
+                    return
+                poll_resp.success()
