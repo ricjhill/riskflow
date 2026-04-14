@@ -136,6 +136,21 @@ RiskFlow automates the mapping step. Upload a bordereaux spreadsheet, and RiskFl
 
 **Business value:** New cedent schemas can be created by data teams without restarting the service or editing YAML files. Built-in schemas (from YAML) are protected from deletion.
 
+### 11. Multi-User Scaling (v0.3.0)
+
+**What it does:** Supports 5 concurrent users with persistent job tracking, concurrent background processing, and rate-limited SLM calls. Every scaling feature is reversible via environment variables.
+
+**Business value:** Multiple team members can upload bordereaux files simultaneously without waiting for each other. Jobs survive server restarts. The Groq API isn't overwhelmed by concurrent requests.
+
+**How it works:**
+- `RedisJobStore` persists jobs across workers and restarts
+- `asyncio.create_task()` runs uploads concurrently within each worker
+- `asyncio.Semaphore(3)` limits Groq API calls to prevent rate limiting
+- Multi-worker Uvicorn (`--workers 2`) handles concurrent HTTP requests
+- All configurable via `JOB_STORE`, `ASYNC_BACKEND`, `SLM_CONCURRENCY` env vars
+
+See [Scaling Architecture](scaling-architecture.md) for full details.
+
 ## Acceptance Testing Checklist
 
 For testers validating RiskFlow, here are the key scenarios to verify:
