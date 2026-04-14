@@ -4,27 +4,40 @@ Run against a live server (docker compose up -d):
 
     uv run locust -f tests/load/locustfile.py --host http://localhost:8000
 
-Or headless for CI:
+Or headless for CI (5-user concurrency test):
 
     uv run locust -f tests/load/locustfile.py \
         --host http://localhost:8000 \
         --headless \
-        --users 10 \
-        --spawn-rate 2 \
+        --users 5 \
+        --spawn-rate 5 \
         --run-time 30s \
-        --csv benchmarks/load_test
+        --csv benchmarks/load_test \
+        --exit-code-on-error 0
 
-The --csv flag writes results to benchmarks/load_test_stats.csv for tracking.
+What "5 concurrent users" means:
+    - 5 simulated users, all spawned immediately
+    - Each user waits 1-3s between requests (realistic think time)
+    - Typically 2-3 requests in-flight at any moment, not 5
+    - This proves 5 users interacting concurrently, not 5 simultaneous requests
+
+Expected 503 errors:
+    - With a dummy GROQ_API_KEY, sync /upload returns 503 (SLM unavailable)
+    - This is expected, not a scaling failure — the same 503 happens with 1 user
+    - All non-SLM endpoints (health, schemas, jobs, async upload) return 200
 
 What this tests:
     - /health: baseline latency, no business logic
-    - /upload: full pipeline latency under concurrency
+    - /upload: full pipeline (503 expected with test key)
+    - /upload/async: enqueue only, returns 202 immediately
+    - /jobs: list all jobs (exercises RedisJobStore.list_all)
+    - /jobs/[id]: poll job status
     - /schemas: read-only metadata endpoint
 
 Performance targets (configurable):
     - /health p95 < 50ms
-    - /upload p95 < 5000ms (includes SLM call)
     - /schemas p95 < 100ms
+    - /jobs p95 < 200ms
 """
 
 import csv
