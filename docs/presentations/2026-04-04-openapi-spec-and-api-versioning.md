@@ -241,3 +241,15 @@ Step 2 of the OpenAPI sync plan:
 - Add body schema diffing to `check_api_changes.py` (detect added/removed response properties)
 - Consider `oasdiff` for PR comments showing exactly what changed
 - Create initial `v0.1.0` release tag (happens automatically on first CI pass after merge)
+
+---
+
+## Lessons Learned (retrospective)
+
+| Problem | Impact | How it was caught |
+|---------|--------|-------------------|
+| Auto-generated wildcard schema in openapi.md was incorrect | Documentation showed wrong schema structure | Follow-up commit in PR #112 |
+| GitHub Actions `set-output` syntax was deprecated | CI step failed silently | PR #111 review — fixed with newer syntax |
+| Version bump tool compared against committed spec, not previous release | If spec was regenerated in a feature PR, the tool saw no diff and didn't bump | Discovered in Session 8 when v0.2.0 stayed unchanged through 20 PRs |
+
+**Key insight:** The version bump automation has a design flaw — it compares current spec against committed spec, but the spec gets committed alongside features. The comparison should be against the last tagged release, not the last commit.

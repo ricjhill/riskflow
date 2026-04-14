@@ -189,3 +189,15 @@ Each question tightened the constraints. Each constraint improved the output. Th
 **The harness is the product.** The code is a side effect.
 
 **Next:** Part 2 covers how we used this harness to build features — configurable schemas, correction cache, CI/CD pipeline, and what we learned from getting documentation wrong.
+
+---
+
+## Lessons Learned (retrospective)
+
+| Problem | Impact | How it was caught |
+|---------|--------|-------------------|
+| All 5 hooks used `jq` but it was never installed | Hooks silently did nothing — no validation ran on any commit | Discovered in Session 4 when hooks were audited (PR #67) |
+| Groq deprecated `llama-3.1-70b-versatile` between coding and testing | Real SLM calls failed with model-not-found error | Smoke test in Loop 10 (PR #12) — no unit test could have caught this |
+| Empty placeholder files left in scaffold | `schema.yaml`, `validator.yaml` never used, confused the architecture | Smoke test cleanup (PR #12) |
+
+**Key insight:** The harness had zero mechanical enforcement for 19 PRs. Every hook was broken from day one because of a missing dependency. The lesson: smoke-test your hooks, not just your code.

@@ -447,3 +447,16 @@ The Flow Mapper uses selectboxes, not drag-and-drop. The UX is less impressive, 
 ### 7. Test the client, not just the server
 
 The api_client had 0 tests until PR #104. Adding 32 tests found no bugs — but it locked down the request shapes (URLs, params, JSON bodies, error propagation) so that future refactors can't silently break the GUI's assumptions about the API. The reviewer caught that raise_for_status was only asserted in 2 of 10 methods — meaning 8 methods could silently swallow HTTP errors without any test noticing.
+
+---
+
+## Lessons Learned (retrospective)
+
+| Problem | Impact | How it was caught |
+|---------|--------|-------------------|
+| Empty file upload returned 500 instead of 400 | Unhandled edge case in session creation | PR #100 — found during edge case testing |
+| DELETE /sessions didn't clean up temp files on failure | Temp files accumulated on disk | PR #100 — reviewer flagged missing finally block |
+| API client had 0 tests for 10 methods | 8 methods could silently swallow HTTP errors | Code reviewer caught missing raise_for_status assertions (PR #104) |
+| PATCH /sessions/{id}/target-fields accepted non-string values | No type validation on new endpoint | PR #107 — found during Flow Mapper testing |
+
+**Key insight:** New endpoints ship without edge case tests more often than existing ones regress. The test coverage validation step (checking planned tests against testing rules) was created because of gaps found in this session.

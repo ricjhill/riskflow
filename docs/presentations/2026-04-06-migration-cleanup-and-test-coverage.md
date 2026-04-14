@@ -366,3 +366,15 @@ The count went down net because we removed 47 tests that tested nothing useful (
 ## Key Takeaway
 
 > Cleaning up after a migration is as important as the migration itself. Dead code confuses future readers, migration scaffolding obscures real test coverage, and opaque errors slow debugging. Today's session was about **finishing what we started** — removing dead code, filling test gaps, structuring error output, and wiring observability so every request is traceable end-to-end.
+
+---
+
+## Lessons Learned (retrospective)
+
+| Problem | Impact | How it was caught |
+|---------|--------|-------------------|
+| CLAUDE.md architecture tree still referenced removed RiskRecord class | Stale reference confused the agent in future sessions | PR #126 cleanup scan |
+| Equivalence tests and shadow deployment tests left after migration complete | Dead tests inflated test count without testing real behaviour | PR #115 — deliberate cleanup, but should have been done immediately after migration |
+| CI JUnit test reporter glob accidentally included coverage.xml | False CI failures on test reporting step | PR #128 — discovered when coverage reporting was added |
+
+**Key insight:** Migration cleanup should happen in the same PR as the final migration step, not deferred to a later session. Dead scaffolding (equivalence tests, shadow tests) confuses future readers and inflates metrics.

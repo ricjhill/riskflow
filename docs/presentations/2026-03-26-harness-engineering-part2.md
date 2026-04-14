@@ -274,3 +274,15 @@ Each question tightened the constraints. Each constraint improved the output. Th
 **The harness is the product.** The code is a side effect.
 
 **What we'd do differently:** Start with hooks and CI from commit 1. The hardest bugs to find were the ones that mattered most — model deprecation, inaccurate PR claims, cross-layer imports. All were caught by mechanical checks, not by reading code.
+
+---
+
+## Lessons Learned (retrospective)
+
+| Problem | Impact | How it was caught |
+|---------|--------|-------------------|
+| PR #26 claimed "returns 400" but code returned 500 | Inaccurate documentation of error handling | Manual review — led to code-reviewer agent checking PR text accuracy |
+| Docker Compose REDIS_URL pointed to localhost inside container | Redis unreachable in Docker — cache always missed | Smoke test against Docker stack |
+| Commit message described wrong direction of Docker volume interference | Misleading git history | User review — led to "trace mechanics before writing" feedback memory |
+
+**Key insight:** Inaccurate documentation is worse than missing documentation. A PR that says "returns 400" when the code returns 500 gives false confidence. The fix wasn't "be more careful" — it was adding a second agent that cross-references claims against code.
