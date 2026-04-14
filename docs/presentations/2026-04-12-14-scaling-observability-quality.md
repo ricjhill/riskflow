@@ -233,11 +233,43 @@ class TestGracefulDegradation:
 
 ---
 
-## 8. What's Next (2 min)
+## 8. Lessons Learned (5 min)
+
+### What went wrong
+
+| Problem | Impact | Fix applied |
+|---------|--------|-------------|
+| **Skipped tests on 4 TDD loops** (PR #149) | Production code shipped untested — user caught it, not the harness | Added coverage delta check in CI; saved RED-first feedback memory |
+| **Skipped PR template repeatedly** | Multiple PRs had minimal descriptions despite explicit rules | Added hook that validates 6 required sections in PR body |
+| **CI broke 3 times after merge** | Shallow checkout, missing permissions, Locust exit code on 503s | Each was a trivial fix but showed CI changes weren't tested pre-merge |
+| **Version didn't bump for 20 PRs** | New endpoint added in PR #133 but version stayed at 0.2.0 | Manual bump to v0.3.0; created issue #169 for /release skill |
+| **Scaling proof is incomplete** | CI concurrency test uses dummy Groq key — proves infra, not full path | Tracked as issue #164 (concurrent e2e with real API) |
+| **Plan took 6 review rounds** | 41-loop plan had dependency errors, missing tests, wrong granularity | Good investment — caught real gaps — but planning overhead was significant |
+| **Test readability deferred too long** | 959 tests but 75% lacked docstrings after 160+ PRs | Retrofitted class docstrings; should have been enforced from the start |
+
+### What should change
+
+1. **Version bumps must be automated** — the /release skill (#169) should detect API changes and bump on merge, not rely on manual intervention
+2. **CI changes need dry-run testing** — too many "fix CI" follow-up PRs. Consider a CI-testing workflow that validates workflow YAML before merge
+3. **RED-first needs mechanical enforcement** — the feedback memory helps but discipline fails under time pressure. The coverage delta in CI catches it at PR level but not at commit level
+4. **Session presentations should always include this section** — what went wrong is more valuable than what shipped
+
+### What went well
+
+- The scaling plan was thorough — 41 loops with explicit dependencies, rollback strategy, and observability
+- Every scaling feature is reversible via env var — no redeploy needed to rollback
+- The code-reviewer agent caught real issues in every PR it reviewed (test isolation, timer consistency, null-filename gaps, disjunctive assertions)
+- The confidence bug was found, root-caused, fixed, and verified with real uploads in one session
+- The harness got stronger — PR template enforcement, coverage delta in CI, test docstring standard
+
+---
+
+## 9. What's Next (2 min)
 
 | # | Title | Type |
 |---|-------|------|
 | #136 | Confidence endpoint for human-provided mappings | Enhancement |
 | #164 | Concurrent e2e test with real Groq API | Testing |
+| #169 | /release skill for automated version bumps | Harness |
 
-The scaling infrastructure is complete. The next step is proving it works with real Groq API calls under concurrency (#164), and building the confidence score endpoint for the interactive mapping workflow (#136).
+The scaling infrastructure is complete. The next step is proving it works with real Groq API calls under concurrency (#164), automating releases (#169), and building the confidence score endpoint for the interactive mapping workflow (#136).
