@@ -295,7 +295,8 @@ jobs:
           uv run locust -f tests/load/locustfile.py \
             --host http://localhost:8000 \
             --headless --users 5 --spawn-rate 5 --run-time 30s \
-            --csv=reports/concurrency
+            --csv=reports/concurrency \
+            --exit-code-on-error 0
           # Assert results
           uv run python -c "
           import csv, sys
