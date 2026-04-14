@@ -1,6 +1,6 @@
 [project]
 name = "riskflow"
-version = "0.2.0"
+version = "0.3.0"
 description = "Reinsurance data mapper — automates mapping of Bordereaux spreadsheets to a standardized schema using SLMs"
 requires-python = ">=3.12"
 dependencies = [
