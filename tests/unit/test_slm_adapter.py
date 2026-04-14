@@ -51,12 +51,16 @@ def _valid_response_json() -> str:
 
 
 class TestGroqMapperProtocol:
+    """GroqMapper satisfies MapperPort protocol for dependency injection."""
+
     def test_satisfies_mapper_port(self) -> None:
         client = AsyncMock()
         assert isinstance(GroqMapper(client=client), MapperPort)
 
 
 class TestPromptConstruction:
+    """System prompt is built dynamically from the schema — fields, hints, and JSON format."""
+
     @pytest.mark.asyncio
     async def test_prompt_contains_all_target_fields(self) -> None:
         client = AsyncMock()
@@ -195,6 +199,8 @@ class TestConfidenceAnchoring:
 
 
 class TestResponseParsing:
+    """SLM JSON response is parsed into a validated MappingResult."""
+
     @pytest.mark.asyncio
     async def test_parses_valid_response(self) -> None:
         client = AsyncMock()
@@ -249,6 +255,8 @@ class TestResponseParsing:
 
 
 class TestResponseParsingEdgeCases:
+    """Malformed SLM responses raise SLMUnavailableError instead of crashing."""
+
     @pytest.mark.asyncio
     async def test_raises_on_empty_choices(self) -> None:
         """SLM returns response with empty choices list."""
@@ -285,6 +293,8 @@ class TestResponseParsingEdgeCases:
 
 
 class TestPromptConstructionWithCustomSchema:
+    """Custom schemas produce tailored prompts — no hardcoded field names leak through."""
+
     @pytest.mark.asyncio
     async def test_schema_with_no_hints_says_no_aliases(self) -> None:
         """A schema with no slm_hints should produce 'No known aliases'."""
@@ -343,6 +353,8 @@ class TestPromptConstructionWithCustomSchema:
 
 
 class TestErrorHandling:
+    """Groq API errors are wrapped in SLMUnavailableError — never leak raw exceptions."""
+
     @pytest.mark.asyncio
     async def test_wraps_api_error(self) -> None:
         client = AsyncMock()
