@@ -356,3 +356,15 @@ The original ISO test used `"2025-01-15"` (day=15 > 12). The boundary that matte
 ### 5. The post-edit lint hook fights you when building incrementally
 
 Adding an import in one edit, then using it in the next edit, causes the linter to strip the import between edits. Workaround: add imports in the same edit as their usage. This is a known friction point with the hook-per-edit architecture.
+
+---
+
+## Lessons Learned (retrospective)
+
+| Problem | Impact | How it was caught |
+|---------|--------|-------------------|
+| Post-edit lint hook stripped imports added in one edit before they were used in the next | Forced workaround: add imports in the same edit as usage | Discovered during incremental development — known friction point |
+| ISO date misparsing: `2025/07/15` parsed as July 15 in some locales, January 5 in others | Silent data corruption on ambiguous dates | Integration test with fixture data (PR #93) |
+| YYYY/MM/DD format not detected by date_format module | Dates in this format fell through to generic parsing with wrong dayfirst assumption | Test failure on real bordereaux data |
+
+**Key insight:** Date parsing is a minefield of silent failures. The fix wasn't just better parsing — it was column-level format detection that locks in the format from sample data before parsing the full column.

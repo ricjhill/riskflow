@@ -379,3 +379,15 @@ TOTAL        96.5%  1277/1324
 ## Key Takeaway
 
 > You can't improve what you don't measure — and you can't measure consistently if only half your stack is instrumented. This session brought coverage parity across both repos, gave PRs version traceability, and caught 3 high-severity CVEs along the way. Every commit, every PR, and every CI run now answers: what's tested, how well, and against which code.
+
+---
+
+## Lessons Learned (retrospective)
+
+| Problem | Impact | How it was caught |
+|---------|--------|-------------------|
+| Coverage measurement didn't exist until Session 7 | No way to know if test quality was improving or regressing across 130+ PRs | Built the tool in this session — should have been built in Session 1 |
+| riskflow-ui had 0% test coverage | Cross-repo parity assumed but never verified | Coverage audit in this session |
+| PR template lacked "tested at" version/SHA | No traceability between PR claims and the code they were tested against | Added in PR #130 |
+
+**Key insight:** Coverage measurement should be a Day 1 tool, not a Session 7 afterthought. By the time we measured, 840 tests existed but we couldn't prove when gaps were introduced or which PRs improved coverage.

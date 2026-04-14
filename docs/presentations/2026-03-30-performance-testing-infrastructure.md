@@ -822,3 +822,14 @@ The architecture is designed so that **scaling is an adapter change, not a domai
 - Kubernetes? → Add /ready and /live endpoints (health check pattern)
 
 The domain service — `MappingService` — has never been modified for infrastructure reasons. It only changes when business rules change.
+
+---
+
+## Lessons Learned (retrospective)
+
+| Problem | Impact | How it was caught |
+|---------|--------|-------------------|
+| No performance baselines before building features | Can't prove optimisations helped — no before/after comparison | Realised when writing the scaling plan (Session 8) |
+| Benchmark JSON files initially committed to repo | Large binary files in git history | Cleanup scan — moved to .gitignore |
+
+**Key insight:** Performance infrastructure should be built before the features that need it, not after. Baselines captured before scaling work would have made the improvement measurable.

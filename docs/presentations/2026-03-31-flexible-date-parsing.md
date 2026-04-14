@@ -526,3 +526,15 @@ tests/fixtures/marine_cargo_bordereaux.xlsx                 (test data)
 tests/fixtures/multi_sheet_bordereaux.xlsx                  (test data)
 .claude/rules/reinsurance.md                               (updated date rule)
 ```
+
+---
+
+## Lessons Learned (retrospective)
+
+| Problem | Impact | How it was caught |
+|---------|--------|-------------------|
+| Ruff SIM105 suggested replacing deliberate `try/except/pass` with `contextlib.suppress` | Changed working, tested code to satisfy a linter rule | PR #87 reverted — led to "don't rewrite deliberate code for linters" feedback memory |
+| Post-rename hook didn't exist — 8+ stale references to `schemas/default.yaml` after rename | Stale file paths in docs, rules, and comments | Built the post-rename hook (PR #92) as a direct result |
+| `pyyaml` was only in dev deps but imported at runtime | Boot test worked in dev mode but would fail in production Docker image | Runtime dependency check hook (PR #91) |
+
+**Key insight:** Linter suggestions are not always improvements. Deliberate patterns (try/except/pass for graceful degradation) should be preserved — ignore the rule, don't change the code.
