@@ -201,8 +201,11 @@ def create_app() -> FastAPI:
 
     # --- Job store for async uploads ---
     job_store_type = os.environ.get("JOB_STORE", "redis")
+    job_ttl = int(os.environ.get("JOB_TTL", "86400"))
     if job_store_type == "redis" and redis_client:
-        job_store: InMemoryJobStore | RedisJobStore = RedisJobStore(client=redis_client)
+        job_store: InMemoryJobStore | RedisJobStore = RedisJobStore(
+            client=redis_client, ttl=job_ttl
+        )
     else:
         job_store = InMemoryJobStore()
 

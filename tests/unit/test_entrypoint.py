@@ -255,6 +255,20 @@ class TestJobStoreWiring:
         assert len(config_events) >= 1
         assert "job_store_type" in config_events[-1]
 
+    def test_job_ttl_from_env(self) -> None:
+        """JOB_TTL env var is passed to RedisJobStore constructor."""
+        mock_client = MagicMock()
+        with (
+            patch.dict(os.environ, {"REDIS_URL": "redis://localhost:6379", "JOB_TTL": "7200"}),
+            patch("src.entrypoint.main._create_redis_client", return_value=mock_client),
+            patch("src.entrypoint.main.RedisJobStore") as MockStore,
+        ):
+            from src.entrypoint.main import create_app
+
+            create_app()
+            assert MockStore.call_count >= 1
+            assert MockStore.call_args.kwargs.get("ttl") == 7200
+
 
 class TestSemaphoreWiring:
     """SLM_CONCURRENCY env var controls the Groq semaphore."""
