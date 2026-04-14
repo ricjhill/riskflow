@@ -81,19 +81,29 @@ class RiskFlowUser(HttpUser):
 
     @task(1)
     def upload_file(self) -> None:
-        """Upload a CSV for mapping — the critical path."""
-        self.client.post(
+        """Upload a CSV for mapping. 503 is expected with a dummy Groq key."""
+        with self.client.post(
             "/upload",
             files={"file": ("load_test.csv", self._csv_content, "text/csv")},
-        )
+            catch_response=True,
+        ) as resp:
+            if resp.status_code == 503:
+                resp.success()
+            elif resp.status_code != 200:
+                resp.failure(f"Expected 200 or 503, got {resp.status_code}")
 
     @task(1)
     def upload_with_schema(self) -> None:
-        """Upload with explicit schema selection."""
-        self.client.post(
+        """Upload with explicit schema selection. 503 is expected with a dummy Groq key."""
+        with self.client.post(
             "/upload?schema=standard_reinsurance",
             files={"file": ("load_test.csv", self._csv_content, "text/csv")},
-        )
+            catch_response=True,
+        ) as resp:
+            if resp.status_code == 503:
+                resp.success()
+            elif resp.status_code != 200:
+                resp.failure(f"Expected 200 or 503, got {resp.status_code}")
 
     @task(2)
     def list_jobs(self) -> None:
