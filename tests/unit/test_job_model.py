@@ -12,6 +12,8 @@ from src.domain.model.job import Job, JobStatus
 
 
 class TestJobCreation:
+    """New jobs start in a known safe state — PENDING, unique ID, no result."""
+
     def test_new_job_is_pending(self) -> None:
         job = Job.create()
         assert job.status == JobStatus.PENDING
@@ -28,6 +30,8 @@ class TestJobCreation:
 
 
 class TestJobTransitions:
+    """Job state machine: PENDING → PROCESSING → COMPLETE or FAILED. Invalid transitions raise."""
+
     def test_start_processing(self) -> None:
         job = Job.create()
         job.start()

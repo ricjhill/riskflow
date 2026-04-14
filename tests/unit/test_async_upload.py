@@ -34,6 +34,8 @@ def _create_test_app(
 
 
 class TestAsyncUpload:
+    """POST /upload/async — accepts file immediately, returns job ID for polling."""
+
     def test_returns_202_with_job_id(self) -> None:
         service = AsyncMock()
         app = _create_test_app(service)
@@ -63,6 +65,8 @@ class TestAsyncUpload:
 
 
 class TestJobStatus:
+    """GET /jobs/{id} — poll job status through PENDING → COMPLETE or FAILED."""
+
     def test_get_pending_job(self) -> None:
         service = AsyncMock()
         store = InMemoryJobStore()
@@ -162,6 +166,8 @@ class TestJobStatus:
 
 
 class TestListJobs:
+    """GET /jobs — list all uploaded files with filenames, dates, and status."""
+
     def test_list_jobs_empty(self) -> None:
         service = AsyncMock()
         app = _create_test_app(service)

@@ -20,6 +20,12 @@ Use `pytest.raises(ValueError, match="field_name")` not just `pytest.raises(Valu
 ## Test domain invariants explicitly
 If a model has a business rule (e.g., no duplicate target fields, expiry after inception), write a dedicated test for it. Don't rely on it being caught indirectly.
 
+## Test docstrings
+- **Every test class** must have a one-sentence docstring explaining the group's purpose.
+- **Edge case test methods** should have a one-sentence docstring explaining the business rule or failure scenario being tested.
+- **Happy path tests** with self-explanatory names do not need docstrings.
+- Do not refactor working test code for readability — add docstrings only.
+
 ## Test depth by layer
 - **Domain models** — full edge case coverage: boundaries, invalid input, invariants. These are the core validation rules.
 - **Ports (Protocols)** — structural only: verify classes satisfy or fail to satisfy the interface. No behavior to test.
