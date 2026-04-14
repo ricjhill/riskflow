@@ -1,0 +1,3 @@
+Policy_ID,Amount,Effective,Maturity,Money Type,Random Column,XYZ123
+POL-001,500000,2025-01-01,2025-12-31,USD,foo,bar
+POL-002,1200000,2025-03-15,2026-03-14,GBP,baz,qux
