@@ -8,11 +8,15 @@ from src.ports.output.job_store import JobStorePort
 
 
 class TestInMemoryJobStoreProtocol:
+    """InMemoryJobStore satisfies JobStorePort protocol for single-process deployments."""
+
     def test_satisfies_job_store_port(self) -> None:
         assert isinstance(InMemoryJobStore(), JobStorePort)
 
 
 class TestSaveAndGet:
+    """Basic job persistence — save stores, get retrieves, updates overwrite."""
+
     def test_save_and_retrieve_job(self) -> None:
         store = InMemoryJobStore()
         job = Job.create()
@@ -26,6 +30,7 @@ class TestSaveAndGet:
         assert store.get("nonexistent-id") is None
 
     def test_save_updates_existing_job(self) -> None:
+        """Re-saving a job after status transition overwrites the previous state."""
         store = InMemoryJobStore()
         job = Job.create()
         store.save(job)
@@ -39,6 +44,8 @@ class TestSaveAndGet:
 
 
 class TestListAll:
+    """List all jobs sorted newest-first — for the GET /jobs endpoint."""
+
     def test_list_all_empty(self) -> None:
         store = InMemoryJobStore()
         assert store.list_all() == []

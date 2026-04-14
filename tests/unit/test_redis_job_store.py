@@ -16,11 +16,15 @@ from src.ports.output.job_store import JobStorePort
 
 
 class TestRedisJobStoreProtocol:
+    """RedisJobStore satisfies JobStorePort protocol for dependency injection."""
+
     def test_satisfies_job_store_port(self) -> None:
         assert isinstance(RedisJobStore(client=MagicMock()), JobStorePort)
 
 
 class TestSaveAndGet:
+    """Job persistence via Redis SETEX — save serializes to JSON, get deserializes."""
+
     def test_save_and_get_roundtrip(self) -> None:
         client = MagicMock()
         store = RedisJobStore(client=client)
@@ -54,6 +58,7 @@ class TestSaveAndGet:
         assert call_args[0] == f"riskflow:job:{job.id}"
 
     def test_get_returns_none_on_miss(self) -> None:
+        """Missing key returns None — job appears as 'not found', not an error."""
         client = MagicMock()
         client.get.return_value = None
         store = RedisJobStore(client=client)
@@ -61,6 +66,7 @@ class TestSaveAndGet:
         assert store.get("nonexistent") is None
 
     def test_get_returns_none_on_corrupt_data(self) -> None:
+        """Corrupt JSON in Redis returns None instead of crashing the API."""
         client = MagicMock()
         client.get.return_value = b"not-valid-json"
         store = RedisJobStore(client=client)
@@ -69,6 +75,8 @@ class TestSaveAndGet:
 
 
 class TestTTL:
+    """Job TTL management — jobs expire after configurable duration, refreshed on each save."""
+
     def test_save_calls_setex_with_default_ttl(self) -> None:
         client = MagicMock()
         store = RedisJobStore(client=client)
@@ -80,6 +88,7 @@ class TestTTL:
         assert ttl_arg == 86400
 
     def test_save_refreshes_ttl_on_update(self) -> None:
+        """Each save resets the TTL — jobs that progress through status transitions stay alive."""
         client = MagicMock()
         store = RedisJobStore(client=client)
         job = Job.create()
@@ -102,6 +111,8 @@ class TestTTL:
 
 
 class TestListAll:
+    """List all jobs via SCAN — returns newest-first, skips corrupt entries."""
+
     def test_list_all_uses_scan(self) -> None:
         client = MagicMock()
         job = Job.create(filename="a.csv")
@@ -123,6 +134,7 @@ class TestListAll:
         assert store.list_all() == []
 
     def test_list_all_skips_corrupt_entries(self) -> None:
+        """One bad entry in Redis doesn't break the entire listing — it's silently skipped."""
         client = MagicMock()
         job = Job.create(filename="good.csv")
         client.scan.return_value = (
@@ -141,7 +153,10 @@ class TestListAll:
 
 
 class TestGracefulDegradation:
+    """Redis failures degrade to no-op — the API stays up even when Redis is down."""
+
     def test_save_swallows_connection_error(self) -> None:
+        """Save failure is silently dropped — the job proceeds without persistence."""
         client = MagicMock()
         client.setex.side_effect = ConnectionError("gone")
         store = RedisJobStore(client=client)
@@ -149,6 +164,7 @@ class TestGracefulDegradation:
         store.save(Job.create())  # should not raise
 
     def test_get_swallows_connection_error(self) -> None:
+        """Get failure returns None — job appears as 'not found', not a 500 error."""
         client = MagicMock()
         client.get.side_effect = ConnectionError("gone")
         store = RedisJobStore(client=client)
@@ -156,6 +172,7 @@ class TestGracefulDegradation:
         assert store.get("some-id") is None
 
     def test_list_all_swallows_connection_error(self) -> None:
+        """List failure returns empty list — the endpoint returns no jobs, not a 500."""
         client = MagicMock()
         client.scan.side_effect = ConnectionError("gone")
         store = RedisJobStore(client=client)
