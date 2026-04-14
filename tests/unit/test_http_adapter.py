@@ -73,6 +73,8 @@ def _upload_csv(
 
 
 class TestUploadEndpoint:
+    """POST /upload — sync upload returns mapping result with confidence scores."""
+
     def test_returns_200_with_mapping_result(self) -> None:
         service = AsyncMock()
         service.process_file.return_value = _make_processing_result()
