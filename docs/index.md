@@ -29,6 +29,8 @@ Step-by-step instructions for common tasks.
 - [Correct a Wrong Mapping](how-to/correct-mappings.md) — Override the AI when it gets a mapping wrong
 - [Process Large Files Asynchronously](how-to/async-upload.md) — Upload without waiting for results
 - [Use a Custom Schema](how-to/custom-schema.md) — Define your own target fields instead of the default 6
+- [Configure Scaling](how-to/configure-scaling.md) — Set concurrency limits, choose job store, rollback
+- [Debug with Logging](how-to/debug-with-logging.md) — Enable DEBUG logs, trace requests, diagnose bottlenecks
 
 ### Explanation — Understand how it works
 
@@ -38,6 +40,7 @@ Background and context for product owners and testers.
 - [How Mapping Works](explanation/how-mapping-works.md) — The AI mapping pipeline from upload to validated output
 - [Confidence Scores](explanation/confidence-scores.md) — What the numbers mean and when to trust them
 - [The Correction Feedback Loop](explanation/corrections.md) — How human corrections improve future mappings
+- [Scaling Architecture](explanation/scaling-architecture.md) — How RiskFlow handles 5 concurrent users
 
 ### Reference — Look up details
 
@@ -48,3 +51,15 @@ Complete specifications for developers and testers.
 - [API Versioning](reference/versioning.md) — Semantic versioning, breaking change detection, GitHub releases
 - [Target Schema](reference/schema.md) — Default schema fields, types, constraints, and how to create custom schemas
 - [Error Codes](reference/errors.md) — Every error code, what triggers it, and what to do about it
+- [Configuration](reference/configuration.md) — All environment variables with defaults and rollback values
+
+### Engineering Sessions — How we built it
+
+Session presentations documenting design decisions, lessons learned, and metrics.
+
+- [Scaling, Observability & Quality (12-14 Apr)](presentations/2026-04-12-14-scaling-observability-quality.md) — 5-user scaling plan, confidence fix, harness improvements
+- [Test Coverage Tracking (8 Apr)](presentations/2026-04-08-test-coverage-tracking.md) — Coverage measurement, PR traceability
+- [Migration Cleanup (6 Apr)](presentations/2026-04-06-migration-cleanup-and-test-coverage.md) — RiskRecord removal, test gaps
+- [OpenAPI & Versioning (4 Apr)](presentations/2026-04-04-openapi-spec-and-api-versioning.md) — Spec export, breaking change detection
+- [Interactive Session API (2 Apr)](presentations/2026-04-02-interactive-session-api-and-harness-completion.md) — 5 REST endpoints, Flow Mapper
+- [Harness Engineering (26 Mar)](presentations/2026-03-26-harness-engineering-part1.md) — Hooks, rules, agents, TDD workflow
