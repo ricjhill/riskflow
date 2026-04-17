@@ -203,3 +203,13 @@ The default target schema (`schemas/standard_reinsurance.yaml`) maps Bordereaux 
 The schema is configurable via YAML. Custom schemas can define different fields, types, constraints, cross-field rules, and SLM hints. See:
 - [Schema reference](docs/reference/schema.md) — field types, constraints, YAML format
 - [How to use a custom schema](docs/how-to/custom-schema.md) — step-by-step guide
+
+## License
+
+This project is dual-licensed:
+
+- **Open Source:** [GNU General Public License v3.0](LICENSE) — free for open-source use, modification, and distribution under GPL terms.
+- **Commercial:** For use in proprietary or closed-source products without GPL obligations, a commercial license is available. Contact [ricjhill](https://github.com/ricjhill) for details.
+
+© 2025-2026 ricjhill. All rights reserved.
+
