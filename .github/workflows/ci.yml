@@ -59,6 +59,10 @@ jobs:
         run: uv run pytest -x -v tests/load/test_locust_ci.py --junitxml=reports/load.xml
         timeout-minutes: 5
 
+      - name: Run scale regression tests
+        run: uv run pytest -x -v tests/scale/ --junitxml=reports/scale.xml
+        timeout-minutes: 5
+
       - name: Type check
         run: uv run mypy src/
 
@@ -131,7 +135,7 @@ jobs:
         uses: dorny/test-reporter@v3
         with:
           name: Test Results
-          path: "reports/unit.xml,reports/integration.xml,reports/contract.xml,reports/benchmark.xml,reports/load.xml"
+          path: "reports/unit.xml,reports/integration.xml,reports/contract.xml,reports/benchmark.xml,reports/load.xml,reports/scale.xml"
           reporter: java-junit
 
   boot-test:

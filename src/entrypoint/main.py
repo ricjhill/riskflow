@@ -171,38 +171,48 @@ def create_app() -> FastAPI:
     builtin_schema_names = set(schemas.keys())
 
     # Load runtime schemas from Redis and merge with YAML schemas.
-    # These are async calls but create_app() is sync and may be called either
-    # at Uvicorn startup (no loop yet) or under a test runner (loop may exist).
-    # Create a dedicated loop for these one-shot startup operations to avoid
-    # the "asyncio.run() cannot be called from a running event loop" error
-    # and the "get_event_loop deprecated" warning.
+    # These are async calls but create_app() is sync and runs at module import
+    # time (before Uvicorn starts its event loop). Create a dedicated loop for
+    # these one-shot startup operations; this also works under a test runner
+    # that has its own loop, because new_event_loop() doesn't attach itself.
     _startup_loop = asyncio.new_event_loop()
     try:
-        runtime_names = _startup_loop.run_until_complete(schema_store.list_all())
-    except Exception:
-        runtime_names = []
-    for runtime_name in runtime_names:
-        if runtime_name not in schemas:
-            runtime_schema = _startup_loop.run_until_complete(schema_store.get(runtime_name))
-            if runtime_schema:
-                mapper = GroqMapper(
-                    client=groq_client, schema=runtime_schema, semaphore=slm_semaphore
-                )
-                schema_registry[runtime_name] = MappingService(
-                    ingestor=ingestor,
-                    mapper=mapper,
-                    cache=cache,
-                    schema=runtime_schema,
-                    correction_cache=correction_cache,
-                    logger=logger,
-                )
-                schemas[runtime_name] = runtime_schema
-                logger.info(
-                    "runtime_schema_loaded",
-                    schema_name=runtime_name,
-                    schema_fingerprint=runtime_schema.fingerprint,
-                )
-    _startup_loop.close()
+        try:
+            runtime_names = _startup_loop.run_until_complete(schema_store.list_all())
+        except Exception as exc:
+            logger.warning("runtime_schema_list_failed", error=str(exc))
+            runtime_names = []
+        for runtime_name in runtime_names:
+            if runtime_name not in schemas:
+                try:
+                    runtime_schema = _startup_loop.run_until_complete(
+                        schema_store.get(runtime_name)
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "runtime_schema_load_failed", schema_name=runtime_name, error=str(exc)
+                    )
+                    continue
+                if runtime_schema:
+                    mapper = GroqMapper(
+                        client=groq_client, schema=runtime_schema, semaphore=slm_semaphore
+                    )
+                    schema_registry[runtime_name] = MappingService(
+                        ingestor=ingestor,
+                        mapper=mapper,
+                        cache=cache,
+                        schema=runtime_schema,
+                        correction_cache=correction_cache,
+                        logger=logger,
+                    )
+                    schemas[runtime_name] = runtime_schema
+                    logger.info(
+                        "runtime_schema_loaded",
+                        schema_name=runtime_name,
+                        schema_fingerprint=runtime_schema.fingerprint,
+                    )
+    finally:
+        _startup_loop.close()
 
     # Factory closure for creating MappingService at runtime
     def _make_service(schema: TargetSchema) -> MappingService:
