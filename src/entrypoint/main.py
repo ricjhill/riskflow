@@ -151,6 +151,7 @@ def create_app() -> FastAPI:
             cache=cache,
             schema=schema,
             correction_cache=correction_cache,
+            logger=logger,
         )
 
     # Default service for requests without ?schema=
@@ -180,6 +181,7 @@ def create_app() -> FastAPI:
                     cache=cache,
                     schema=runtime_schema,
                     correction_cache=correction_cache,
+                    logger=logger,
                 )
                 schemas[runtime_name] = runtime_schema
                 logger.info(
@@ -197,6 +199,7 @@ def create_app() -> FastAPI:
             cache=cache,
             schema=schema,
             correction_cache=correction_cache,
+            logger=logger,
         )
 
     # --- Job store for async uploads ---
