@@ -166,6 +166,16 @@ jobs:
           echo "Waiting for app to start..."
           sleep 5
 
+      - name: Scan Docker image for vulnerabilities
+        if: steps.changes.outputs.app == 'true'
+        uses: aquasecurity/trivy-action@v0.35.0
+        with:
+          image-ref: 'riskflow-api'
+          format: 'table'
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true
+
       - name: Functional smoke tests
         if: steps.changes.outputs.app == 'true'
         run: |
