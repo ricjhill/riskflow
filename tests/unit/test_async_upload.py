@@ -296,11 +296,12 @@ class TestAsyncBackend:
         )
         job_id = response.json()["job_id"]
 
-        # Poll until terminal state
         job = store.get(job_id)
-        # With TestClient, background tasks complete synchronously
         assert job is not None
-        assert job.status in (JobStatus.FAILED, JobStatus.PENDING, JobStatus.PROCESSING)
+        assert job.status == JobStatus.FAILED, (
+            f"Expected FAILED but got {job.status} — error handling may be broken"
+        )
+        assert job.error == "SLM timeout"
 
     def test_async_backend_background_fallback(self) -> None:
         """ASYNC_BACKEND=background still processes jobs via BackgroundTasks."""
