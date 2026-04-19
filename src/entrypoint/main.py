@@ -170,10 +170,14 @@ def create_app() -> FastAPI:
     # Must capture before merging Redis schemas
     builtin_schema_names = set(schemas.keys())
 
-    # Load runtime schemas from Redis and merge with YAML schemas
-    for runtime_name in schema_store.list_all():
+    # Load runtime schemas from Redis and merge with YAML schemas.
+    # These are async calls but create_app() is sync (called during Uvicorn
+    # startup before the event loop serves requests). Use the event loop
+    # directly for these one-time startup operations.
+    _loop = asyncio.get_event_loop()
+    for runtime_name in _loop.run_until_complete(schema_store.list_all()):
         if runtime_name not in schemas:
-            runtime_schema = schema_store.get(runtime_name)
+            runtime_schema = _loop.run_until_complete(schema_store.get(runtime_name))
             if runtime_schema:
                 mapper = GroqMapper(
                     client=groq_client, schema=runtime_schema, semaphore=slm_semaphore

@@ -280,7 +280,7 @@ def create_router(
 
             # Persist to store
             if _store:
-                _store.save(schema)
+                await _store.save(schema)
 
             # Create service and register
             if _factory:
@@ -324,7 +324,7 @@ def create_router(
             _registry.pop(name, None)
             _definitions.pop(name, None)
             if _store:
-                _store.delete(name)
+                await _store.delete(name)
 
             logger.info("schema_deleted", schema_name=name)
 

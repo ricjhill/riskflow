@@ -1,6 +1,6 @@
 """Schema store adapters for runtime schema persistence."""
 
-from typing import Any, cast
+from typing import Any
 
 import redis as redis_lib
 import structlog
@@ -13,16 +13,16 @@ KEY_PREFIX = "riskflow:schema:"
 class NullSchemaStore:
     """No-op fallback when Redis is unavailable."""
 
-    def get(self, name: str) -> TargetSchema | None:
+    async def get(self, name: str) -> TargetSchema | None:
         return None
 
-    def save(self, schema: TargetSchema) -> None:
+    async def save(self, schema: TargetSchema) -> None:
         pass
 
-    def delete(self, name: str) -> None:
+    async def delete(self, name: str) -> None:
         pass
 
-    def list_all(self) -> list[str]:
+    async def list_all(self) -> list[str]:
         return []
 
 
@@ -33,9 +33,9 @@ class RedisSchemaStore:
         self._client = client
         self._logger = structlog.get_logger()
 
-    def get(self, name: str) -> TargetSchema | None:
+    async def get(self, name: str) -> TargetSchema | None:
         try:
-            data = cast(bytes | None, self._client.get(f"{KEY_PREFIX}{name}"))
+            data = await self._client.get(f"{KEY_PREFIX}{name}")
         except (ConnectionError, redis_lib.RedisError) as exc:
             self._logger.error("schema_store_get_failed", schema_name=name, error=str(exc))
             return None
@@ -46,24 +46,26 @@ class RedisSchemaStore:
         except (ValueError, TypeError):
             return None
 
-    def save(self, schema: TargetSchema) -> None:
+    async def save(self, schema: TargetSchema) -> None:
         try:
-            self._client.set(f"{KEY_PREFIX}{schema.name}", schema.model_dump_json())
+            await self._client.set(f"{KEY_PREFIX}{schema.name}", schema.model_dump_json())
         except (ConnectionError, redis_lib.RedisError) as exc:
             self._logger.error("schema_store_save_failed", schema_name=schema.name, error=str(exc))
 
-    def delete(self, name: str) -> None:
+    async def delete(self, name: str) -> None:
         try:
-            self._client.delete(f"{KEY_PREFIX}{name}")
+            await self._client.delete(f"{KEY_PREFIX}{name}")
         except (ConnectionError, redis_lib.RedisError) as exc:
             self._logger.error("schema_store_delete_failed", schema_name=name, error=str(exc))
 
-    def list_all(self) -> list[str]:
+    async def list_all(self) -> list[str]:
         try:
             names: list[str] = []
             cursor: int = 0
             while True:
-                cursor, keys = self._client.scan(cursor=cursor, match=f"{KEY_PREFIX}*", count=100)
+                cursor, keys = await self._client.scan(
+                    cursor=cursor, match=f"{KEY_PREFIX}*", count=100
+                )
                 for key in keys:
                     key_str = key.decode() if isinstance(key, bytes) else key
                     names.append(key_str.removeprefix(KEY_PREFIX))
