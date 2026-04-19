@@ -52,7 +52,7 @@ def client() -> TestClient:
     """TestClient with real CSV parsing but mocked SLM."""
     mapper = AsyncMock()
     mapper.map_headers.return_value = _make_mapping_result()
-    cache = MagicMock()
+    cache = AsyncMock()
     cache.get_mapping.return_value = None
 
     service = MappingService(

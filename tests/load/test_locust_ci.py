@@ -66,7 +66,7 @@ def _build_app():  # type: ignore[no-untyped-def]
         ],
         unmapped_headers=["Extra"],
     )
-    cache = MagicMock()
+    cache = AsyncMock()
     cache.get_mapping.return_value = None
 
     service = MappingService(

@@ -151,7 +151,7 @@ class TestProviderUploadContract:
             ],
             unmapped_headers=["Extra"],
         )
-        cache = MagicMock()
+        cache = AsyncMock()
         cache.get_mapping.return_value = None
 
         service = MappingService(
@@ -251,7 +251,7 @@ class TestProviderUploadContract:
             ],
             unmapped_headers=[],
         )
-        low_conf_cache = MagicMock()
+        low_conf_cache = AsyncMock()
         low_conf_cache.get_mapping.return_value = None
         low_conf_service = MappingService(
             ingestor=PolarsIngestor(),

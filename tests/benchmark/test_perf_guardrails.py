@@ -308,54 +308,55 @@ class TestRedisJobStorePerformance:
     network I/O. Real Redis latency is tested in integration tests.
     """
 
-    def test_redis_job_save_under_5ms(self) -> None:
+    @pytest.mark.asyncio
+    async def test_redis_job_save_under_5ms(self) -> None:
         """save() serializes to JSON and calls setex — budget 5ms."""
-        from unittest.mock import MagicMock
+        from unittest.mock import AsyncMock
 
         from src.adapters.storage.job_store import RedisJobStore
         from src.domain.model.job import Job
 
-        client = MagicMock()
+        client = AsyncMock()
         store = RedisJobStore(client=client)
         job = Job.create(filename="perf.csv")
 
-        # Warm up
-        store.save(job)
+        await store.save(job)  # warm up
 
         with Timer() as t:
-            store.save(job)
+            await store.save(job)
         assert t.elapsed_ms < 5, f"save() took {t.elapsed_ms:.1f}ms (budget: 5ms)"
 
-    def test_redis_job_get_under_5ms(self) -> None:
+    @pytest.mark.asyncio
+    async def test_redis_job_get_under_5ms(self) -> None:
         """get() deserializes from JSON — budget 5ms."""
         import json
-        from unittest.mock import MagicMock
+        from unittest.mock import AsyncMock
 
         from src.adapters.storage.job_store import RedisJobStore
         from src.domain.model.job import Job
 
-        client = MagicMock()
+        client = AsyncMock()
         job = Job.create(filename="perf.csv")
         client.get.return_value = json.dumps(job.to_dict()).encode()
         store = RedisJobStore(client=client)
 
-        # Warm up
-        store.get(job.id)
+        await store.get(job.id)  # warm up
 
         with Timer() as t:
-            store.get(job.id)
+            await store.get(job.id)
         assert t.elapsed_ms < 5, f"get() took {t.elapsed_ms:.1f}ms (budget: 5ms)"
 
-    def test_redis_job_list_10_under_50ms(self) -> None:
+    @pytest.mark.asyncio
+    async def test_redis_job_list_10_under_50ms(self) -> None:
         """list_all() with 10 jobs: SCAN + 10×GET + sort — budget 50ms."""
         import json
-        from unittest.mock import MagicMock
+        from unittest.mock import AsyncMock
 
         from src.adapters.storage.job_store import RedisJobStore
         from src.domain.model.job import Job
 
         jobs = [Job.create(filename=f"file{i}.csv") for i in range(10)]
-        client = MagicMock()
+        client = AsyncMock()
         client.scan.return_value = (
             0,
             [f"riskflow:job:{j.id}".encode() for j in jobs],
@@ -364,7 +365,7 @@ class TestRedisJobStorePerformance:
         store = RedisJobStore(client=client)
 
         with Timer() as t:
-            result = store.list_all()
+            result = await store.list_all()
         assert len(result) == 10
         assert t.elapsed_ms < 50, f"list_all(10) took {t.elapsed_ms:.1f}ms (budget: 50ms)"
 
