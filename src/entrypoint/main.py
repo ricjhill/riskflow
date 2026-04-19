@@ -252,7 +252,7 @@ def create_app() -> FastAPI:
         if redis_client is None:
             return HealthResponse(status="ok", redis="not_configured")
         try:
-            redis_client.ping()
+            await redis_client.ping()
             return HealthResponse(status="ok", redis="connected")
         except Exception:
             return HealthResponse(status="degraded", redis="unreachable")
@@ -266,7 +266,7 @@ def create_app() -> FastAPI:
         """
         if redis_client is not None:
             try:
-                redis_client.ping()
+                await redis_client.ping()
             except Exception:
                 return JSONResponse(
                     status_code=503,
@@ -345,12 +345,12 @@ def _load_all_schemas() -> dict[str, TargetSchema]:
 
 
 def _create_redis_client() -> Any:
-    """Create a shared Redis client if REDIS_URL is set, otherwise None."""
+    """Create a shared async Redis client if REDIS_URL is set, otherwise None."""
     redis_url = os.environ.get("REDIS_URL")
     if redis_url:
-        import redis
+        import redis.asyncio
 
-        return redis.Redis.from_url(redis_url)
+        return redis.asyncio.Redis.from_url(redis_url)
     return None
 
 

@@ -8,7 +8,7 @@ or Groq connections.
 import logging
 import os
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import structlog
@@ -46,7 +46,7 @@ class TestAppCreation:
         """With a working Redis, health reports redis as connected."""
         from src.entrypoint.main import create_app
 
-        mock_redis = MagicMock()
+        mock_redis = AsyncMock()
         mock_redis.ping.return_value = True
         with patch("src.entrypoint.main._create_redis_client", return_value=mock_redis):
             app = create_app()
@@ -59,7 +59,7 @@ class TestAppCreation:
         """With a failing Redis, health reports degraded status."""
         from src.entrypoint.main import create_app
 
-        mock_redis = MagicMock()
+        mock_redis = AsyncMock()
         mock_redis.ping.side_effect = ConnectionError("gone")
         with patch("src.entrypoint.main._create_redis_client", return_value=mock_redis):
             app = create_app()
@@ -92,7 +92,7 @@ class TestAppCreation:
         """With unreachable Redis, readiness probe returns 503."""
         from src.entrypoint.main import create_app
 
-        mock_redis = MagicMock()
+        mock_redis = AsyncMock()
         mock_redis.ping.side_effect = ConnectionError("gone")
         with patch("src.entrypoint.main._create_redis_client", return_value=mock_redis):
             app = create_app()
@@ -232,7 +232,7 @@ class TestCorrectionCacheWiring:
 
     def test_app_creates_with_redis_correction_cache(self) -> None:
         """When REDIS_URL is set, RedisCorrectionCache is used."""
-        mock_client = MagicMock()
+        mock_client = AsyncMock()
         with (
             patch.dict(os.environ, {"REDIS_URL": "redis://localhost:6379"}),
             patch("src.entrypoint.main._create_redis_client", return_value=mock_client),
@@ -341,7 +341,7 @@ class TestJobStoreWiring:
     """JOB_STORE env var controls which job store is used."""
 
     def test_job_store_is_redis_when_redis_available(self) -> None:
-        mock_client = MagicMock()
+        mock_client = AsyncMock()
         with (
             patch.dict(os.environ, {"REDIS_URL": "redis://localhost:6379"}),
             patch("src.entrypoint.main._create_redis_client", return_value=mock_client),
@@ -364,7 +364,7 @@ class TestJobStoreWiring:
 
     def test_job_store_memory_when_env_set(self) -> None:
         """JOB_STORE=memory forces InMemoryJobStore even with Redis available."""
-        mock_client = MagicMock()
+        mock_client = AsyncMock()
         with (
             patch.dict(
                 os.environ,
@@ -395,7 +395,7 @@ class TestJobStoreWiring:
 
     def test_job_ttl_from_env(self) -> None:
         """JOB_TTL env var is passed to RedisJobStore constructor."""
-        mock_client = MagicMock()
+        mock_client = AsyncMock()
         with (
             patch.dict(os.environ, {"REDIS_URL": "redis://localhost:6379", "JOB_TTL": "7200"}),
             patch("src.entrypoint.main._create_redis_client", return_value=mock_client),
