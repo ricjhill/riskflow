@@ -32,6 +32,27 @@ LAYER_RULES: dict[str, set[str]] = {
 # third-party) is always allowed.
 LOCAL_LAYERS = {"domain", "ports", "adapters", "entrypoint"}
 
+# Infrastructure packages that must NOT be imported directly in domain/
+# or ports/ layers. These are implementation concerns that should be
+# injected via dependency injection from entrypoint/ or adapters/.
+# Pure modelling libraries like pydantic and polars are intentionally excluded.
+INFRA_PACKAGES_BANNED_IN_DOMAIN: set[str] = {
+    "structlog",
+    "redis",
+    "httpx",
+    "fastapi",
+    "uvicorn",
+    "groq",
+}
+
+# Layers where infrastructure imports are banned
+INFRA_BAN_LAYERS: set[str] = {"domain", "ports"}
+
+INFRA_FIX_SUGGESTION = (
+    "FIX: domain/ and ports/ must not import infrastructure packages directly. "
+    "Accept the dependency via constructor injection from entrypoint/."
+)
+
 FIX_SUGGESTIONS: dict[str, str] = {
     "domain": (
         "FIX: domain/ may only import from domain/ and ports/. "
@@ -121,15 +142,25 @@ def _check_import(
 ) -> None:
     """Check if a single import violates the boundary rules."""
     imported_layer = _extract_local_layer(module)
-    if imported_layer is None:
-        return  # stdlib or third-party — always allowed
+    if imported_layer is not None:
+        # Local (src/) import — check layer boundary rules
+        if imported_layer not in allowed:
+            fix = FIX_SUGGESTIONS.get(current_layer, "")
+            errors.append(
+                f"VIOLATION: Layer '{current_layer}' cannot import '{imported_layer}' "
+                f"(from '{module}') in {path}:{lineno}. {fix}"
+            )
+        return
 
-    if imported_layer not in allowed:
-        fix = FIX_SUGGESTIONS.get(current_layer, "")
-        errors.append(
-            f"VIOLATION: Layer '{current_layer}' cannot import '{imported_layer}' "
-            f"(from '{module}') in {path}:{lineno}. {fix}"
-        )
+    # Third-party or stdlib import — check infra package ban in domain/ports
+    if current_layer in INFRA_BAN_LAYERS:
+        top_package = module.split(".")[0]
+        if top_package in INFRA_PACKAGES_BANNED_IN_DOMAIN:
+            errors.append(
+                f"INFRA_IMPORT: Layer '{current_layer}' cannot import "
+                f"infrastructure package '{top_package}' (from '{module}') "
+                f"in {path}:{lineno}. {INFRA_FIX_SUGGESTION}"
+            )
 
 
 def main(exit_on_error: bool = True) -> list[str]:

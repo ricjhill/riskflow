@@ -57,6 +57,7 @@ Complete specifications for developers and testers.
 
 Session presentations documenting design decisions, lessons learned, and metrics.
 
+- [Harness Audit & Release Skill (19 Apr)](presentations/2026-04-19-harness-audit-and-release-skill.md) — Adversarial audit, branch protection, 5 harness fixes, release automation
 - [Scaling, Observability & Quality (12-14 Apr)](presentations/2026-04-12-14-scaling-observability-quality.md) — 5-user scaling plan, confidence fix, harness improvements
 - [Test Coverage Tracking (8 Apr)](presentations/2026-04-08-test-coverage-tracking.md) — Coverage measurement, PR traceability
 - [Migration Cleanup (6 Apr)](presentations/2026-04-06-migration-cleanup-and-test-coverage.md) — RiskRecord removal, test gaps

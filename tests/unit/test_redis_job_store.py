@@ -155,29 +155,122 @@ class TestListAll:
 class TestGracefulDegradation:
     """Redis failures degrade to no-op — the API stays up even when Redis is down."""
 
-    def test_save_swallows_connection_error(self) -> None:
-        """Save failure is silently dropped — the job proceeds without persistence."""
-        client = MagicMock()
-        client.setex.side_effect = ConnectionError("gone")
-        store = RedisJobStore(client=client)
+    def _capture_structlog(self) -> tuple[list[dict[str, object]], dict]:
+        """Set up structlog capture, return (events_list, old_config)."""
+        captured: list[dict[str, object]] = []
+        old_config = structlog.get_config()
 
-        store.save(Job.create())  # should not raise
+        def capture(
+            logger: object, method_name: str, event_dict: dict[str, object]
+        ) -> dict[str, object]:
+            captured.append(event_dict.copy())
+            raise structlog.DropEvent
+
+        structlog.configure(
+            processors=[capture],
+            wrapper_class=structlog.stdlib.BoundLogger,
+            cache_logger_on_first_use=False,
+        )
+        return captured, old_config
+
+    def test_save_swallows_connection_error(self) -> None:
+        """Save failure logs an error but does not raise — the job proceeds without persistence."""
+        captured, old_config = self._capture_structlog()
+        try:
+            client = MagicMock()
+            client.setex.side_effect = ConnectionError("gone")
+            store = RedisJobStore(client=client)
+
+            store.save(Job.create())  # should not raise
+
+            error_events = [e for e in captured if e.get("event") == "job_store_save_failed"]
+            assert len(error_events) == 1
+            assert "error" in error_events[0]
+        finally:
+            structlog.configure(**old_config)
 
     def test_get_swallows_connection_error(self) -> None:
-        """Get failure returns None — job appears as 'not found', not a 500 error."""
-        client = MagicMock()
-        client.get.side_effect = ConnectionError("gone")
-        store = RedisJobStore(client=client)
+        """Get failure logs an error and returns None — job appears as 'not found', not a 500 error."""
+        captured, old_config = self._capture_structlog()
+        try:
+            client = MagicMock()
+            client.get.side_effect = ConnectionError("gone")
+            store = RedisJobStore(client=client)
 
-        assert store.get("some-id") is None
+            assert store.get("some-id") is None
+
+            error_events = [e for e in captured if e.get("event") == "job_store_get_failed"]
+            assert len(error_events) == 1
+            assert "error" in error_events[0]
+        finally:
+            structlog.configure(**old_config)
 
     def test_list_all_swallows_connection_error(self) -> None:
-        """List failure returns empty list — the endpoint returns no jobs, not a 500."""
-        client = MagicMock()
-        client.scan.side_effect = ConnectionError("gone")
-        store = RedisJobStore(client=client)
+        """List failure logs an error and returns empty list — the endpoint returns no jobs, not a 500."""
+        captured, old_config = self._capture_structlog()
+        try:
+            client = MagicMock()
+            client.scan.side_effect = ConnectionError("gone")
+            store = RedisJobStore(client=client)
 
-        assert store.list_all() == []
+            assert store.list_all() == []
+
+            error_events = [e for e in captured if e.get("event") == "job_store_list_failed"]
+            assert len(error_events) == 1
+            assert "error" in error_events[0]
+        finally:
+            structlog.configure(**old_config)
+
+    def test_save_error_logs_job_id(self) -> None:
+        """Save error log includes the job_id so operators can correlate failures to specific jobs."""
+        captured, old_config = self._capture_structlog()
+        try:
+            client = MagicMock()
+            client.setex.side_effect = ConnectionError("connection refused")
+            store = RedisJobStore(client=client)
+            job = Job.create(filename="important.csv")
+
+            store.save(job)
+
+            error_events = [e for e in captured if e.get("event") == "job_store_save_failed"]
+            assert len(error_events) == 1
+            assert error_events[0]["job_id"] == job.id
+            assert error_events[0]["error"] == "connection refused"
+        finally:
+            structlog.configure(**old_config)
+
+    def test_get_error_logs_job_id(self) -> None:
+        """Get error log includes the job_id so operators can correlate failures to specific jobs."""
+        captured, old_config = self._capture_structlog()
+        try:
+            client = MagicMock()
+            client.get.side_effect = ConnectionError("timeout")
+            store = RedisJobStore(client=client)
+
+            store.get("job-abc-123")
+
+            error_events = [e for e in captured if e.get("event") == "job_store_get_failed"]
+            assert len(error_events) == 1
+            assert error_events[0]["job_id"] == "job-abc-123"
+            assert error_events[0]["error"] == "timeout"
+        finally:
+            structlog.configure(**old_config)
+
+    def test_list_error_logs_event(self) -> None:
+        """List error log uses the correct event name for filtering in production logs."""
+        captured, old_config = self._capture_structlog()
+        try:
+            client = MagicMock()
+            client.scan.side_effect = ConnectionError("redis down")
+            store = RedisJobStore(client=client)
+
+            store.list_all()
+
+            error_events = [e for e in captured if e.get("event") == "job_store_list_failed"]
+            assert len(error_events) == 1
+            assert error_events[0]["error"] == "redis down"
+        finally:
+            structlog.configure(**old_config)
 
 
 class TestDebugLogging:
