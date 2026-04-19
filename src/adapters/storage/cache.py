@@ -9,6 +9,7 @@ NullCache: no-op fallback used when Redis is unavailable or in tests.
 from typing import cast
 
 import redis
+import structlog
 
 from src.domain.model.schema import MappingResult
 
@@ -20,12 +21,14 @@ class RedisCache:
 
     def __init__(self, client: redis.Redis) -> None:
         self._client = client
+        self._logger = structlog.get_logger()
 
     def get_mapping(self, cache_key: str) -> MappingResult | None:
         """Retrieve a cached mapping result, or None on miss/error."""
         try:
             data = cast(bytes | None, self._client.get(f"{KEY_PREFIX}{cache_key}"))
-        except (ConnectionError, redis.RedisError):
+        except (ConnectionError, redis.RedisError) as exc:
+            self._logger.error("cache_get_failed", cache_key=cache_key, error=str(exc))
             return None
 
         if data is None:
@@ -44,8 +47,8 @@ class RedisCache:
                 ttl,
                 result.model_dump_json(),
             )
-        except (ConnectionError, redis.RedisError):
-            pass
+        except (ConnectionError, redis.RedisError) as exc:
+            self._logger.error("cache_set_failed", cache_key=cache_key, error=str(exc))
 
 
 class NullCache:

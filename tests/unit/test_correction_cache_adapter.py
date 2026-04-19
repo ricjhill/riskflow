@@ -3,6 +3,7 @@
 from unittest.mock import MagicMock
 
 import redis
+import structlog.testing
 
 from src.adapters.storage.correction_cache import (
     NullCorrectionCache,
@@ -76,6 +77,20 @@ class TestRedisCorrectionCacheGet:
         result = cache.get_corrections("ABC", ["GWP"])
 
         assert result == {}
+
+    def test_logs_error_on_get_connection_failure(self) -> None:
+        """Redis get failure emits an error log with cedent_id."""
+        client = MagicMock()
+        client.hmget.side_effect = redis.ConnectionError("down")
+        cache = RedisCorrectionCache(client=client)
+
+        with structlog.testing.capture_logs() as logs:
+            cache.get_corrections("ABC", ["GWP"])
+
+        error_logs = [l for l in logs if l.get("event") == "correction_cache_get_failed"]
+        assert len(error_logs) == 1
+        assert error_logs[0]["cedent_id"] == "ABC"
+        assert "down" in error_logs[0]["error"]
 
     def test_returns_empty_for_empty_headers(self) -> None:
         client = MagicMock()
@@ -166,3 +181,18 @@ class TestRedisCorrectionCacheSet:
         correction = Correction(cedent_id="ABC", source_header="GWP", target_field="Gross_Premium")
 
         cache.set_correction(correction)  # should not raise
+
+    def test_logs_error_on_set_connection_failure(self) -> None:
+        """Redis set failure emits an error log with cedent_id."""
+        client = MagicMock()
+        client.hset.side_effect = redis.ConnectionError("down")
+        cache = RedisCorrectionCache(client=client)
+        correction = Correction(cedent_id="ABC", source_header="GWP", target_field="Gross_Premium")
+
+        with structlog.testing.capture_logs() as logs:
+            cache.set_correction(correction)
+
+        error_logs = [l for l in logs if l.get("event") == "correction_cache_set_failed"]
+        assert len(error_logs) == 1
+        assert error_logs[0]["cedent_id"] == "ABC"
+        assert "down" in error_logs[0]["error"]

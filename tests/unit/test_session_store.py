@@ -7,6 +7,7 @@ and RedisMappingSessionStore (save/get roundtrip, TTL, delete, graceful degradat
 from unittest.mock import MagicMock
 
 import redis as redis_lib
+import structlog.testing
 
 from src.adapters.storage.session_store import (
     NullMappingSessionStore,
@@ -162,3 +163,44 @@ class TestRedisMappingSessionStoreGracefulDegradation:
         client.delete.side_effect = redis_lib.RedisError("oops")
         store = RedisMappingSessionStore(client=client)
         store.delete("any")  # Should not raise
+
+
+class TestRedisMappingSessionStoreErrorLogging:
+    """Redis failures emit error-level structlog events."""
+
+    def test_save_logs_error(self) -> None:
+        client = MagicMock()
+        client.setex.side_effect = ConnectionError("gone")
+        store = RedisMappingSessionStore(client=client)
+
+        with structlog.testing.capture_logs() as logs:
+            store.save(_make_session("log-test"))
+
+        error_logs = [l for l in logs if l.get("event") == "session_store_save_failed"]
+        assert len(error_logs) == 1
+        assert error_logs[0]["session_id"] == "log-test"
+        assert "gone" in error_logs[0]["error"]
+
+    def test_get_logs_error(self) -> None:
+        client = MagicMock()
+        client.get.side_effect = ConnectionError("gone")
+        store = RedisMappingSessionStore(client=client)
+
+        with structlog.testing.capture_logs() as logs:
+            store.get("log-test")
+
+        error_logs = [l for l in logs if l.get("event") == "session_store_get_failed"]
+        assert len(error_logs) == 1
+        assert error_logs[0]["session_id"] == "log-test"
+
+    def test_delete_logs_error(self) -> None:
+        client = MagicMock()
+        client.delete.side_effect = ConnectionError("gone")
+        store = RedisMappingSessionStore(client=client)
+
+        with structlog.testing.capture_logs() as logs:
+            store.delete("log-test")
+
+        error_logs = [l for l in logs if l.get("event") == "session_store_delete_failed"]
+        assert len(error_logs) == 1
+        assert error_logs[0]["session_id"] == "log-test"

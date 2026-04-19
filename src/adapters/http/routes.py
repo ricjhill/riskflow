@@ -90,6 +90,7 @@ class HealthResponse(BaseModel):
     """GET /health response."""
 
     status: str
+    redis: str = "not_configured"
 
 
 class SchemaListResponse(BaseModel):
