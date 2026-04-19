@@ -7,6 +7,7 @@ import pytest
 from tools.bump_version import (
     bump_major,
     bump_minor,
+    bump_patch,
     compute_next_version,
     read_version,
     write_version,
@@ -38,6 +39,19 @@ class TestBumpMinor:
 
     def test_bump_minor_resets_patch(self) -> None:
         assert bump_minor("2.5.9") == "2.6.0"
+
+
+class TestBumpPatch:
+    """Patch version bumps."""
+
+    def test_bump_patch_from_0_1_0(self) -> None:
+        assert bump_patch("0.1.0") == "0.1.1"
+
+    def test_bump_patch_from_1_2_3(self) -> None:
+        assert bump_patch("1.2.3") == "1.2.4"
+
+    def test_bump_patch_preserves_major_and_minor(self) -> None:
+        assert bump_patch("3.5.7") == "3.5.8"
 
 
 class TestComputeNextVersion:
@@ -77,6 +91,14 @@ class TestBumpInvalidInput:
     def test_bump_minor_empty_string(self) -> None:
         with pytest.raises(ValueError):
             bump_minor("")
+
+    def test_bump_patch_two_parts(self) -> None:
+        with pytest.raises(ValueError):
+            bump_patch("1.0")
+
+    def test_bump_patch_empty_string(self) -> None:
+        with pytest.raises(ValueError):
+            bump_patch("")
 
 
 class TestReadVersion:

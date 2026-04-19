@@ -41,6 +41,12 @@ def bump_minor(version: str) -> str:
     return f"{major}.{int(minor) + 1}.0"
 
 
+def bump_patch(version: str) -> str:
+    """Bump patch version, preserve major and minor."""
+    major, minor, patch = version.split(".")
+    return f"{major}.{minor}.{int(patch) + 1}"
+
+
 def compute_next_version(current: str, change_kind: ChangeKind) -> str:
     """Compute the next version based on the kind of API change."""
     if change_kind == ChangeKind.BREAKING:
