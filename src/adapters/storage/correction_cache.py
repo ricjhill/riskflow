@@ -5,6 +5,8 @@ RedisCorrectionCache: Redis hash per cedent — corrections:{cedent_id}
   with fields {source_header} and values {target_field}.
 """
 
+from typing import Any
+
 import redis as redis_lib
 import structlog
 
@@ -19,10 +21,10 @@ class NullCorrectionCache:
     Used when Redis is unavailable or no cedent_id is provided.
     """
 
-    def get_corrections(self, cedent_id: str, headers: list[str]) -> dict[str, str]:
+    async def get_corrections(self, cedent_id: str, headers: list[str]) -> dict[str, str]:
         return {}
 
-    def set_correction(self, correction: Correction) -> None:
+    async def set_correction(self, correction: Correction) -> None:
         pass
 
 
@@ -34,19 +36,19 @@ class RedisCorrectionCache:
 
     Uses HMGET for batch lookup (one round-trip for all headers)
     and HSET for single writes. Gracefully degrades on connection
-    errors — returns empty dict / silently drops writes.
+    errors — returns empty dict / logs errors.
     """
 
-    def __init__(self, client: redis_lib.Redis) -> None:
+    def __init__(self, client: Any) -> None:
         self._client = client
         self._logger = structlog.get_logger()
 
-    def get_corrections(self, cedent_id: str, headers: list[str]) -> dict[str, str]:
+    async def get_corrections(self, cedent_id: str, headers: list[str]) -> dict[str, str]:
         if not headers:
             return {}
         try:
             key = f"{CORRECTION_KEY_PREFIX}{cedent_id}"
-            values: list[bytes | None] = self._client.hmget(key, headers)  # type: ignore[assignment]
+            values: list[bytes | None] = await self._client.hmget(key, headers)
         except (ConnectionError, redis_lib.RedisError) as exc:
             self._logger.error("correction_cache_get_failed", cedent_id=cedent_id, error=str(exc))
             return {}
@@ -56,10 +58,10 @@ class RedisCorrectionCache:
             if value is not None
         }
 
-    def set_correction(self, correction: Correction) -> None:
+    async def set_correction(self, correction: Correction) -> None:
         try:
             key = f"{CORRECTION_KEY_PREFIX}{correction.cedent_id}"
-            self._client.hset(key, correction.source_header, correction.target_field)
+            await self._client.hset(key, correction.source_header, correction.target_field)
         except (ConnectionError, redis_lib.RedisError) as exc:
             self._logger.error(
                 "correction_cache_set_failed", cedent_id=correction.cedent_id, error=str(exc)

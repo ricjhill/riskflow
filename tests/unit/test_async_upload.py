@@ -71,7 +71,7 @@ class TestJobStatus:
         service = AsyncMock()
         store = InMemoryJobStore()
         job = Job.create()
-        store.save(job)
+        asyncio.run(store.save(job))
 
         app = _create_test_app(service, job_store=store)
         client = TestClient(app)
@@ -88,7 +88,7 @@ class TestJobStatus:
         job = Job.create()
         job.start()
         job.complete(result={"mapping": {}, "valid_records": []})
-        store.save(job)
+        asyncio.run(store.save(job))
 
         app = _create_test_app(service, job_store=store)
         client = TestClient(app)
@@ -105,7 +105,7 @@ class TestJobStatus:
         job = Job.create()
         job.start()
         job.fail(error="SLM timeout")
-        store.save(job)
+        asyncio.run(store.save(job))
 
         app = _create_test_app(service, job_store=store)
         client = TestClient(app)
@@ -128,7 +128,7 @@ class TestJobStatus:
         service = AsyncMock()
         store = InMemoryJobStore()
         job = Job.create(filename="report.csv")
-        store.save(job)
+        asyncio.run(store.save(job))
 
         app = _create_test_app(service, job_store=store)
         client = TestClient(app)
@@ -141,7 +141,7 @@ class TestJobStatus:
         service = AsyncMock()
         store = InMemoryJobStore()
         job = Job.create()
-        store.save(job)
+        asyncio.run(store.save(job))
 
         app = _create_test_app(service, job_store=store)
         client = TestClient(app)
@@ -155,7 +155,7 @@ class TestJobStatus:
         service = AsyncMock()
         store = InMemoryJobStore()
         job = Job.create()  # no filename
-        store.save(job)
+        asyncio.run(store.save(job))
 
         app = _create_test_app(service, job_store=store)
         client = TestClient(app)
@@ -182,7 +182,7 @@ class TestListJobs:
         store = InMemoryJobStore()
         for i in range(2):
             job = Job.create(filename=f"file{i}.csv")
-            store.save(job)
+            asyncio.run(store.save(job))
 
         app = _create_test_app(service, job_store=store)
         client = TestClient(app)
@@ -195,7 +195,7 @@ class TestListJobs:
         service = AsyncMock()
         store = InMemoryJobStore()
         job = Job.create(filename="report.csv")
-        store.save(job)
+        asyncio.run(store.save(job))
 
         app = _create_test_app(service, job_store=store)
         client = TestClient(app)
@@ -209,7 +209,7 @@ class TestListJobs:
         service = AsyncMock()
         store = InMemoryJobStore()
         job = Job.create()
-        store.save(job)
+        asyncio.run(store.save(job))
 
         app = _create_test_app(service, job_store=store)
         client = TestClient(app)
@@ -223,7 +223,7 @@ class TestListJobs:
         service = AsyncMock()
         store = InMemoryJobStore()
         job = Job.create()
-        store.save(job)
+        asyncio.run(store.save(job))
 
         app = _create_test_app(service, job_store=store)
         client = TestClient(app)
@@ -237,7 +237,7 @@ class TestListJobs:
         service = AsyncMock()
         store = InMemoryJobStore()
         job = Job.create()  # no filename
-        store.save(job)
+        asyncio.run(store.save(job))
 
         app = _create_test_app(service, job_store=store)
         client = TestClient(app)
@@ -257,8 +257,8 @@ class TestListJobs:
         old_job = Job("old", JobStatus.PENDING, filename="old.csv", created_at=t1)
         new_job = Job("new", JobStatus.PENDING, filename="new.csv", created_at=t2)
 
-        store.save(old_job)
-        store.save(new_job)
+        asyncio.run(store.save(old_job))
+        asyncio.run(store.save(new_job))
 
         app = _create_test_app(service, job_store=store)
         client = TestClient(app)
@@ -296,7 +296,7 @@ class TestAsyncBackend:
         )
         job_id = response.json()["job_id"]
 
-        job = store.get(job_id)
+        job = asyncio.run(store.get(job_id))
         assert job is not None
         assert job.status == JobStatus.FAILED, (
             f"Expected FAILED but got {job.status} — error handling may be broken"
@@ -418,6 +418,10 @@ class TestTaskLifecycleLogging:
         configure_logging()
 
         service = AsyncMock()
+        # Configure a result with a working model_dump() so job.complete() doesn't warn
+        result_mock = AsyncMock()
+        result_mock.model_dump = lambda: {"mapping": {}, "valid_records": []}
+        service.process_file.return_value = result_mock
         store = InMemoryJobStore()
         app = _create_test_app(service, job_store=store, async_backend="background")
         client = TestClient(app)

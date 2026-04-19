@@ -114,7 +114,7 @@ class MappingService:
         """Validate rows using a supplied mapping (no SLM call)."""
         return self._validate_rows(file_path, mapping, sheet_name=sheet_name)
 
-    def store_correction(self, correction: Correction) -> None:
+    async def store_correction(self, correction: Correction) -> None:
         """Validate and store a human-verified correction.
 
         Raises InvalidCorrectionError if the target_field is not in the
@@ -127,7 +127,7 @@ class MappingService:
             )
             raise InvalidCorrectionError(msg)
         if self._correction_cache:
-            self._correction_cache.set_correction(correction)
+            await self._correction_cache.set_correction(correction)
 
     async def process_file(
         self,
@@ -143,7 +143,7 @@ class MappingService:
         cache_key = self._build_cache_key(headers)
 
         start = time.monotonic()
-        cached = self._cache.get_mapping(cache_key)
+        cached = await self._cache.get_mapping(cache_key)
         duration_ms = int((time.monotonic() - start) * 1000)
         if cached is not None:
             self._logger.info(
@@ -155,7 +155,7 @@ class MappingService:
                 "cache_lookup", result="miss", cache_key=cache_key, duration_ms=duration_ms
             )
             mapping = await self._map_with_corrections(headers, preview, cedent_id)
-            self._cache.set_mapping(cache_key, mapping)
+            await self._cache.set_mapping(cache_key, mapping)
 
         return self._validate_rows(file_path, mapping, sheet_name=sheet_name)
 
@@ -168,7 +168,7 @@ class MappingService:
         """Check corrections, then call SLM for uncorrected headers."""
         corrections: dict[str, str] = {}
         if cedent_id and self._correction_cache:
-            corrections = self._correction_cache.get_corrections(cedent_id, headers)
+            corrections = await self._correction_cache.get_corrections(cedent_id, headers)
 
         if corrections:
             self._validate_corrections(corrections)

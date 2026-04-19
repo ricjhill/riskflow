@@ -557,7 +557,7 @@ class TestCorrectionsEndpoint:
 
     def test_post_correction_returns_201(self) -> None:
         service = AsyncMock()
-        service.store_correction = MagicMock()
+        service.store_correction = AsyncMock()
         app = _create_test_app(service)
         client = TestClient(app)
 
@@ -575,7 +575,7 @@ class TestCorrectionsEndpoint:
 
     def test_correction_stored_via_service(self) -> None:
         service = AsyncMock()
-        service.store_correction = MagicMock()
+        service.store_correction = AsyncMock()
         app = _create_test_app(service)
         client = TestClient(app)
 
@@ -623,7 +623,7 @@ class TestCorrectionsEndpoint:
 
     def test_invalid_target_field_returns_422(self) -> None:
         service = AsyncMock()
-        service.store_correction = MagicMock(
+        service.store_correction = AsyncMock(
             side_effect=InvalidCorrectionError("Nonexistent not in schema")
         )
         app = _create_test_app(service)
@@ -645,7 +645,7 @@ class TestCorrectionsEndpoint:
     def test_duplicate_corrections_in_request(self) -> None:
         """Same source_header twice — last one wins, both stored."""
         service = AsyncMock()
-        service.store_correction = MagicMock()
+        service.store_correction = AsyncMock()
         app = _create_test_app(service)
         client = TestClient(app)
 

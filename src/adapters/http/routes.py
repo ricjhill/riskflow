@@ -280,7 +280,7 @@ def create_router(
 
             # Persist to store
             if _store:
-                _store.save(schema)
+                await _store.save(schema)
 
             # Create service and register
             if _factory:
@@ -324,7 +324,7 @@ def create_router(
             _registry.pop(name, None)
             _definitions.pop(name, None)
             if _store:
-                _store.delete(name)
+                await _store.delete(name)
 
             logger.info("schema_deleted", schema_name=name)
 
@@ -500,7 +500,7 @@ def create_router(
                 target_field=item.target_field,
             )
             try:
-                mapping_service.store_correction(correction)
+                await mapping_service.store_correction(correction)
             except InvalidCorrectionError as e:
                 raise HTTPException(
                     status_code=422,
@@ -562,7 +562,7 @@ def create_router(
                     unmapped_headers=suggestion.unmapped_headers,
                     preview_rows=preview,
                 )
-                session_store.save(session)
+                await session_store.save(session)
 
                 logger.info(
                     "session_created",
@@ -610,7 +610,7 @@ def create_router(
         @router.get("/sessions/{session_id}")
         async def get_session(session_id: str) -> MappingSession:
             """Return current session state."""
-            session = session_store.get(session_id)
+            session = await session_store.get(session_id)
             if session is None:
                 raise HTTPException(status_code=404, detail="Session not found")
             return session
@@ -620,7 +620,7 @@ def create_router(
             session_id: str, body: UpdateMappingsRequest
         ) -> MappingSession:
             """Update the session's mappings with user-edited values."""
-            session = session_store.get(session_id)
+            session = await session_store.get(session_id)
             if session is None:
                 raise HTTPException(status_code=404, detail="Session not found")
 
@@ -639,7 +639,7 @@ def create_router(
                     ),
                 ) from e
 
-            session_store.save(session)
+            await session_store.save(session)
             return session
 
         @router.patch("/sessions/{session_id}/target-fields")
@@ -647,7 +647,7 @@ def create_router(
             session_id: str, body: ExtendTargetFieldsRequest
         ) -> MappingSession:
             """Add custom target fields to a session."""
-            session = session_store.get(session_id)
+            session = await session_store.get(session_id)
             if session is None:
                 raise HTTPException(status_code=404, detail="Session not found")
 
@@ -663,13 +663,13 @@ def create_router(
                     ),
                 ) from e
 
-            session_store.save(session)
+            await session_store.save(session)
             return session
 
         @router.post("/sessions/{session_id}/finalise")
         async def finalise_session(session_id: str) -> MappingSession:
             """Validate rows with the session's current mapping."""
-            session = session_store.get(session_id)
+            session = await session_store.get(session_id)
             if session is None:
                 raise HTTPException(status_code=404, detail="Session not found")
 
@@ -700,7 +700,7 @@ def create_router(
                 ) from e
 
             session.finalise(result=processing_result.model_dump())
-            session_store.save(session)
+            await session_store.save(session)
 
             logger.info(
                 "session_finalised",
@@ -713,7 +713,7 @@ def create_router(
         @router.delete("/sessions/{session_id}", status_code=204)
         async def delete_session(session_id: str) -> None:
             """Delete a session and clean up its temp file."""
-            session = session_store.get(session_id)
+            session = await session_store.get(session_id)
             if session is None:
                 raise HTTPException(status_code=404, detail="Session not found")
 
@@ -726,7 +726,7 @@ def create_router(
                     session_id=session_id,
                     file_path=session.file_path,
                 )
-            session_store.delete(session_id)
+            await session_store.delete(session_id)
 
             logger.info("session_deleted", session_id=session_id)
 
@@ -745,7 +745,7 @@ def create_router(
             _validate_file(file)
 
             job = Job.create(filename=file.filename)
-            job_store.save(job)
+            await job_store.save(job)
 
             temp_path = _save_temp_file(file)
             logger.info(
@@ -770,7 +770,7 @@ def create_router(
         @router.get("/jobs")
         async def list_jobs() -> JobListResponse:
             """List all async jobs with filename and upload date."""
-            jobs = job_store.list_all()
+            jobs = await job_store.list_all()
             return JobListResponse(
                 jobs=[
                     JobSummary(
@@ -786,7 +786,7 @@ def create_router(
         @router.get("/jobs/{job_id}")
         async def get_job_status(job_id: str) -> JobStatusResponse:
             """Get the status and result of an async job."""
-            job = job_store.get(job_id)
+            job = await job_store.get(job_id)
             if job is None:
                 raise HTTPException(status_code=404, detail="Job not found")
             return JobStatusResponse(
@@ -826,14 +826,14 @@ async def _process_job(
     start = time.monotonic()
     logger.info("task_started", job_id=job.id, filename=job.filename)
     job.start()
-    job_store.save(job)
+    await job_store.save(job)
     try:
         result = await mapping_service.process_file(temp_path, sheet_name=sheet_name)
         job.complete(result=result.model_dump())
     except Exception as e:
         job.fail(error=str(e))
     finally:
-        job_store.save(job)
+        await job_store.save(job)
         duration_ms = int((time.monotonic() - start) * 1000)
         logger.info(
             "task_completed",

@@ -1,10 +1,10 @@
 """Tests for cache adapters: RedisCache and NullCache.
 
-RedisCache tests use a mocked redis.Redis client — no real Redis needed.
+RedisCache tests use a mocked async Redis client — no real Redis needed.
 NullCache is a trivial fallback for when Redis is unavailable.
 """
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 import structlog.testing
@@ -28,72 +28,109 @@ def _make_mapping_result() -> MappingResult:
 
 
 class TestRedisCacheProtocol:
+    """RedisCache must satisfy CachePort at runtime."""
+
     def test_satisfies_cache_port(self) -> None:
-        assert isinstance(RedisCache(client=MagicMock()), CachePort)
+        assert isinstance(RedisCache(client=AsyncMock()), CachePort)
 
 
 class TestRedisCacheGetMapping:
-    def test_returns_none_on_cache_miss(self) -> None:
-        client = MagicMock()
+    """get_mapping retrieves cached results or returns None on miss/error."""
+
+    @pytest.mark.asyncio
+    async def test_returns_none_on_cache_miss(self) -> None:
+        client = AsyncMock()
         client.get.return_value = None
         cache = RedisCache(client=client)
 
-        result = cache.get_mapping("nonexistent-key")
+        result = await cache.get_mapping("nonexistent-key")
 
         assert result is None
         client.get.assert_called_once_with("riskflow:mapping:nonexistent-key")
 
-    def test_deserializes_cached_json(self) -> None:
+    @pytest.mark.asyncio
+    async def test_deserializes_cached_json(self) -> None:
         expected = _make_mapping_result()
-        client = MagicMock()
+        client = AsyncMock()
         client.get.return_value = expected.model_dump_json().encode()
         cache = RedisCache(client=client)
 
-        result = cache.get_mapping("some-key")
+        result = await cache.get_mapping("some-key")
 
         assert result is not None
         assert result == expected
 
-    def test_returns_none_on_invalid_json(self) -> None:
-        client = MagicMock()
+    @pytest.mark.asyncio
+    async def test_returns_none_on_invalid_json(self) -> None:
+        client = AsyncMock()
         client.get.return_value = b"not valid json"
         cache = RedisCache(client=client)
 
-        result = cache.get_mapping("bad-key")
+        result = await cache.get_mapping("bad-key")
 
         assert result is None
 
-    def test_returns_none_on_connection_error(self) -> None:
-        client = MagicMock()
+    @pytest.mark.asyncio
+    async def test_returns_none_on_connection_error(self) -> None:
+        client = AsyncMock()
         client.get.side_effect = ConnectionError("Redis down")
         cache = RedisCache(client=client)
 
-        result = cache.get_mapping("any-key")
+        result = await cache.get_mapping("any-key")
 
         assert result is None
 
-    def test_logs_error_on_get_connection_failure(self) -> None:
+    @pytest.mark.asyncio
+    async def test_returns_none_on_redis_error(self) -> None:
+        """RedisError (not just ConnectionError) is also caught."""
+        import redis as redis_lib
+
+        client = AsyncMock()
+        client.get.side_effect = redis_lib.RedisError("unexpected")
+        cache = RedisCache(client=client)
+
+        result = await cache.get_mapping("any-key")
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_logs_error_on_get_connection_failure(self) -> None:
         """Redis get failure emits an error log with cache_key and error message."""
-        client = MagicMock()
+        client = AsyncMock()
         client.get.side_effect = ConnectionError("Redis down")
         cache = RedisCache(client=client)
 
         with structlog.testing.capture_logs() as logs:
-            cache.get_mapping("any-key")
+            await cache.get_mapping("any-key")
 
-        error_logs = [l for l in logs if l.get("event") == "cache_get_failed"]
+        error_logs = [e for e in logs if e.get("event") == "cache_get_failed"]
         assert len(error_logs) == 1
         assert error_logs[0]["cache_key"] == "any-key"
         assert "Redis down" in error_logs[0]["error"]
 
+    @pytest.mark.asyncio
+    async def test_empty_cache_key(self) -> None:
+        """Empty string is a valid cache key — returns None on miss."""
+        client = AsyncMock()
+        client.get.return_value = None
+        cache = RedisCache(client=client)
+
+        result = await cache.get_mapping("")
+
+        assert result is None
+        client.get.assert_called_once_with("riskflow:mapping:")
+
 
 class TestRedisCacheSetMapping:
-    def test_stores_json_with_ttl(self) -> None:
-        client = MagicMock()
+    """set_mapping stores results with TTL, silently fails on error."""
+
+    @pytest.mark.asyncio
+    async def test_stores_json_with_ttl(self) -> None:
+        client = AsyncMock()
         cache = RedisCache(client=client)
         mapping = _make_mapping_result()
 
-        cache.set_mapping("some-key", mapping, ttl=7200)
+        await cache.set_mapping("some-key", mapping, ttl=7200)
 
         client.setex.assert_called_once()
         args = client.setex.call_args[0]
@@ -101,55 +138,63 @@ class TestRedisCacheSetMapping:
         assert args[1] == 7200
         assert isinstance(args[2], (str, bytes))
 
-    def test_default_ttl_is_3600(self) -> None:
-        client = MagicMock()
+    @pytest.mark.asyncio
+    async def test_default_ttl_is_3600(self) -> None:
+        client = AsyncMock()
         cache = RedisCache(client=client)
         mapping = _make_mapping_result()
 
-        cache.set_mapping("some-key", mapping)
+        await cache.set_mapping("some-key", mapping)
 
         args = client.setex.call_args[0]
         assert args[1] == 3600
 
-    def test_swallows_connection_error(self) -> None:
-        client = MagicMock()
+    @pytest.mark.asyncio
+    async def test_swallows_connection_error(self) -> None:
+        client = AsyncMock()
         client.setex.side_effect = ConnectionError("Redis down")
         cache = RedisCache(client=client)
         mapping = _make_mapping_result()
 
-        # Should not raise — cache failures are non-fatal
-        cache.set_mapping("some-key", mapping)
+        await cache.set_mapping("some-key", mapping)  # should not raise
 
-    def test_logs_error_on_set_connection_failure(self) -> None:
+    @pytest.mark.asyncio
+    async def test_logs_error_on_set_connection_failure(self) -> None:
         """Redis set failure emits an error log with cache_key and error message."""
-        client = MagicMock()
+        client = AsyncMock()
         client.setex.side_effect = ConnectionError("Redis down")
         cache = RedisCache(client=client)
         mapping = _make_mapping_result()
 
         with structlog.testing.capture_logs() as logs:
-            cache.set_mapping("some-key", mapping)
+            await cache.set_mapping("some-key", mapping)
 
-        error_logs = [l for l in logs if l.get("event") == "cache_set_failed"]
+        error_logs = [e for e in logs if e.get("event") == "cache_set_failed"]
         assert len(error_logs) == 1
         assert error_logs[0]["cache_key"] == "some-key"
         assert "Redis down" in error_logs[0]["error"]
 
 
 class TestNullCacheProtocol:
+    """NullCache must satisfy CachePort at runtime."""
+
     def test_satisfies_cache_port(self) -> None:
         assert isinstance(NullCache(), CachePort)
 
 
 class TestNullCache:
-    def test_get_always_returns_none(self) -> None:
-        assert NullCache().get_mapping("any-key") is None
+    """NullCache always returns None and silently discards writes."""
 
-    def test_set_is_a_noop(self) -> None:
+    @pytest.mark.asyncio
+    async def test_get_always_returns_none(self) -> None:
+        assert await NullCache().get_mapping("any-key") is None
+
+    @pytest.mark.asyncio
+    async def test_set_is_a_noop(self) -> None:
         mapping = _make_mapping_result()
-        # Should not raise
-        NullCache().set_mapping("any-key", mapping)
+        await NullCache().set_mapping("any-key", mapping)  # should not raise
 
+    @pytest.mark.asyncio
     @pytest.mark.parametrize("key", ["", "abc", "x" * 1000])
-    def test_get_returns_none_for_any_key(self, key: str) -> None:
-        assert NullCache().get_mapping(key) is None
+    async def test_get_returns_none_for_any_key(self, key: str) -> None:
+        assert await NullCache().get_mapping(key) is None

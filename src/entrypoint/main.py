@@ -170,10 +170,20 @@ def create_app() -> FastAPI:
     # Must capture before merging Redis schemas
     builtin_schema_names = set(schemas.keys())
 
-    # Load runtime schemas from Redis and merge with YAML schemas
-    for runtime_name in schema_store.list_all():
+    # Load runtime schemas from Redis and merge with YAML schemas.
+    # These are async calls but create_app() is sync and may be called either
+    # at Uvicorn startup (no loop yet) or under a test runner (loop may exist).
+    # Create a dedicated loop for these one-shot startup operations to avoid
+    # the "asyncio.run() cannot be called from a running event loop" error
+    # and the "get_event_loop deprecated" warning.
+    _startup_loop = asyncio.new_event_loop()
+    try:
+        runtime_names = _startup_loop.run_until_complete(schema_store.list_all())
+    except Exception:
+        runtime_names = []
+    for runtime_name in runtime_names:
         if runtime_name not in schemas:
-            runtime_schema = schema_store.get(runtime_name)
+            runtime_schema = _startup_loop.run_until_complete(schema_store.get(runtime_name))
             if runtime_schema:
                 mapper = GroqMapper(
                     client=groq_client, schema=runtime_schema, semaphore=slm_semaphore
@@ -192,6 +202,7 @@ def create_app() -> FastAPI:
                     schema_name=runtime_name,
                     schema_fingerprint=runtime_schema.fingerprint,
                 )
+    _startup_loop.close()
 
     # Factory closure for creating MappingService at runtime
     def _make_service(schema: TargetSchema) -> MappingService:
@@ -248,7 +259,7 @@ def create_app() -> FastAPI:
         if redis_client is None:
             return HealthResponse(status="ok", redis="not_configured")
         try:
-            redis_client.ping()
+            await redis_client.ping()
             return HealthResponse(status="ok", redis="connected")
         except Exception:
             return HealthResponse(status="degraded", redis="unreachable")
@@ -262,7 +273,7 @@ def create_app() -> FastAPI:
         """
         if redis_client is not None:
             try:
-                redis_client.ping()
+                await redis_client.ping()
             except Exception:
                 return JSONResponse(
                     status_code=503,
@@ -341,12 +352,12 @@ def _load_all_schemas() -> dict[str, TargetSchema]:
 
 
 def _create_redis_client() -> Any:
-    """Create a shared Redis client if REDIS_URL is set, otherwise None."""
+    """Create a shared async Redis client if REDIS_URL is set, otherwise None."""
     redis_url = os.environ.get("REDIS_URL")
     if redis_url:
-        import redis
+        import redis.asyncio
 
-        return redis.Redis.from_url(redis_url)
+        return redis.asyncio.Redis.from_url(redis_url)
     return None
 
 

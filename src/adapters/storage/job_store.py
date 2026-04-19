@@ -20,13 +20,13 @@ class InMemoryJobStore:
     def __init__(self) -> None:
         self._jobs: dict[str, Job] = {}
 
-    def save(self, job: Job) -> None:
+    async def save(self, job: Job) -> None:
         self._jobs[job.id] = job
 
-    def get(self, job_id: str) -> Job | None:
+    async def get(self, job_id: str) -> Job | None:
         return self._jobs.get(job_id)
 
-    def list_all(self) -> list[Job]:
+    async def list_all(self) -> list[Job]:
         return sorted(self._jobs.values(), key=lambda j: j.created_at, reverse=True)
 
 
@@ -47,10 +47,10 @@ class RedisJobStore:
         self._ttl = ttl
         self._logger = structlog.get_logger()
 
-    def save(self, job: Job) -> None:
+    async def save(self, job: Job) -> None:
         start = time.monotonic()
         try:
-            self._client.setex(
+            await self._client.setex(
                 f"{KEY_PREFIX}{job.id}",
                 self._ttl,
                 json.dumps(job.to_dict()),
@@ -60,9 +60,9 @@ class RedisJobStore:
         duration_ms = int((time.monotonic() - start) * 1000)
         self._logger.debug("job_store_save", job_id=job.id, duration_ms=duration_ms)
 
-    def get(self, job_id: str) -> Job | None:
+    async def get(self, job_id: str) -> Job | None:
         try:
-            data = self._client.get(f"{KEY_PREFIX}{job_id}")
+            data = await self._client.get(f"{KEY_PREFIX}{job_id}")
         except (ConnectionError, redis_lib.RedisError) as exc:
             self._logger.error("job_store_get_failed", job_id=job_id, error=str(exc))
             return None
@@ -74,15 +74,15 @@ class RedisJobStore:
         except (ValueError, TypeError, json.JSONDecodeError, KeyError):
             return None
 
-    def list_all(self) -> list[Job]:
+    async def list_all(self) -> list[Job]:
         start = time.monotonic()
         jobs: list[Job] = []
         try:
             cursor = 0
             while True:
-                cursor, keys = self._client.scan(cursor, match=f"{KEY_PREFIX}*")
+                cursor, keys = await self._client.scan(cursor, match=f"{KEY_PREFIX}*")
                 for key in keys:
-                    data = self._client.get(key)
+                    data = await self._client.get(key)
                     if data is not None:
                         try:
                             jobs.append(Job.from_dict(json.loads(data)))

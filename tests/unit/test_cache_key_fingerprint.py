@@ -7,7 +7,7 @@ stale mappings from schema A.
 """
 
 import hashlib
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -24,7 +24,7 @@ def _make_service(schema: TargetSchema | None = None) -> MappingService:
     """Create a MappingService with mocked ports and optional schema."""
     ingestor = MagicMock()
     mapper = MagicMock()
-    cache = MagicMock()
+    cache = AsyncMock()
     return MappingService(
         ingestor=ingestor,
         mapper=mapper,

@@ -18,7 +18,7 @@ async upload pipeline.
 
 import csv
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -105,13 +105,13 @@ class TestAsyncServiceDeterministic:
         return mock
 
     @pytest.fixture
-    def cache(self) -> MagicMock:
-        mock = MagicMock()
+    def cache(self) -> AsyncMock:
+        mock = AsyncMock()
         mock.get_mapping.return_value = None
         return mock
 
     @pytest.fixture
-    def service(self, mapper: AsyncMock, cache: MagicMock) -> MappingService:
+    def service(self, mapper: AsyncMock, cache: AsyncMock) -> MappingService:
         return MappingService(
             ingestor=PolarsIngestor(),
             mapper=mapper,
@@ -139,7 +139,7 @@ class TestAsyncServiceDeterministic:
         self,
         service: MappingService,
         mapper: AsyncMock,
-        cache: MagicMock,
+        cache: AsyncMock,
         tmp_path: Path,
     ) -> None:
         """When cache returns a result, the SLM mapper is never called."""
@@ -206,7 +206,7 @@ class TestAsyncUploadIntegration:
             ],
             unmapped_headers=["Extra"],
         )
-        cache = MagicMock()
+        cache = AsyncMock()
         cache.get_mapping.return_value = None
 
         service = MappingService(

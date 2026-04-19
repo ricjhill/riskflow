@@ -114,7 +114,7 @@ class TestRowValidation:
 
         mapper = AsyncMock()
         mapper.map_headers.return_value = _full_mapping()
-        cache = MagicMock()
+        cache = AsyncMock()
         cache.get_mapping.return_value = None
 
         from src.adapters.parsers.ingestor import PolarsIngestor
@@ -143,7 +143,7 @@ class TestRowValidation:
 
         mapper = AsyncMock()
         mapper.map_headers.return_value = _full_mapping()
-        cache = MagicMock()
+        cache = AsyncMock()
         cache.get_mapping.return_value = None
 
         from src.adapters.parsers.ingestor import PolarsIngestor
@@ -175,7 +175,7 @@ class TestRowValidation:
 
         mapper = AsyncMock()
         mapper.map_headers.return_value = _full_mapping()
-        cache = MagicMock()
+        cache = AsyncMock()
         cache.get_mapping.return_value = None
 
         from src.adapters.parsers.ingestor import PolarsIngestor
@@ -204,7 +204,7 @@ class TestRowValidation:
 
         mapper = AsyncMock()
         mapper.map_headers.return_value = _full_mapping()
-        cache = MagicMock()
+        cache = AsyncMock()
         cache.get_mapping.return_value = None
 
         from src.adapters.parsers.ingestor import PolarsIngestor
@@ -233,7 +233,7 @@ class TestRowValidation:
 
         mapper = AsyncMock()
         mapper.map_headers.return_value = _full_mapping()
-        cache = MagicMock()
+        cache = AsyncMock()
         cache.get_mapping.return_value = None
 
         from src.adapters.parsers.ingestor import PolarsIngestor
