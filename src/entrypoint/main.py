@@ -242,7 +242,13 @@ def create_app() -> FastAPI:
 
     @app.get("/health")
     async def health() -> HealthResponse:
-        return HealthResponse(status="ok")
+        if redis_client is None:
+            return HealthResponse(status="ok", redis="not_configured")
+        try:
+            redis_client.ping()
+            return HealthResponse(status="ok", redis="connected")
+        except Exception:
+            return HealthResponse(status="degraded", redis="unreachable")
 
     return app
 

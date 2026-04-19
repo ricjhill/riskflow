@@ -32,6 +32,41 @@ class TestAppCreation:
         assert response.status_code == 200
         assert response.json()["status"] == "ok"
 
+    def test_health_reports_redis_not_configured(self) -> None:
+        """Without REDIS_URL, health reports redis as not_configured."""
+        from src.entrypoint.main import create_app
+
+        app = create_app()
+        client = TestClient(app)
+        response = client.get("/health")
+        assert response.json()["redis"] == "not_configured"
+
+    def test_health_reports_redis_connected(self) -> None:
+        """With a working Redis, health reports redis as connected."""
+        from src.entrypoint.main import create_app
+
+        mock_redis = MagicMock()
+        mock_redis.ping.return_value = True
+        with patch("src.entrypoint.main._create_redis_client", return_value=mock_redis):
+            app = create_app()
+        client = TestClient(app)
+        response = client.get("/health")
+        assert response.json()["status"] == "ok"
+        assert response.json()["redis"] == "connected"
+
+    def test_health_reports_redis_unreachable(self) -> None:
+        """With a failing Redis, health reports degraded status."""
+        from src.entrypoint.main import create_app
+
+        mock_redis = MagicMock()
+        mock_redis.ping.side_effect = ConnectionError("gone")
+        with patch("src.entrypoint.main._create_redis_client", return_value=mock_redis):
+            app = create_app()
+        client = TestClient(app)
+        response = client.get("/health")
+        assert response.json()["status"] == "degraded"
+        assert response.json()["redis"] == "unreachable"
+
     def test_upload_endpoint_is_registered(self) -> None:
         from src.entrypoint.main import create_app
 
