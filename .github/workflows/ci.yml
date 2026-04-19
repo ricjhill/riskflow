@@ -401,3 +401,67 @@ jobs:
           name: E2E Test Results
           path: reports/*.xml
           reporter: java-junit
+
+  concurrent-e2e:
+    needs: e2e
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    # 5-user concurrent e2e with REAL Groq API against Docker stack.
+    # Proves the full path: HTTP → semaphore → SLM → Redis → response
+    # under concurrent load. Runs on push to main only (burns API credits).
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv and deps
+        uses: astral-sh/setup-uv@v7
+
+      - name: Set up Python and install deps
+        run: |
+          uv python install 3.12
+          uv sync --frozen
+
+      - name: Build and start stack with real Groq key
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: |
+          echo "GROQ_API_KEY=$GROQ_API_KEY" > .env
+          docker compose up -d --build
+          curl --fail --retry 10 --retry-delay 2 --retry-all-errors http://localhost:8000/health
+
+      - name: Run Locust 5-user test with real SLM
+        run: |
+          uv run locust -f tests/load/locustfile.py \
+            --host http://localhost:8000 \
+            --headless --users 5 --spawn-rate 5 --run-time 30s \
+            --csv=reports/concurrent-e2e \
+            --exit-code-on-error 0
+          # With a real Groq key, sync /upload should return 200 (not 503).
+          # Thresholds are generous because real SLM calls take 5-15s.
+          uv run python -c "
+          import csv
+          with open('reports/concurrent-e2e_stats.csv') as f:
+              rows = list(csv.DictReader(f))
+          agg = next(r for r in rows if r['Name'] == 'Aggregated')
+          total = int(agg['Request Count'])
+          failures = int(agg.get('Failure Count', 0))
+          rps = float(agg.get('Requests/s', 0))
+          print(f'Requests: {total}, RPS: {rps:.1f}, Failures: {failures}')
+          assert failures == 0, f'{failures} failures with real Groq key'
+          assert total >= 10, f'Only {total} requests — possible deadlock'
+          assert rps >= 0.5, f'RPS {rps:.1f} below 0.5 — real SLM calls are slow but this is too slow'
+          print('PASS: 5-user concurrent e2e with real Groq API')
+          "
+
+      - name: Upload concurrent e2e results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: concurrent-e2e-results
+          path: reports/concurrent-e2e*
+          retention-days: 30
+
+      - name: Tear down
+        if: always()
+        run: docker compose down
