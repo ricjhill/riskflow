@@ -562,7 +562,7 @@ def create_router(
                     unmapped_headers=suggestion.unmapped_headers,
                     preview_rows=preview,
                 )
-                session_store.save(session)
+                await session_store.save(session)
 
                 logger.info(
                     "session_created",
@@ -610,7 +610,7 @@ def create_router(
         @router.get("/sessions/{session_id}")
         async def get_session(session_id: str) -> MappingSession:
             """Return current session state."""
-            session = session_store.get(session_id)
+            session = await session_store.get(session_id)
             if session is None:
                 raise HTTPException(status_code=404, detail="Session not found")
             return session
@@ -620,7 +620,7 @@ def create_router(
             session_id: str, body: UpdateMappingsRequest
         ) -> MappingSession:
             """Update the session's mappings with user-edited values."""
-            session = session_store.get(session_id)
+            session = await session_store.get(session_id)
             if session is None:
                 raise HTTPException(status_code=404, detail="Session not found")
 
@@ -639,7 +639,7 @@ def create_router(
                     ),
                 ) from e
 
-            session_store.save(session)
+            await session_store.save(session)
             return session
 
         @router.patch("/sessions/{session_id}/target-fields")
@@ -647,7 +647,7 @@ def create_router(
             session_id: str, body: ExtendTargetFieldsRequest
         ) -> MappingSession:
             """Add custom target fields to a session."""
-            session = session_store.get(session_id)
+            session = await session_store.get(session_id)
             if session is None:
                 raise HTTPException(status_code=404, detail="Session not found")
 
@@ -663,13 +663,13 @@ def create_router(
                     ),
                 ) from e
 
-            session_store.save(session)
+            await session_store.save(session)
             return session
 
         @router.post("/sessions/{session_id}/finalise")
         async def finalise_session(session_id: str) -> MappingSession:
             """Validate rows with the session's current mapping."""
-            session = session_store.get(session_id)
+            session = await session_store.get(session_id)
             if session is None:
                 raise HTTPException(status_code=404, detail="Session not found")
 
@@ -700,7 +700,7 @@ def create_router(
                 ) from e
 
             session.finalise(result=processing_result.model_dump())
-            session_store.save(session)
+            await session_store.save(session)
 
             logger.info(
                 "session_finalised",
@@ -713,7 +713,7 @@ def create_router(
         @router.delete("/sessions/{session_id}", status_code=204)
         async def delete_session(session_id: str) -> None:
             """Delete a session and clean up its temp file."""
-            session = session_store.get(session_id)
+            session = await session_store.get(session_id)
             if session is None:
                 raise HTTPException(status_code=404, detail="Session not found")
 
@@ -726,7 +726,7 @@ def create_router(
                     session_id=session_id,
                     file_path=session.file_path,
                 )
-            session_store.delete(session_id)
+            await session_store.delete(session_id)
 
             logger.info("session_deleted", session_id=session_id)
 

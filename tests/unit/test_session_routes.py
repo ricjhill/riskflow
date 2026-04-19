@@ -61,9 +61,9 @@ def _make_service() -> MappingService:
     )
 
 
-def _make_session_store() -> MagicMock:
+def _make_session_store() -> AsyncMock:
     """A mock session store that stores sessions in a dict."""
-    store = MagicMock()
+    store = AsyncMock()
     sessions: dict[str, MappingSession] = {}
 
     def save(session: MappingSession) -> None:
@@ -75,20 +75,20 @@ def _make_session_store() -> MagicMock:
     def delete(session_id: str) -> None:
         sessions.pop(session_id, None)
 
-    store.save = MagicMock(side_effect=save)
-    store.get = MagicMock(side_effect=get)
-    store.delete = MagicMock(side_effect=delete)
+    store.save = AsyncMock(side_effect=save)
+    store.get = AsyncMock(side_effect=get)
+    store.delete = AsyncMock(side_effect=delete)
     store._sessions = sessions
     return store
 
 
 @pytest.fixture
-def session_store() -> MagicMock:
+def session_store() -> AsyncMock:
     return _make_session_store()
 
 
 @pytest.fixture
-def client(session_store: MagicMock) -> TestClient:
+def client(session_store: AsyncMock) -> TestClient:
     """TestClient with session endpoints enabled."""
     schema = _make_schema("default")
     service = _make_service()
@@ -193,14 +193,14 @@ class TestPostSessions:
         )
         assert resp.status_code == 404
 
-    def test_session_persisted_to_store(self, client: TestClient, session_store: MagicMock) -> None:
+    def test_session_persisted_to_store(self, client: TestClient, session_store: AsyncMock) -> None:
         _upload_csv(client)
         session_store.save.assert_called_once()
         saved = session_store.save.call_args[0][0]
         assert isinstance(saved, MappingSession)
         assert saved.status == SessionStatus.CREATED
 
-    def test_slm_unavailable_returns_503(self, session_store: MagicMock) -> None:
+    def test_slm_unavailable_returns_503(self, session_store: AsyncMock) -> None:
         """SLM failure during suggest_mapping returns 503."""
         mapper = AsyncMock()
         mapper.map_headers.side_effect = SLMUnavailableError("Groq down")
@@ -334,7 +334,7 @@ class TestPutSessionMappings:
         # which is valid (empty mapping list)
         assert resp.status_code == 200
 
-    def test_update_persisted_to_store(self, client: TestClient, session_store: MagicMock) -> None:
+    def test_update_persisted_to_store(self, client: TestClient, session_store: AsyncMock) -> None:
         data = _upload_csv(client)
         session_id = data["id"]
         client.put(
@@ -380,7 +380,7 @@ class TestFinaliseSession:
         assert resp2.status_code == 409
 
     def test_finalise_persisted_to_store(
-        self, client: TestClient, session_store: MagicMock
+        self, client: TestClient, session_store: AsyncMock
     ) -> None:
         data = _upload_csv(client)
         session_id = data["id"]
@@ -391,7 +391,7 @@ class TestFinaliseSession:
         assert final_save.status == SessionStatus.FINALISED
 
     def test_missing_temp_file_returns_500(
-        self, client: TestClient, session_store: MagicMock
+        self, client: TestClient, session_store: AsyncMock
     ) -> None:
         """If the temp file is deleted before finalise, returns 500."""
         data = _upload_csv(client)
@@ -455,7 +455,7 @@ class TestPatchTargetFields:
         )
         assert resp.status_code == 422
 
-    def test_persisted_to_store(self, client: TestClient, session_store: MagicMock) -> None:
+    def test_persisted_to_store(self, client: TestClient, session_store: AsyncMock) -> None:
         data = _upload_csv(client)
         session_id = data["id"]
         client.patch(
@@ -516,13 +516,13 @@ class TestDeleteSession:
         resp = client.delete("/sessions/nonexistent")
         assert resp.status_code == 404
 
-    def test_session_removed_from_store(self, client: TestClient, session_store: MagicMock) -> None:
+    def test_session_removed_from_store(self, client: TestClient, session_store: AsyncMock) -> None:
         data = _upload_csv(client)
         session_id = data["id"]
         client.delete(f"/sessions/{session_id}")
         session_store.delete.assert_called_once_with(session_id)
 
-    def test_temp_file_cleaned_up(self, client: TestClient, session_store: MagicMock) -> None:
+    def test_temp_file_cleaned_up(self, client: TestClient, session_store: AsyncMock) -> None:
         data = _upload_csv(client)
         session_id = data["id"]
         # Get the file path from the stored session
@@ -541,7 +541,7 @@ class TestDeleteSession:
         assert resp.status_code == 404
 
     def test_delete_succeeds_when_temp_file_already_gone(
-        self, client: TestClient, session_store: MagicMock
+        self, client: TestClient, session_store: AsyncMock
     ) -> None:
         """DELETE still returns 204 and removes session even if temp file was already deleted."""
         data = _upload_csv(client)
@@ -555,7 +555,7 @@ class TestDeleteSession:
         session_store.delete.assert_called_once_with(session_id)
 
     def test_delete_succeeds_when_file_removal_fails(
-        self, client: TestClient, session_store: MagicMock
+        self, client: TestClient, session_store: AsyncMock
     ) -> None:
         """DELETE still returns 204 even if os.remove raises OSError."""
         data = _upload_csv(client)

@@ -1,6 +1,6 @@
 """Session store adapters for interactive mapping session persistence."""
 
-from typing import Any, cast
+from typing import Any
 
 import redis as redis_lib
 import structlog
@@ -14,13 +14,13 @@ DEFAULT_TTL = 3600  # 1 hour
 class NullMappingSessionStore:
     """No-op fallback when Redis is unavailable."""
 
-    def save(self, session: MappingSession) -> None:
+    async def save(self, session: MappingSession) -> None:
         pass
 
-    def get(self, session_id: str) -> MappingSession | None:
+    async def get(self, session_id: str) -> MappingSession | None:
         return None
 
-    def delete(self, session_id: str) -> None:
+    async def delete(self, session_id: str) -> None:
         pass
 
 
@@ -32,9 +32,9 @@ class RedisMappingSessionStore:
         self._ttl = ttl
         self._logger = structlog.get_logger()
 
-    def save(self, session: MappingSession) -> None:
+    async def save(self, session: MappingSession) -> None:
         try:
-            self._client.setex(
+            await self._client.setex(
                 f"{KEY_PREFIX}{session.id}",
                 self._ttl,
                 session.model_dump_json(),
@@ -42,9 +42,9 @@ class RedisMappingSessionStore:
         except (ConnectionError, redis_lib.RedisError) as exc:
             self._logger.error("session_store_save_failed", session_id=session.id, error=str(exc))
 
-    def get(self, session_id: str) -> MappingSession | None:
+    async def get(self, session_id: str) -> MappingSession | None:
         try:
-            data = cast(bytes | None, self._client.get(f"{KEY_PREFIX}{session_id}"))
+            data = await self._client.get(f"{KEY_PREFIX}{session_id}")
         except (ConnectionError, redis_lib.RedisError) as exc:
             self._logger.error("session_store_get_failed", session_id=session_id, error=str(exc))
             return None
@@ -55,8 +55,8 @@ class RedisMappingSessionStore:
         except (ValueError, TypeError):
             return None
 
-    def delete(self, session_id: str) -> None:
+    async def delete(self, session_id: str) -> None:
         try:
-            self._client.delete(f"{KEY_PREFIX}{session_id}")
+            await self._client.delete(f"{KEY_PREFIX}{session_id}")
         except (ConnectionError, redis_lib.RedisError) as exc:
             self._logger.error("session_store_delete_failed", session_id=session_id, error=str(exc))
