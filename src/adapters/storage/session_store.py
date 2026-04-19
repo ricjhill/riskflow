@@ -3,6 +3,7 @@
 from typing import Any, cast
 
 import redis as redis_lib
+import structlog
 
 from src.domain.model.session import MappingSession
 
@@ -29,6 +30,7 @@ class RedisMappingSessionStore:
     def __init__(self, client: Any, ttl: int = DEFAULT_TTL) -> None:
         self._client = client
         self._ttl = ttl
+        self._logger = structlog.get_logger()
 
     def save(self, session: MappingSession) -> None:
         try:
@@ -37,13 +39,14 @@ class RedisMappingSessionStore:
                 self._ttl,
                 session.model_dump_json(),
             )
-        except (ConnectionError, redis_lib.RedisError):
-            pass
+        except (ConnectionError, redis_lib.RedisError) as exc:
+            self._logger.error("session_store_save_failed", session_id=session.id, error=str(exc))
 
     def get(self, session_id: str) -> MappingSession | None:
         try:
             data = cast(bytes | None, self._client.get(f"{KEY_PREFIX}{session_id}"))
-        except (ConnectionError, redis_lib.RedisError):
+        except (ConnectionError, redis_lib.RedisError) as exc:
+            self._logger.error("session_store_get_failed", session_id=session_id, error=str(exc))
             return None
         if data is None:
             return None
@@ -55,5 +58,5 @@ class RedisMappingSessionStore:
     def delete(self, session_id: str) -> None:
         try:
             self._client.delete(f"{KEY_PREFIX}{session_id}")
-        except (ConnectionError, redis_lib.RedisError):
-            pass
+        except (ConnectionError, redis_lib.RedisError) as exc:
+            self._logger.error("session_store_delete_failed", session_id=session_id, error=str(exc))

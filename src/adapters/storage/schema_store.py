@@ -3,6 +3,7 @@
 from typing import Any, cast
 
 import redis as redis_lib
+import structlog
 
 from src.domain.model.target_schema import TargetSchema
 
@@ -30,11 +31,13 @@ class RedisSchemaStore:
 
     def __init__(self, client: Any) -> None:
         self._client = client
+        self._logger = structlog.get_logger()
 
     def get(self, name: str) -> TargetSchema | None:
         try:
             data = cast(bytes | None, self._client.get(f"{KEY_PREFIX}{name}"))
-        except (ConnectionError, redis_lib.RedisError):
+        except (ConnectionError, redis_lib.RedisError) as exc:
+            self._logger.error("schema_store_get_failed", schema_name=name, error=str(exc))
             return None
         if data is None:
             return None
@@ -46,14 +49,14 @@ class RedisSchemaStore:
     def save(self, schema: TargetSchema) -> None:
         try:
             self._client.set(f"{KEY_PREFIX}{schema.name}", schema.model_dump_json())
-        except (ConnectionError, redis_lib.RedisError):
-            pass
+        except (ConnectionError, redis_lib.RedisError) as exc:
+            self._logger.error("schema_store_save_failed", schema_name=schema.name, error=str(exc))
 
     def delete(self, name: str) -> None:
         try:
             self._client.delete(f"{KEY_PREFIX}{name}")
-        except (ConnectionError, redis_lib.RedisError):
-            pass
+        except (ConnectionError, redis_lib.RedisError) as exc:
+            self._logger.error("schema_store_delete_failed", schema_name=name, error=str(exc))
 
     def list_all(self) -> list[str]:
         try:
@@ -67,5 +70,6 @@ class RedisSchemaStore:
                 if cursor == 0:
                     break
             return sorted(names)
-        except (ConnectionError, redis_lib.RedisError, ValueError, TypeError):
+        except (ConnectionError, redis_lib.RedisError, ValueError, TypeError) as exc:
+            self._logger.error("schema_store_list_failed", error=str(exc))
             return []

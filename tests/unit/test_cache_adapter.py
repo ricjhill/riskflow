@@ -7,6 +7,7 @@ NullCache is a trivial fallback for when Redis is unavailable.
 from unittest.mock import MagicMock
 
 import pytest
+import structlog.testing
 
 from src.adapters.storage.cache import NullCache, RedisCache
 from src.domain.model.schema import ColumnMapping, MappingResult
@@ -71,6 +72,20 @@ class TestRedisCacheGetMapping:
 
         assert result is None
 
+    def test_logs_error_on_get_connection_failure(self) -> None:
+        """Redis get failure emits an error log with cache_key and error message."""
+        client = MagicMock()
+        client.get.side_effect = ConnectionError("Redis down")
+        cache = RedisCache(client=client)
+
+        with structlog.testing.capture_logs() as logs:
+            cache.get_mapping("any-key")
+
+        error_logs = [l for l in logs if l.get("event") == "cache_get_failed"]
+        assert len(error_logs) == 1
+        assert error_logs[0]["cache_key"] == "any-key"
+        assert "Redis down" in error_logs[0]["error"]
+
 
 class TestRedisCacheSetMapping:
     def test_stores_json_with_ttl(self) -> None:
@@ -104,6 +119,21 @@ class TestRedisCacheSetMapping:
 
         # Should not raise — cache failures are non-fatal
         cache.set_mapping("some-key", mapping)
+
+    def test_logs_error_on_set_connection_failure(self) -> None:
+        """Redis set failure emits an error log with cache_key and error message."""
+        client = MagicMock()
+        client.setex.side_effect = ConnectionError("Redis down")
+        cache = RedisCache(client=client)
+        mapping = _make_mapping_result()
+
+        with structlog.testing.capture_logs() as logs:
+            cache.set_mapping("some-key", mapping)
+
+        error_logs = [l for l in logs if l.get("event") == "cache_set_failed"]
+        assert len(error_logs) == 1
+        assert error_logs[0]["cache_key"] == "some-key"
+        assert "Redis down" in error_logs[0]["error"]
 
 
 class TestNullCacheProtocol:
