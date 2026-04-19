@@ -1108,6 +1108,11 @@
           "status": {
             "type": "string",
             "title": "Status"
+          },
+          "redis": {
+            "type": "string",
+            "title": "Redis",
+            "default": "not_configured"
           }
         },
         "type": "object",
