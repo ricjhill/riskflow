@@ -171,13 +171,19 @@ def create_app() -> FastAPI:
     builtin_schema_names = set(schemas.keys())
 
     # Load runtime schemas from Redis and merge with YAML schemas.
-    # These are async calls but create_app() is sync (called during Uvicorn
-    # startup before the event loop serves requests). asyncio.run() creates
-    # a fresh loop each call, which is safe because create_app() runs once
-    # at startup, not on the hot path.
-    for runtime_name in asyncio.run(schema_store.list_all()):
+    # These are async calls but create_app() is sync and may be called either
+    # at Uvicorn startup (no loop yet) or under a test runner (loop may exist).
+    # Create a dedicated loop for these one-shot startup operations to avoid
+    # the "asyncio.run() cannot be called from a running event loop" error
+    # and the "get_event_loop deprecated" warning.
+    _startup_loop = asyncio.new_event_loop()
+    try:
+        runtime_names = _startup_loop.run_until_complete(schema_store.list_all())
+    except Exception:
+        runtime_names = []
+    for runtime_name in runtime_names:
         if runtime_name not in schemas:
-            runtime_schema = asyncio.run(schema_store.get(runtime_name))
+            runtime_schema = _startup_loop.run_until_complete(schema_store.get(runtime_name))
             if runtime_schema:
                 mapper = GroqMapper(
                     client=groq_client, schema=runtime_schema, semaphore=slm_semaphore
@@ -196,6 +202,7 @@ def create_app() -> FastAPI:
                     schema_name=runtime_name,
                     schema_fingerprint=runtime_schema.fingerprint,
                 )
+    _startup_loop.close()
 
     # Factory closure for creating MappingService at runtime
     def _make_service(schema: TargetSchema) -> MappingService:
