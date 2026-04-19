@@ -66,14 +66,14 @@ def mapper() -> AsyncMock:
 
 
 @pytest.fixture
-def cache() -> MagicMock:
-    mock = MagicMock()
+def cache() -> AsyncMock:
+    mock = AsyncMock()
     mock.get_mapping.return_value = None
     return mock
 
 
 @pytest.fixture
-def service(mapper: AsyncMock, cache: MagicMock) -> MappingService:
+def service(mapper: AsyncMock, cache: AsyncMock) -> MappingService:
     return MappingService(
         ingestor=PolarsIngestor(),
         mapper=mapper,
@@ -107,7 +107,7 @@ class TestCacheInteraction:
     async def test_cache_miss_calls_mapper_and_stores(
         self,
         service: MappingService,
-        cache: MagicMock,
+        cache: AsyncMock,
         mapper: AsyncMock,
         tmp_path: Path,
     ) -> None:
@@ -126,7 +126,7 @@ class TestCacheInteraction:
     async def test_cache_hit_skips_mapper(
         self,
         service: MappingService,
-        cache: MagicMock,
+        cache: AsyncMock,
         mapper: AsyncMock,
         tmp_path: Path,
     ) -> None:
@@ -144,7 +144,7 @@ class TestCacheInteraction:
     async def test_cache_key_is_deterministic(
         self,
         mapper: AsyncMock,
-        cache: MagicMock,
+        cache: AsyncMock,
         tmp_path: Path,
     ) -> None:
         """Same headers in different order produce the same cache key."""
@@ -182,7 +182,7 @@ class TestCacheLogging:
         configure_logging()
 
     @pytest.fixture
-    def service(self, mapper: AsyncMock, cache: MagicMock) -> MappingService:
+    def service(self, mapper: AsyncMock, cache: AsyncMock) -> MappingService:
         """Override module-level fixture to inject structlog logger."""
         import structlog
 
@@ -197,7 +197,7 @@ class TestCacheLogging:
     async def test_logs_cache_miss(
         self,
         service: MappingService,
-        cache: MagicMock,
+        cache: AsyncMock,
         tmp_path: Path,
         caplog: pytest.LogCaptureFixture,
     ) -> None:
@@ -215,7 +215,7 @@ class TestCacheLogging:
     async def test_logs_cache_hit(
         self,
         service: MappingService,
-        cache: MagicMock,
+        cache: AsyncMock,
         tmp_path: Path,
         caplog: pytest.LogCaptureFixture,
     ) -> None:
@@ -233,7 +233,7 @@ class TestCacheLogging:
     async def test_cache_miss_includes_duration_ms(
         self,
         service: MappingService,
-        cache: MagicMock,
+        cache: AsyncMock,
         tmp_path: Path,
         caplog: pytest.LogCaptureFixture,
     ) -> None:
@@ -254,7 +254,7 @@ class TestCacheLogging:
     async def test_cache_hit_includes_duration_ms(
         self,
         service: MappingService,
-        cache: MagicMock,
+        cache: AsyncMock,
         tmp_path: Path,
         caplog: pytest.LogCaptureFixture,
     ) -> None:
@@ -303,7 +303,7 @@ class TestConfidenceThreshold:
     async def test_custom_threshold(
         self,
         mapper: AsyncMock,
-        cache: MagicMock,
+        cache: AsyncMock,
         tmp_path: Path,
     ) -> None:
         path = _write_csv(tmp_path)
@@ -324,7 +324,7 @@ class TestPartialMapping:
     rather than failing entirely."""
 
     @pytest.mark.asyncio
-    async def test_partial_mapping_returns_result(self, cache: MagicMock, tmp_path: Path) -> None:
+    async def test_partial_mapping_returns_result(self, cache: AsyncMock, tmp_path: Path) -> None:
         """A file with only 2 of 6 target fields should still process."""
         # CSV has Policy No. and GWP but not the other 4 target fields
         file_path = str(tmp_path / "partial.csv")
@@ -355,7 +355,7 @@ class TestPartialMapping:
 
     @pytest.mark.asyncio
     async def test_partial_mapping_reports_missing_fields(
-        self, cache: MagicMock, tmp_path: Path
+        self, cache: AsyncMock, tmp_path: Path
     ) -> None:
         file_path = str(tmp_path / "partial.csv")
         with open(file_path, "w", newline="") as f:
@@ -385,7 +385,7 @@ class TestPartialMapping:
         assert len(result.confidence_report.missing_fields) == 4
 
     @pytest.mark.asyncio
-    async def test_partial_mapping_rows_are_invalid(self, cache: MagicMock, tmp_path: Path) -> None:
+    async def test_partial_mapping_rows_are_invalid(self, cache: AsyncMock, tmp_path: Path) -> None:
         """Rows with missing required fields go to invalid_records."""
         file_path = str(tmp_path / "partial.csv")
         with open(file_path, "w", newline="") as f:
@@ -424,7 +424,7 @@ class TestCustomSchema:
 
     @pytest.mark.asyncio
     async def test_validates_rows_against_custom_schema(
-        self, cache: MagicMock, tmp_path: Path
+        self, cache: AsyncMock, tmp_path: Path
     ) -> None:
         """A 2-field schema should validate rows with just those 2 fields."""
         file_path = str(tmp_path / "simple.csv")
@@ -466,7 +466,7 @@ class TestCustomSchema:
 
     @pytest.mark.asyncio
     async def test_custom_schema_rejects_invalid_rows(
-        self, cache: MagicMock, tmp_path: Path
+        self, cache: AsyncMock, tmp_path: Path
     ) -> None:
         """Custom schema with non_negative should reject negative amounts."""
         file_path = str(tmp_path / "bad.csv")
@@ -517,7 +517,7 @@ class TestCustomSchema:
 
     @pytest.mark.asyncio
     async def test_confidence_report_uses_custom_schema_fields(
-        self, cache: MagicMock, tmp_path: Path
+        self, cache: AsyncMock, tmp_path: Path
     ) -> None:
         """missing_fields should reference the custom schema's fields,
         not the hardcoded 6-field set."""
@@ -574,8 +574,8 @@ class TestCorrectionCache:
     def _make_service(
         self,
         mapper: AsyncMock,
-        cache: MagicMock,
-        correction_cache: MagicMock,
+        cache: AsyncMock,
+        correction_cache: AsyncMock,
         logger: object | None = None,
     ) -> MappingService:
         return MappingService(
@@ -588,7 +588,7 @@ class TestCorrectionCache:
 
     @pytest.mark.asyncio
     async def test_without_cedent_id_skips_corrections(
-        self, mapper: AsyncMock, cache: MagicMock, correction_cache: MagicMock, tmp_path: Path
+        self, mapper: AsyncMock, cache: MagicMock, correction_cache: AsyncMock, tmp_path: Path
     ) -> None:
         path = _write_csv(tmp_path)
         service = self._make_service(mapper, cache, correction_cache)
@@ -600,7 +600,7 @@ class TestCorrectionCache:
 
     @pytest.mark.asyncio
     async def test_with_cedent_id_checks_corrections(
-        self, mapper: AsyncMock, cache: MagicMock, correction_cache: MagicMock, tmp_path: Path
+        self, mapper: AsyncMock, cache: MagicMock, correction_cache: AsyncMock, tmp_path: Path
     ) -> None:
         path = _write_csv(tmp_path)
         service = self._make_service(mapper, cache, correction_cache)
@@ -613,7 +613,7 @@ class TestCorrectionCache:
 
     @pytest.mark.asyncio
     async def test_corrections_used_with_confidence_1(
-        self, mapper: AsyncMock, cache: MagicMock, correction_cache: MagicMock, tmp_path: Path
+        self, mapper: AsyncMock, cache: MagicMock, correction_cache: AsyncMock, tmp_path: Path
     ) -> None:
         correction_cache.get_corrections.return_value = {"Policy No.": "Policy_ID"}
         # SLM maps the remaining header
@@ -635,7 +635,7 @@ class TestCorrectionCache:
 
     @pytest.mark.asyncio
     async def test_corrected_headers_not_sent_to_slm(
-        self, mapper: AsyncMock, cache: MagicMock, correction_cache: MagicMock, tmp_path: Path
+        self, mapper: AsyncMock, cache: MagicMock, correction_cache: AsyncMock, tmp_path: Path
     ) -> None:
         correction_cache.get_corrections.return_value = {"Policy No.": "Policy_ID"}
         mapper.map_headers.return_value = MappingResult(
@@ -655,7 +655,7 @@ class TestCorrectionCache:
 
     @pytest.mark.asyncio
     async def test_all_headers_corrected_skips_slm(
-        self, mapper: AsyncMock, cache: MagicMock, correction_cache: MagicMock, tmp_path: Path
+        self, mapper: AsyncMock, cache: MagicMock, correction_cache: AsyncMock, tmp_path: Path
     ) -> None:
         correction_cache.get_corrections.return_value = {
             "Policy No.": "Policy_ID",
@@ -672,7 +672,7 @@ class TestCorrectionCache:
 
     @pytest.mark.asyncio
     async def test_no_corrections_falls_through_to_slm(
-        self, mapper: AsyncMock, cache: MagicMock, correction_cache: MagicMock, tmp_path: Path
+        self, mapper: AsyncMock, cache: MagicMock, correction_cache: AsyncMock, tmp_path: Path
     ) -> None:
         correction_cache.get_corrections.return_value = {}
         path = _write_csv(tmp_path)
@@ -684,7 +684,7 @@ class TestCorrectionCache:
 
     @pytest.mark.asyncio
     async def test_correction_with_invalid_target_raises(
-        self, mapper: AsyncMock, cache: MagicMock, correction_cache: MagicMock, tmp_path: Path
+        self, mapper: AsyncMock, cache: MagicMock, correction_cache: AsyncMock, tmp_path: Path
     ) -> None:
         """Correction referencing a field not in the schema should raise."""
         correction_cache.get_corrections.return_value = {
@@ -698,7 +698,7 @@ class TestCorrectionCache:
 
     @pytest.mark.asyncio
     async def test_cedent_id_with_no_correction_cache_injected(
-        self, mapper: AsyncMock, cache: MagicMock, tmp_path: Path
+        self, mapper: AsyncMock, cache: AsyncMock, tmp_path: Path
     ) -> None:
         """When correction_cache is None, cedent_id is ignored gracefully."""
         service = MappingService(
@@ -715,7 +715,7 @@ class TestCorrectionCache:
 
     @pytest.mark.asyncio
     async def test_merged_result_has_no_duplicate_targets(
-        self, mapper: AsyncMock, cache: MagicMock, correction_cache: MagicMock, tmp_path: Path
+        self, mapper: AsyncMock, cache: MagicMock, correction_cache: AsyncMock, tmp_path: Path
     ) -> None:
         """If SLM maps a target already covered by a correction,
         the SLM mapping is filtered out to prevent duplicate target error."""
@@ -741,8 +741,8 @@ class TestCorrectionCache:
     async def test_corrections_logged(
         self,
         mapper: AsyncMock,
-        cache: MagicMock,
-        correction_cache: MagicMock,
+        cache: AsyncMock,
+        correction_cache: AsyncMock,
         tmp_path: Path,
         capfd: pytest.CaptureFixture[str],
     ) -> None:
@@ -789,7 +789,7 @@ class TestDateFormatDetection:
 
     @pytest.mark.asyncio
     async def test_yyyy_slash_dates_parsed_correctly(
-        self, cache: MagicMock, tmp_path: Path
+        self, cache: AsyncMock, tmp_path: Path
     ) -> None:
         """CSV with YYYY/MM/DD dates should validate with correct months."""
         file_path = str(tmp_path / "yyyy_slash.csv")
@@ -863,10 +863,10 @@ class TestDateFormatDetection:
 class TestStoreCorrection:
     """store_correction validates target field against the active schema."""
 
-    def test_valid_correction_stored(self, mapper: AsyncMock, cache: MagicMock) -> None:
+    def test_valid_correction_stored(self, mapper: AsyncMock, cache: AsyncMock) -> None:
         from src.domain.model.correction import Correction
 
-        correction_cache = MagicMock()
+        correction_cache = AsyncMock()
         service = MappingService(
             ingestor=PolarsIngestor(),
             mapper=mapper,
@@ -882,7 +882,7 @@ class TestStoreCorrection:
         correction_cache.set_correction.assert_called_once_with(correction)
 
     def test_invalid_target_raises_invalid_correction_error(
-        self, mapper: AsyncMock, cache: MagicMock
+        self, mapper: AsyncMock, cache: AsyncMock
     ) -> None:
         from src.domain.model.correction import Correction
 
@@ -900,7 +900,7 @@ class TestStoreCorrection:
             service.store_correction(correction)
 
     def test_valid_correction_without_cache_is_noop(
-        self, mapper: AsyncMock, cache: MagicMock
+        self, mapper: AsyncMock, cache: AsyncMock
     ) -> None:
         """When no correction_cache is configured, store_correction validates
         but doesn't persist (no error raised)."""
@@ -924,7 +924,7 @@ class TestConfidenceThresholdBoundary:
 
     @pytest.mark.asyncio
     async def test_confidence_just_below_threshold_raises(
-        self, cache: MagicMock, tmp_path: Path
+        self, cache: AsyncMock, tmp_path: Path
     ) -> None:
         """0.599999 is below 0.6 threshold — should raise."""
         path = _write_csv(tmp_path)
@@ -940,7 +940,7 @@ class TestHeaderOnlyFile:
 
     @pytest.mark.asyncio
     async def test_header_only_csv_produces_empty_result(
-        self, cache: MagicMock, tmp_path: Path
+        self, cache: AsyncMock, tmp_path: Path
     ) -> None:
         """A file with headers but no data rows should produce 0 valid/invalid records."""
         file_path = str(tmp_path / "empty.csv")
@@ -965,7 +965,7 @@ class TestOptionalFieldValidation:
 
     @pytest.mark.asyncio
     async def test_optional_date_none_passes_validation(
-        self, cache: MagicMock, tmp_path: Path
+        self, cache: AsyncMock, tmp_path: Path
     ) -> None:
         """A schema with an optional date field should accept rows missing that field."""
         file_path = str(tmp_path / "optional.csv")
@@ -1003,7 +1003,7 @@ class TestOptionalFieldValidation:
 
     @pytest.mark.asyncio
     async def test_optional_float_none_passes_validation(
-        self, cache: MagicMock, tmp_path: Path
+        self, cache: AsyncMock, tmp_path: Path
     ) -> None:
         """Optional float field should accept rows missing that field."""
         file_path = str(tmp_path / "opt_float.csv")
@@ -1083,14 +1083,14 @@ class TestSuggestMapping:
 
     @pytest.mark.asyncio
     async def test_does_not_use_cache(
-        self, service: MappingService, mapper: AsyncMock, cache: MagicMock
+        self, service: MappingService, mapper: AsyncMock, cache: AsyncMock
     ) -> None:
         await service.suggest_mapping(["H"], [{"H": 1}])
         cache.get_mapping.assert_not_called()
         cache.set_mapping.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_does_not_check_confidence(self, mapper: AsyncMock, cache: MagicMock) -> None:
+    async def test_does_not_check_confidence(self, mapper: AsyncMock, cache: AsyncMock) -> None:
         """Low confidence should NOT raise — suggest_mapping skips threshold."""
         mapper.map_headers.return_value = _make_mapping_result(confidence=0.1)
         service = MappingService(ingestor=PolarsIngestor(), mapper=mapper, cache=cache)

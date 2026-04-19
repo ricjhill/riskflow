@@ -51,7 +51,7 @@ def _make_mapping_result() -> MappingResult:
 def _make_service() -> MappingService:
     mapper = AsyncMock()
     mapper.map_headers.return_value = _make_mapping_result()
-    cache = MagicMock()
+    cache = AsyncMock()
     cache.get_mapping.return_value = None
     return MappingService(
         ingestor=PolarsIngestor(),
@@ -204,7 +204,7 @@ class TestPostSessions:
         """SLM failure during suggest_mapping returns 503."""
         mapper = AsyncMock()
         mapper.map_headers.side_effect = SLMUnavailableError("Groq down")
-        cache = MagicMock()
+        cache = AsyncMock()
         cache.get_mapping.return_value = None
         schema = _make_schema("default")
         service = MappingService(

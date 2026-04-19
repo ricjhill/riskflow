@@ -143,7 +143,7 @@ class MappingService:
         cache_key = self._build_cache_key(headers)
 
         start = time.monotonic()
-        cached = self._cache.get_mapping(cache_key)
+        cached = await self._cache.get_mapping(cache_key)
         duration_ms = int((time.monotonic() - start) * 1000)
         if cached is not None:
             self._logger.info(
@@ -155,7 +155,7 @@ class MappingService:
                 "cache_lookup", result="miss", cache_key=cache_key, duration_ms=duration_ms
             )
             mapping = await self._map_with_corrections(headers, preview, cedent_id)
-            self._cache.set_mapping(cache_key, mapping)
+            await self._cache.set_mapping(cache_key, mapping)
 
         return self._validate_rows(file_path, mapping, sheet_name=sheet_name)
 

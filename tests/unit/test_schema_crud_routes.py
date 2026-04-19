@@ -39,7 +39,7 @@ def _make_service(schema: TargetSchema | None = None) -> MappingService:
         ],
         unmapped_headers=[],
     )
-    cache = MagicMock()
+    cache = AsyncMock()
     cache.get_mapping.return_value = None
     return MappingService(
         ingestor=PolarsIngestor(),
