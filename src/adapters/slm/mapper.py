@@ -15,6 +15,12 @@ import time
 
 import openai
 import structlog
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_random_exponential,
+)
 
 from src.domain.model.errors import SLMUnavailableError
 from src.domain.model.schema import MappingResult
@@ -86,33 +92,10 @@ class GroqMapper:
 
         try:
             start = time.monotonic()
-            if self._semaphore:
-                sem_start = time.monotonic()
-                async with self._semaphore:
-                    sem_duration_ms = int((time.monotonic() - sem_start) * 1000)
-                    self._logger.debug(
-                        "semaphore_wait",
-                        duration_ms=sem_duration_ms,
-                        model=self._model,
-                    )
-                    response = await self._client.chat.completions.create(
-                        model=self._model,
-                        messages=[
-                            {"role": "system", "content": self._system_prompt},
-                            {"role": "user", "content": user_message},
-                        ],
-                        response_format={"type": "json_object"},
-                    )
-            else:
-                response = await self._client.chat.completions.create(
-                    model=self._model,
-                    messages=[
-                        {"role": "system", "content": self._system_prompt},
-                        {"role": "user", "content": user_message},
-                    ],
-                    response_format={"type": "json_object"},
-                )
+            response = await self._call_with_retry(user_message)
             duration_ms = int((time.monotonic() - start) * 1000)
+        except openai.RateLimitError as e:
+            raise SLMUnavailableError(str(e)) from e
         except Exception as e:
             raise SLMUnavailableError(str(e)) from e
 
@@ -124,6 +107,40 @@ class GroqMapper:
         )
 
         return self._parse_response(response)
+
+    @retry(
+        retry=retry_if_exception_type(openai.RateLimitError),
+        stop=stop_after_attempt(3),
+        wait=wait_random_exponential(multiplier=1, max=10),
+        reraise=True,
+    )
+    async def _call_with_retry(self, user_message: str) -> object:
+        """Call the SLM with retry on rate limit (429). Non-retryable errors propagate immediately."""
+        if self._semaphore:
+            sem_start = time.monotonic()
+            async with self._semaphore:
+                sem_duration_ms = int((time.monotonic() - sem_start) * 1000)
+                self._logger.debug(
+                    "semaphore_wait",
+                    duration_ms=sem_duration_ms,
+                    model=self._model,
+                )
+                return await self._client.chat.completions.create(
+                    model=self._model,
+                    messages=[
+                        {"role": "system", "content": self._system_prompt},
+                        {"role": "user", "content": user_message},
+                    ],
+                    response_format={"type": "json_object"},
+                )
+        return await self._client.chat.completions.create(
+            model=self._model,
+            messages=[
+                {"role": "system", "content": self._system_prompt},
+                {"role": "user", "content": user_message},
+            ],
+            response_format={"type": "json_object"},
+        )
 
     def _build_user_message(
         self,
