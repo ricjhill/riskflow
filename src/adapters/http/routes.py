@@ -500,7 +500,7 @@ def create_router(
                 target_field=item.target_field,
             )
             try:
-                mapping_service.store_correction(correction)
+                await mapping_service.store_correction(correction)
             except InvalidCorrectionError as e:
                 raise HTTPException(
                     status_code=422,

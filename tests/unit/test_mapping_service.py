@@ -8,7 +8,7 @@ test orchestration logic — call ordering, cache behavior, and confidence.
 import csv
 import hashlib
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -566,8 +566,8 @@ class TestCorrectionCache:
     the SLM. Corrected headers get confidence 1.0 and skip the SLM."""
 
     @pytest.fixture
-    def correction_cache(self) -> MagicMock:
-        mock = MagicMock()
+    def correction_cache(self) -> AsyncMock:
+        mock = AsyncMock()
         mock.get_corrections.return_value = {}
         return mock
 
@@ -588,7 +588,7 @@ class TestCorrectionCache:
 
     @pytest.mark.asyncio
     async def test_without_cedent_id_skips_corrections(
-        self, mapper: AsyncMock, cache: MagicMock, correction_cache: AsyncMock, tmp_path: Path
+        self, mapper: AsyncMock, cache: AsyncMock, correction_cache: AsyncMock, tmp_path: Path
     ) -> None:
         path = _write_csv(tmp_path)
         service = self._make_service(mapper, cache, correction_cache)
@@ -600,7 +600,7 @@ class TestCorrectionCache:
 
     @pytest.mark.asyncio
     async def test_with_cedent_id_checks_corrections(
-        self, mapper: AsyncMock, cache: MagicMock, correction_cache: AsyncMock, tmp_path: Path
+        self, mapper: AsyncMock, cache: AsyncMock, correction_cache: AsyncMock, tmp_path: Path
     ) -> None:
         path = _write_csv(tmp_path)
         service = self._make_service(mapper, cache, correction_cache)
@@ -613,7 +613,7 @@ class TestCorrectionCache:
 
     @pytest.mark.asyncio
     async def test_corrections_used_with_confidence_1(
-        self, mapper: AsyncMock, cache: MagicMock, correction_cache: AsyncMock, tmp_path: Path
+        self, mapper: AsyncMock, cache: AsyncMock, correction_cache: AsyncMock, tmp_path: Path
     ) -> None:
         correction_cache.get_corrections.return_value = {"Policy No.": "Policy_ID"}
         # SLM maps the remaining header
@@ -635,7 +635,7 @@ class TestCorrectionCache:
 
     @pytest.mark.asyncio
     async def test_corrected_headers_not_sent_to_slm(
-        self, mapper: AsyncMock, cache: MagicMock, correction_cache: AsyncMock, tmp_path: Path
+        self, mapper: AsyncMock, cache: AsyncMock, correction_cache: AsyncMock, tmp_path: Path
     ) -> None:
         correction_cache.get_corrections.return_value = {"Policy No.": "Policy_ID"}
         mapper.map_headers.return_value = MappingResult(
@@ -655,7 +655,7 @@ class TestCorrectionCache:
 
     @pytest.mark.asyncio
     async def test_all_headers_corrected_skips_slm(
-        self, mapper: AsyncMock, cache: MagicMock, correction_cache: AsyncMock, tmp_path: Path
+        self, mapper: AsyncMock, cache: AsyncMock, correction_cache: AsyncMock, tmp_path: Path
     ) -> None:
         correction_cache.get_corrections.return_value = {
             "Policy No.": "Policy_ID",
@@ -672,7 +672,7 @@ class TestCorrectionCache:
 
     @pytest.mark.asyncio
     async def test_no_corrections_falls_through_to_slm(
-        self, mapper: AsyncMock, cache: MagicMock, correction_cache: AsyncMock, tmp_path: Path
+        self, mapper: AsyncMock, cache: AsyncMock, correction_cache: AsyncMock, tmp_path: Path
     ) -> None:
         correction_cache.get_corrections.return_value = {}
         path = _write_csv(tmp_path)
@@ -684,7 +684,7 @@ class TestCorrectionCache:
 
     @pytest.mark.asyncio
     async def test_correction_with_invalid_target_raises(
-        self, mapper: AsyncMock, cache: MagicMock, correction_cache: AsyncMock, tmp_path: Path
+        self, mapper: AsyncMock, cache: AsyncMock, correction_cache: AsyncMock, tmp_path: Path
     ) -> None:
         """Correction referencing a field not in the schema should raise."""
         correction_cache.get_corrections.return_value = {
@@ -715,7 +715,7 @@ class TestCorrectionCache:
 
     @pytest.mark.asyncio
     async def test_merged_result_has_no_duplicate_targets(
-        self, mapper: AsyncMock, cache: MagicMock, correction_cache: AsyncMock, tmp_path: Path
+        self, mapper: AsyncMock, cache: AsyncMock, correction_cache: AsyncMock, tmp_path: Path
     ) -> None:
         """If SLM maps a target already covered by a correction,
         the SLM mapping is filtered out to prevent duplicate target error."""
@@ -863,7 +863,8 @@ class TestDateFormatDetection:
 class TestStoreCorrection:
     """store_correction validates target field against the active schema."""
 
-    def test_valid_correction_stored(self, mapper: AsyncMock, cache: AsyncMock) -> None:
+    @pytest.mark.asyncio
+    async def test_valid_correction_stored(self, mapper: AsyncMock, cache: AsyncMock) -> None:
         from src.domain.model.correction import Correction
 
         correction_cache = AsyncMock()
@@ -878,10 +879,11 @@ class TestStoreCorrection:
             source_header="GWP",
             target_field="Gross_Premium",
         )
-        service.store_correction(correction)
+        await service.store_correction(correction)
         correction_cache.set_correction.assert_called_once_with(correction)
 
-    def test_invalid_target_raises_invalid_correction_error(
+    @pytest.mark.asyncio
+    async def test_invalid_target_raises_invalid_correction_error(
         self, mapper: AsyncMock, cache: AsyncMock
     ) -> None:
         from src.domain.model.correction import Correction
@@ -897,9 +899,10 @@ class TestStoreCorrection:
             target_field="Nonexistent_Field",
         )
         with pytest.raises(InvalidCorrectionError, match="Nonexistent_Field"):
-            service.store_correction(correction)
+            await service.store_correction(correction)
 
-    def test_valid_correction_without_cache_is_noop(
+    @pytest.mark.asyncio
+    async def test_valid_correction_without_cache_is_noop(
         self, mapper: AsyncMock, cache: AsyncMock
     ) -> None:
         """When no correction_cache is configured, store_correction validates
@@ -916,7 +919,7 @@ class TestStoreCorrection:
             source_header="GWP",
             target_field="Gross_Premium",
         )
-        service.store_correction(correction)  # should not raise
+        await service.store_correction(correction)  # should not raise
 
 
 class TestConfidenceThresholdBoundary:

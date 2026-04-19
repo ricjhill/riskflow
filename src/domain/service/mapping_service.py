@@ -114,7 +114,7 @@ class MappingService:
         """Validate rows using a supplied mapping (no SLM call)."""
         return self._validate_rows(file_path, mapping, sheet_name=sheet_name)
 
-    def store_correction(self, correction: Correction) -> None:
+    async def store_correction(self, correction: Correction) -> None:
         """Validate and store a human-verified correction.
 
         Raises InvalidCorrectionError if the target_field is not in the
@@ -127,7 +127,7 @@ class MappingService:
             )
             raise InvalidCorrectionError(msg)
         if self._correction_cache:
-            self._correction_cache.set_correction(correction)
+            await self._correction_cache.set_correction(correction)
 
     async def process_file(
         self,
@@ -168,7 +168,7 @@ class MappingService:
         """Check corrections, then call SLM for uncorrected headers."""
         corrections: dict[str, str] = {}
         if cedent_id and self._correction_cache:
-            corrections = self._correction_cache.get_corrections(cedent_id, headers)
+            corrections = await self._correction_cache.get_corrections(cedent_id, headers)
 
         if corrections:
             self._validate_corrections(corrections)
