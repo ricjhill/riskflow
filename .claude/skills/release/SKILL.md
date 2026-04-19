@@ -91,7 +91,7 @@ Edit the notes if needed (add context, highlight important changes, add test/cov
 
 1. Update the version in `pyproject.toml`:
    ```bash
-   sed -i 's/^version = ".*"/version = "<new-version>"/' pyproject.toml
+   uv run python -c "from tools.bump_version import write_version; write_version('<new-version>')"
    ```
 
 2. Regenerate the OpenAPI spec with the new version:

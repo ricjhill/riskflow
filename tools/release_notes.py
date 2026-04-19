@@ -7,7 +7,7 @@ for GitHub releases.
 Usage:
     uv run python -m tools.release_notes [--since TAG] [--version VERSION]
 
-The tool is also importable for use by the /release skill and release.yml.
+The tool is also importable for use by the /release skill.
 """
 
 from __future__ import annotations
@@ -20,7 +20,19 @@ from dataclasses import dataclass
 # Category patterns — matched case-insensitively against PR title.
 # Each pattern is a regex. Order matters: first match wins.
 _CATEGORY_RULES: list[tuple[str, list[str]]] = [
-    ("fixes", [r"\bfix", r"\bupgrade\b", r"\bbump\b", r"\bpatch\b", r"\bcve\b", r"\bsecurity\b"]),
+    (
+        "fixes",
+        [
+            r"\bfix\b",
+            r"\bfixes\b",
+            r"\bfixed\b",
+            r"\bupgrade\b",
+            r"\bbump\b",
+            r"\bpatch\b",
+            r"\bcve\b",
+            r"\bsecurity\b",
+        ],
+    ),
     (
         "infrastructure",
         [
@@ -32,7 +44,7 @@ _CATEGORY_RULES: list[tuple[str, list[str]]] = [
             r"\bpre-commit\b",
             r"\bcoverage\b",
             r"\brelease\b",
-            r"\blint",
+            r"\blint\b",
         ],
     ),
     (
@@ -43,14 +55,14 @@ _CATEGORY_RULES: list[tuple[str, list[str]]] = [
             r"\breadme\b",
             r"\bpresentation\b",
             r"\bsession\b",
-            r"\blesson",
+            r"\blessons?\b",
         ],
     ),
     # "features" is the fallback — anything with "add", "implement", "new",
     # or anything that doesn't match another category.
     (
         "features",
-        [r"\badd\b", r"\bimplement", r"\bnew\b", r"\bcreate\b", r"\bsupport\b", r"\benable\b"],
+        [r"\badd\b", r"\bimplement\b", r"\bnew\b", r"\bcreate\b", r"\bsupport\b", r"\benable\b"],
     ),
 ]
 

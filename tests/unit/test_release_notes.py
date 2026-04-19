@@ -7,8 +7,6 @@ suitable for GitHub releases.
 
 from __future__ import annotations
 
-import datetime
-
 import pytest
 
 from tools.release_notes import (
@@ -19,64 +17,51 @@ from tools.release_notes import (
 )
 
 
+def _pr(title: str) -> PR:
+    """Helper to build a PR with only the title varying."""
+    return PR(number=1, title=title, merged_at="2026-04-12T00:00:00Z")
+
+
 class TestPRCategorisation:
     """Categorise PRs into features, fixes, infrastructure, or docs by title keywords."""
 
-    def test_feature_keyword_in_title(self) -> None:
-        pr = PR(number=100, title="Add RedisJobStore adapter", merged_at="2026-04-12T00:00:00Z")
-        assert categorise_pr(pr) == "features"
+    @pytest.mark.parametrize(
+        ("title", "expected"),
+        [
+            # Features
+            ("Add RedisJobStore adapter", "features"),
+            ("Implement schema validation", "features"),
+            ("Create new endpoint for jobs", "features"),
+            ("Something completely new", "features"),
+            # Fixes
+            ("Fix SLM confidence anchoring", "fixes"),
+            ("Upgrade pygments 2.20.0", "fixes"),
+            ("Bump python-multipart to 0.0.26", "fixes"),
+            ("FIX broken import", "fixes"),
+            # Infrastructure
+            ("Move coverage delta check from pre-commit to CI", "infrastructure"),
+            ("Add CI concurrency job", "infrastructure"),
+            ("Add Docker multi-worker and log rotation", "infrastructure"),
+            ("Release v0.3.0 — scaling", "infrastructure"),
+            ("Add pre-commit hook for linting", "infrastructure"),
+            # Docs
+            ("Update diataxis docs for v0.3.0", "docs"),
+            ("Add 12 April session presentation", "docs"),
+            ("Update documentation for scaling", "docs"),
+            ("Add Lessons Learned to past sessions", "docs"),
+        ],
+        ids=lambda x: x if isinstance(x, str) and len(x) > 10 else x,
+    )
+    def test_categorise_by_title(self, title: str, expected: str) -> None:
+        assert categorise_pr(_pr(title)) == expected
 
-    def test_fix_keyword_in_title(self) -> None:
-        pr = PR(number=101, title="Fix SLM confidence anchoring", merged_at="2026-04-12T00:00:00Z")
-        assert categorise_pr(pr) == "fixes"
+    def test_fixture_is_not_a_fix(self) -> None:
+        """'fixture' contains 'fix' as a prefix — word boundary prevents false match."""
+        assert categorise_pr(_pr("Add test fixture for upload endpoint")) == "features"
 
-    def test_upgrade_keyword_is_fix(self) -> None:
-        pr = PR(number=102, title="Upgrade pygments 2.20.0", merged_at="2026-04-12T00:00:00Z")
-        assert categorise_pr(pr) == "fixes"
-
-    def test_docs_keyword_in_title(self) -> None:
-        pr = PR(
-            number=103, title="Update diataxis docs for v0.3.0", merged_at="2026-04-12T00:00:00Z"
-        )
-        assert categorise_pr(pr) == "docs"
-
-    def test_presentation_is_docs(self) -> None:
-        pr = PR(
-            number=104, title="Add 12 April session presentation", merged_at="2026-04-12T00:00:00Z"
-        )
-        assert categorise_pr(pr) == "docs"
-
-    def test_infrastructure_keyword_in_title(self) -> None:
-        pr = PR(
-            number=105,
-            title="Move coverage delta check from pre-commit to CI",
-            merged_at="2026-04-12T00:00:00Z",
-        )
-        assert categorise_pr(pr) == "infrastructure"
-
-    def test_ci_keyword_is_infrastructure(self) -> None:
-        pr = PR(number=106, title="Add CI concurrency job", merged_at="2026-04-12T00:00:00Z")
-        assert categorise_pr(pr) == "infrastructure"
-
-    def test_docker_keyword_is_infrastructure(self) -> None:
-        pr = PR(
-            number=107,
-            title="Add Docker multi-worker and log rotation",
-            merged_at="2026-04-12T00:00:00Z",
-        )
-        assert categorise_pr(pr) == "infrastructure"
-
-    def test_unknown_defaults_to_features(self) -> None:
-        pr = PR(number=108, title="Something completely new", merged_at="2026-04-12T00:00:00Z")
-        assert categorise_pr(pr) == "features"
-
-    def test_release_pr_is_infrastructure(self) -> None:
-        pr = PR(number=109, title="Release v0.3.0 — scaling", merged_at="2026-04-12T00:00:00Z")
-        assert categorise_pr(pr) == "infrastructure"
-
-    def test_case_insensitive_matching(self) -> None:
-        pr = PR(number=110, title="FIX broken import", merged_at="2026-04-12T00:00:00Z")
-        assert categorise_pr(pr) == "fixes"
+    def test_docker_is_not_docs(self) -> None:
+        """'Docker' contains 'doc' as a substring — word boundary prevents false match."""
+        assert categorise_pr(_pr("Add Docker support")) == "infrastructure"
 
 
 class TestGroupPRs:
