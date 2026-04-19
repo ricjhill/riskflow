@@ -32,6 +32,9 @@ Every log line is JSON with `worker_pid`, `request_id` (when in a request), `lev
 | `task_started` | `job_id`, `filename` | Background task began |
 | `task_completed` | `job_id`, `duration_ms`, `status` | Background task finished |
 | `app_configured` | `cache_type`, `correction_cache_type`, `schema_count`, `job_store_type` | Startup config |
+| `job_store_save_failed` | `job_id`, `error` | Redis save failed |
+| `job_store_get_failed` | `job_id`, `error` | Redis get failed |
+| `job_store_list_failed` | `error` | Redis list failed |
 
 ### DEBUG only (LOG_LEVEL=DEBUG)
 
