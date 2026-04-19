@@ -67,6 +67,7 @@ STDLIB_MODULES: set[str] = {
     "unittest",
     "uuid",
     "gc",
+    "glob",
     "resource",
     "socket",
     "subprocess",

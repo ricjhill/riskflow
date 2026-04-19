@@ -67,6 +67,39 @@ class TestAppCreation:
         assert response.json()["status"] == "degraded"
         assert response.json()["redis"] == "unreachable"
 
+    def test_live_always_returns_200(self) -> None:
+        """Liveness probe always returns 200 — if it fails, the process is dead."""
+        from src.entrypoint.main import create_app
+
+        app = create_app()
+        client = TestClient(app)
+        response = client.get("/live")
+        assert response.status_code == 200
+        assert response.json()["status"] == "alive"
+
+    def test_ready_returns_200_without_redis(self) -> None:
+        """Without Redis, readiness probe returns 200 (app works with fallbacks)."""
+        from src.entrypoint.main import create_app
+
+        app = create_app()
+        client = TestClient(app)
+        response = client.get("/ready")
+        assert response.status_code == 200
+        assert response.json()["status"] == "ready"
+
+    def test_ready_returns_503_when_redis_unreachable(self) -> None:
+        """With unreachable Redis, readiness probe returns 503."""
+        from src.entrypoint.main import create_app
+
+        mock_redis = MagicMock()
+        mock_redis.ping.side_effect = ConnectionError("gone")
+        with patch("src.entrypoint.main._create_redis_client", return_value=mock_redis):
+            app = create_app()
+        client = TestClient(app)
+        response = client.get("/ready")
+        assert response.status_code == 503
+        assert response.json()["status"] == "not_ready"
+
     def test_upload_endpoint_is_registered(self) -> None:
         from src.entrypoint.main import create_app
 

@@ -11,14 +11,17 @@ other adapters. All wiring happens here.
 """
 
 import asyncio
+import glob
 import logging
 import os
 import sys
+import time
 from typing import Any
 
 import openai
 import structlog
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 
 from src.adapters.http.middleware import RequestIdMiddleware
 from src.adapters.http.routes import HealthResponse, create_router
@@ -250,7 +253,58 @@ def create_app() -> FastAPI:
         except Exception:
             return HealthResponse(status="degraded", redis="unreachable")
 
+    @app.get("/ready")
+    async def ready() -> Any:
+        """Readiness probe: can this instance accept requests?
+
+        Returns 200 if Redis is connected (or not configured).
+        Returns 503 if Redis is configured but unreachable.
+        """
+        if redis_client is not None:
+            try:
+                redis_client.ping()
+            except Exception:
+                return JSONResponse(
+                    status_code=503,
+                    content={"status": "not_ready", "reason": "redis_unreachable"},
+                )
+        return {"status": "ready"}
+
+    @app.get("/live")
+    async def live() -> dict[str, str]:
+        """Liveness probe: is this process alive?
+
+        Always returns 200. If this fails, the process is dead.
+        """
+        return {"status": "alive"}
+
+    _cleanup_orphaned_temp_files(logger)
+
     return app
+
+
+def _cleanup_orphaned_temp_files(logger: Any) -> None:
+    """Remove temp files from expired sessions.
+
+    Session data expires via Redis TTL (1 hour), but the temp file
+    on disk stays forever. This cleanup removes files older than
+    the session TTL to prevent disk fill at scale.
+    """
+    import tempfile
+
+    temp_dir = tempfile.gettempdir()
+    session_ttl = 3600  # matches session_store.DEFAULT_TTL
+    cutoff = time.time() - session_ttl
+    cleaned = 0
+    for path in glob.glob(os.path.join(temp_dir, "riskflow_*")):
+        try:
+            if os.path.getmtime(path) < cutoff:
+                os.remove(path)
+                cleaned += 1
+        except OSError:
+            pass
+    if cleaned:
+        logger.info("temp_files_cleaned", count=cleaned)
 
 
 def _load_all_schemas() -> dict[str, TargetSchema]:
