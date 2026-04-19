@@ -408,14 +408,17 @@ jobs:
     permissions:
       contents: read
     # 5-user concurrent e2e with REAL Groq API against Docker stack.
-    # Proves the full path: HTTP → semaphore → SLM → Redis → response
+    # Exercises the full path: HTTP → semaphore → SLM → Redis → response
     # under concurrent load. Runs on push to main only (burns API credits).
+    # Note: locustfile marks 503 as success, so a Groq outage would pass.
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v6
 
       - name: Install uv and deps
         uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
 
       - name: Set up Python and install deps
         run: |
@@ -426,12 +429,13 @@ jobs:
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
-          echo "GROQ_API_KEY=$GROQ_API_KEY" > .env
-          docker compose up -d --build
+          echo "GROQ_API_KEY=placeholder" > .env
+          GROQ_API_KEY=$GROQ_API_KEY docker compose up -d --build
           curl --fail --retry 10 --retry-delay 2 --retry-all-errors http://localhost:8000/health
 
       - name: Run Locust 5-user test with real SLM
         run: |
+          mkdir -p reports
           uv run locust -f tests/load/locustfile.py \
             --host http://localhost:8000 \
             --headless --users 5 --spawn-rate 5 --run-time 30s \
