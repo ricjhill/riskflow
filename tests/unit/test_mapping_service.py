@@ -181,6 +181,18 @@ class TestCacheLogging:
 
         configure_logging()
 
+    @pytest.fixture
+    def service(self, mapper: AsyncMock, cache: MagicMock) -> MappingService:
+        """Override module-level fixture to inject structlog logger."""
+        import structlog
+
+        return MappingService(
+            ingestor=PolarsIngestor(),
+            mapper=mapper,
+            cache=cache,
+            logger=structlog.get_logger(),
+        )
+
     @pytest.mark.asyncio
     async def test_logs_cache_miss(
         self,
@@ -564,12 +576,14 @@ class TestCorrectionCache:
         mapper: AsyncMock,
         cache: MagicMock,
         correction_cache: MagicMock,
+        logger: object | None = None,
     ) -> MappingService:
         return MappingService(
             ingestor=PolarsIngestor(),
             mapper=mapper,
             cache=cache,
             correction_cache=correction_cache,
+            logger=logger,
         )
 
     @pytest.mark.asyncio
@@ -734,6 +748,8 @@ class TestCorrectionCache:
     ) -> None:
         import json
 
+        import structlog
+
         from src.entrypoint.main import configure_logging
 
         configure_logging()
@@ -747,7 +763,7 @@ class TestCorrectionCache:
             unmapped_headers=["Extra"],
         )
         path = _write_csv(tmp_path)
-        service = self._make_service(mapper, cache, correction_cache)
+        service = self._make_service(mapper, cache, correction_cache, logger=structlog.get_logger())
 
         await service.process_file(path, cedent_id="ABC")
 

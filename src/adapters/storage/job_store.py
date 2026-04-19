@@ -55,15 +55,16 @@ class RedisJobStore:
                 self._ttl,
                 json.dumps(job.to_dict()),
             )
-        except (ConnectionError, redis_lib.RedisError):
-            pass
+        except (ConnectionError, redis_lib.RedisError) as exc:
+            self._logger.error("job_store_save_failed", job_id=job.id, error=str(exc))
         duration_ms = int((time.monotonic() - start) * 1000)
         self._logger.debug("job_store_save", job_id=job.id, duration_ms=duration_ms)
 
     def get(self, job_id: str) -> Job | None:
         try:
             data = self._client.get(f"{KEY_PREFIX}{job_id}")
-        except (ConnectionError, redis_lib.RedisError):
+        except (ConnectionError, redis_lib.RedisError) as exc:
+            self._logger.error("job_store_get_failed", job_id=job_id, error=str(exc))
             return None
         if data is None:
             return None
@@ -89,7 +90,8 @@ class RedisJobStore:
                             continue
                 if cursor == 0:
                     break
-        except (ConnectionError, redis_lib.RedisError):
+        except (ConnectionError, redis_lib.RedisError) as exc:
+            self._logger.error("job_store_list_failed", error=str(exc))
             return []
         result = sorted(jobs, key=lambda j: j.created_at, reverse=True)
         duration_ms = int((time.monotonic() - start) * 1000)
