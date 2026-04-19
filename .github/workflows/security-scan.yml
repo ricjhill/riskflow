@@ -1,0 +1,55 @@
+name: Daily Security Scan
+
+# Catches new CVEs published after the last build — runs even when
+# no code changes. Also triggered manually for on-demand scans.
+on:
+  schedule:
+    - cron: '17 7 * * *'  # 7:17 AM UTC daily (off-minute to avoid fleet spikes)
+  workflow_dispatch:       # manual trigger
+
+jobs:
+  scan-image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Build Docker image
+        run: docker build -t riskflow-scan:latest .
+
+      - name: Scan image for vulnerabilities
+        uses: aquasecurity/trivy-action@v0.35.0
+        with:
+          image-ref: 'riskflow-scan:latest'
+          format: 'table'
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true
+
+  scan-dependencies:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Audit Python dependencies
+        run: uv run pip-audit
+
+      - name: Static security analysis
+        run: uv run bandit -r src/ -q
