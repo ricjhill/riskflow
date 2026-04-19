@@ -7,6 +7,7 @@ or Groq connections.
 
 import logging
 import os
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -99,6 +100,75 @@ class TestAppCreation:
         response = client.get("/ready")
         assert response.status_code == 503
         assert response.json()["status"] == "not_ready"
+
+
+class TestTempFileCleanup:
+    """Startup cleanup removes orphaned riskflow_* temp files older than session TTL."""
+
+    def test_removes_old_files(self, tmp_path: Path) -> None:
+        """Files older than session TTL are removed."""
+        from src.entrypoint.main import _cleanup_orphaned_temp_files
+
+        old_file = tmp_path / "riskflow_old.csv"
+        old_file.write_text("data")
+        os.utime(old_file, (0, 0))  # set mtime to epoch (very old)
+
+        with patch("src.entrypoint.main.glob.glob", return_value=[str(old_file)]):
+            _cleanup_orphaned_temp_files(MagicMock())
+
+        assert not old_file.exists()
+
+    def test_preserves_new_files(self, tmp_path: Path) -> None:
+        """Files newer than session TTL are preserved."""
+        from src.entrypoint.main import _cleanup_orphaned_temp_files
+
+        new_file = tmp_path / "riskflow_new.csv"
+        new_file.write_text("data")
+        # mtime is now (just created) — well within TTL
+
+        with patch("src.entrypoint.main.glob.glob", return_value=[str(new_file)]):
+            _cleanup_orphaned_temp_files(MagicMock())
+
+        assert new_file.exists()
+
+    def test_swallows_os_error(self, tmp_path: Path) -> None:
+        """OSError on remove is swallowed — cleanup is best-effort."""
+        from src.entrypoint.main import _cleanup_orphaned_temp_files
+
+        with (
+            patch("src.entrypoint.main.glob.glob", return_value=["/nonexistent/riskflow_x"]),
+            patch("os.path.getmtime", return_value=0),
+            patch("os.remove", side_effect=OSError("perm denied")),
+        ):
+            _cleanup_orphaned_temp_files(MagicMock())  # should not raise
+
+    def test_logs_count_when_files_cleaned(self, tmp_path: Path) -> None:
+        """Logs temp_files_cleaned with count when files are removed."""
+        from src.entrypoint.main import _cleanup_orphaned_temp_files
+
+        old_file = tmp_path / "riskflow_old.csv"
+        old_file.write_text("data")
+        os.utime(old_file, (0, 0))
+
+        mock_logger = MagicMock()
+        with patch("src.entrypoint.main.glob.glob", return_value=[str(old_file)]):
+            _cleanup_orphaned_temp_files(mock_logger)
+
+        mock_logger.info.assert_called_once_with("temp_files_cleaned", count=1)
+
+    def test_empty_dir_no_log(self) -> None:
+        """No files to clean — no log emitted."""
+        from src.entrypoint.main import _cleanup_orphaned_temp_files
+
+        mock_logger = MagicMock()
+        with patch("src.entrypoint.main.glob.glob", return_value=[]):
+            _cleanup_orphaned_temp_files(mock_logger)
+
+        mock_logger.info.assert_not_called()
+
+
+class TestAppRoutes:
+    """Verify core routes are registered."""
 
     def test_upload_endpoint_is_registered(self) -> None:
         from src.entrypoint.main import create_app

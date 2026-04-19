@@ -290,9 +290,9 @@ def _cleanup_orphaned_temp_files(logger: Any) -> None:
     on disk stays forever. This cleanup removes files older than
     the session TTL to prevent disk fill at scale.
     """
-    import tempfile
+    import tempfile as _tempfile
 
-    temp_dir = tempfile.gettempdir()
+    temp_dir = _tempfile.gettempdir()
     session_ttl = 3600  # matches session_store.DEFAULT_TTL
     cutoff = time.time() - session_ttl
     cleaned = 0

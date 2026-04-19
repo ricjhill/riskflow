@@ -638,6 +638,8 @@ class TestGroqRetryOn429:
         with pytest.raises(SLMUnavailableError, match="rate limited"):
             await mapper.map_headers(["GWP"], [{"GWP": 50000}])
 
+        assert client.chat.completions.create.call_count == 3
+
     @pytest.mark.asyncio
     async def test_does_not_retry_auth_errors(self) -> None:
         """Authentication errors are NOT retried — fail immediately."""
