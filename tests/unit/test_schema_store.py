@@ -4,6 +4,8 @@ The SchemaStorePort persists runtime schemas to Redis. Bootstrap schemas
 from YAML files are loaded separately at startup and are not stored here.
 """
 
+import structlog.testing
+
 from src.adapters.storage.schema_store import NullSchemaStore
 from src.domain.model.target_schema import FieldDefinition, FieldType, TargetSchema
 from src.ports.output.schema_store import SchemaStorePort
@@ -178,3 +180,76 @@ class TestRedisSchemaStoreDeleteListAll:
         store = RedisSchemaStore(client=client)
 
         assert store.list_all() == []
+
+
+class TestRedisSchemaStoreErrorLogging:
+    """Redis failures emit error-level structlog events."""
+
+    def test_get_logs_error(self) -> None:
+        from unittest.mock import MagicMock
+
+        import redis as redis_lib
+
+        from src.adapters.storage.schema_store import RedisSchemaStore
+
+        client = MagicMock()
+        client.get.side_effect = redis_lib.ConnectionError("down")
+        store = RedisSchemaStore(client=client)
+
+        with structlog.testing.capture_logs() as logs:
+            store.get("test")
+
+        error_logs = [l for l in logs if l.get("event") == "schema_store_get_failed"]
+        assert len(error_logs) == 1
+        assert error_logs[0]["schema_name"] == "test"
+
+    def test_save_logs_error(self) -> None:
+        from unittest.mock import MagicMock
+
+        import redis as redis_lib
+
+        from src.adapters.storage.schema_store import RedisSchemaStore
+
+        client = MagicMock()
+        client.set.side_effect = redis_lib.ConnectionError("down")
+        store = RedisSchemaStore(client=client)
+
+        with structlog.testing.capture_logs() as logs:
+            store.save(_make_schema())
+
+        error_logs = [l for l in logs if l.get("event") == "schema_store_save_failed"]
+        assert len(error_logs) == 1
+
+    def test_delete_logs_error(self) -> None:
+        from unittest.mock import MagicMock
+
+        import redis as redis_lib
+
+        from src.adapters.storage.schema_store import RedisSchemaStore
+
+        client = MagicMock()
+        client.delete.side_effect = redis_lib.ConnectionError("down")
+        store = RedisSchemaStore(client=client)
+
+        with structlog.testing.capture_logs() as logs:
+            store.delete("test")
+
+        error_logs = [l for l in logs if l.get("event") == "schema_store_delete_failed"]
+        assert len(error_logs) == 1
+
+    def test_list_all_logs_error(self) -> None:
+        from unittest.mock import MagicMock
+
+        import redis as redis_lib
+
+        from src.adapters.storage.schema_store import RedisSchemaStore
+
+        client = MagicMock()
+        client.scan.side_effect = redis_lib.ConnectionError("down")
+        store = RedisSchemaStore(client=client)
+
+        with structlog.testing.capture_logs() as logs:
+            store.list_all()
+
+        error_logs = [l for l in logs if l.get("event") == "schema_store_list_failed"]
+        assert len(error_logs) == 1

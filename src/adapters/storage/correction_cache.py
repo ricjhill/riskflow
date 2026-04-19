@@ -6,6 +6,7 @@ RedisCorrectionCache: Redis hash per cedent — corrections:{cedent_id}
 """
 
 import redis as redis_lib
+import structlog
 
 from src.domain.model.correction import Correction
 
@@ -38,6 +39,7 @@ class RedisCorrectionCache:
 
     def __init__(self, client: redis_lib.Redis) -> None:
         self._client = client
+        self._logger = structlog.get_logger()
 
     def get_corrections(self, cedent_id: str, headers: list[str]) -> dict[str, str]:
         if not headers:
@@ -45,7 +47,8 @@ class RedisCorrectionCache:
         try:
             key = f"{CORRECTION_KEY_PREFIX}{cedent_id}"
             values: list[bytes | None] = self._client.hmget(key, headers)  # type: ignore[assignment]
-        except (ConnectionError, redis_lib.RedisError):
+        except (ConnectionError, redis_lib.RedisError) as exc:
+            self._logger.error("correction_cache_get_failed", cedent_id=cedent_id, error=str(exc))
             return {}
         return {
             header: value.decode()
@@ -57,5 +60,7 @@ class RedisCorrectionCache:
         try:
             key = f"{CORRECTION_KEY_PREFIX}{correction.cedent_id}"
             self._client.hset(key, correction.source_header, correction.target_field)
-        except (ConnectionError, redis_lib.RedisError):
-            pass
+        except (ConnectionError, redis_lib.RedisError) as exc:
+            self._logger.error(
+                "correction_cache_set_failed", cedent_id=correction.cedent_id, error=str(exc)
+            )
