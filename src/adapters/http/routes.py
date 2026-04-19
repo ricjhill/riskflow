@@ -745,7 +745,7 @@ def create_router(
             _validate_file(file)
 
             job = Job.create(filename=file.filename)
-            job_store.save(job)
+            await job_store.save(job)
 
             temp_path = _save_temp_file(file)
             logger.info(
@@ -770,7 +770,7 @@ def create_router(
         @router.get("/jobs")
         async def list_jobs() -> JobListResponse:
             """List all async jobs with filename and upload date."""
-            jobs = job_store.list_all()
+            jobs = await job_store.list_all()
             return JobListResponse(
                 jobs=[
                     JobSummary(
@@ -786,7 +786,7 @@ def create_router(
         @router.get("/jobs/{job_id}")
         async def get_job_status(job_id: str) -> JobStatusResponse:
             """Get the status and result of an async job."""
-            job = job_store.get(job_id)
+            job = await job_store.get(job_id)
             if job is None:
                 raise HTTPException(status_code=404, detail="Job not found")
             return JobStatusResponse(
@@ -826,14 +826,14 @@ async def _process_job(
     start = time.monotonic()
     logger.info("task_started", job_id=job.id, filename=job.filename)
     job.start()
-    job_store.save(job)
+    await job_store.save(job)
     try:
         result = await mapping_service.process_file(temp_path, sheet_name=sheet_name)
         job.complete(result=result.model_dump())
     except Exception as e:
         job.fail(error=str(e))
     finally:
-        job_store.save(job)
+        await job_store.save(job)
         duration_ms = int((time.monotonic() - start) * 1000)
         logger.info(
             "task_completed",
