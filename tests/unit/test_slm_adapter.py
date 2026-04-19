@@ -594,3 +594,67 @@ class TestSemaphoreWaitLogging:
 
         wait_events = [e for e in self.captured_events if e.get("event") == "semaphore_wait"]
         assert len(wait_events) == 0
+
+
+class TestGroqRetryOn429:
+    """Groq 429 (rate limit) retries with backoff before raising SLMUnavailableError."""
+
+    @pytest.mark.asyncio
+    async def test_retries_on_rate_limit_then_succeeds(self) -> None:
+        """First call gets 429, second call succeeds — result is returned."""
+        import openai
+
+        client = AsyncMock()
+        rate_limit_error = openai.RateLimitError(
+            message="rate limited",
+            response=MagicMock(status_code=429),
+            body=None,
+        )
+        client.chat.completions.create.side_effect = [
+            rate_limit_error,
+            _mock_completion(_valid_response_json()),
+        ]
+        mapper = GroqMapper(client=client)
+
+        result = await mapper.map_headers(["GWP"], [{"GWP": 50000}])
+
+        assert len(result.mappings) >= 1
+        assert client.chat.completions.create.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_raises_after_max_retries(self) -> None:
+        """All retries exhausted — raises SLMUnavailableError."""
+        import openai
+
+        client = AsyncMock()
+        rate_limit_error = openai.RateLimitError(
+            message="rate limited",
+            response=MagicMock(status_code=429),
+            body=None,
+        )
+        client.chat.completions.create.side_effect = rate_limit_error
+        mapper = GroqMapper(client=client)
+
+        with pytest.raises(SLMUnavailableError, match="rate limited"):
+            await mapper.map_headers(["GWP"], [{"GWP": 50000}])
+
+        assert client.chat.completions.create.call_count == 3
+
+    @pytest.mark.asyncio
+    async def test_does_not_retry_auth_errors(self) -> None:
+        """Authentication errors are NOT retried — fail immediately."""
+        import openai
+
+        client = AsyncMock()
+        auth_error = openai.AuthenticationError(
+            message="invalid key",
+            response=MagicMock(status_code=401),
+            body=None,
+        )
+        client.chat.completions.create.side_effect = auth_error
+        mapper = GroqMapper(client=client)
+
+        with pytest.raises(SLMUnavailableError, match="invalid key"):
+            await mapper.map_headers(["GWP"], [{"GWP": 50000}])
+
+        assert client.chat.completions.create.call_count == 1

@@ -2197,6 +2197,7 @@ dependencies = [
     { name = "redis" },
     { name = "starlette" },
     { name = "structlog" },
+    { name = "tenacity" },
     { name = "uvicorn" },
 ]
 
@@ -2239,6 +2240,7 @@ requires-dist = [
     { name = "redis", specifier = ">=7.4.0" },
     { name = "starlette", specifier = ">=1.0.0" },
     { name = "structlog", specifier = ">=25.5.0" },
+    { name = "tenacity", specifier = ">=9.1.4" },
     { name = "uvicorn", specifier = ">=0.42.0" },
 ]
 

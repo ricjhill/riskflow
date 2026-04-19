@@ -877,6 +877,6 @@ def _validate_file(file: UploadFile) -> None:
 def _save_temp_file(file: UploadFile) -> str:
     """Save uploaded file to a temp path and return the path."""
     suffix = os.path.splitext(file.filename or "upload")[1]
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+    with tempfile.NamedTemporaryFile(delete=False, prefix="riskflow_", suffix=suffix) as tmp:
         tmp.write(file.file.read())
         return tmp.name
