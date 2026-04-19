@@ -57,6 +57,7 @@ Complete specifications for developers and testers.
 
 Session presentations documenting design decisions, lessons learned, and metrics.
 
+- [Async Redis & Scaling (19-20 Apr)](presentations/2026-04-19-20-async-redis-and-scaling.md) — Phase 4 planning, scaling experiments, sync-to-async Redis migration (7 TDD loops), scale regression tests
 - [Harness Audit & Release Skill (19 Apr)](presentations/2026-04-19-harness-audit-and-release-skill.md) — Adversarial audit, branch protection, 5 harness fixes, release automation
 - [Scaling, Observability & Quality (12-14 Apr)](presentations/2026-04-12-14-scaling-observability-quality.md) — 5-user scaling plan, confidence fix, harness improvements
 - [Test Coverage Tracking (8 Apr)](presentations/2026-04-08-test-coverage-tracking.md) — Coverage measurement, PR traceability
