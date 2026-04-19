@@ -129,7 +129,7 @@ class TestAllowedImports:
     def test_third_party_imports_allowed(self, tmp_path: Path) -> None:
         f = tmp_path / "src" / "domain" / "model" / "ok.py"
         f.parent.mkdir(parents=True)
-        f.write_text("from pydantic import BaseModel\nimport structlog\n")
+        f.write_text("from pydantic import BaseModel\nimport polars\n")
         errors = check_file(f)
         assert errors == []
 
@@ -163,6 +163,96 @@ class TestMultipleViolations:
         )
         errors = check_file(f)
         assert len(errors) == 2
+
+
+class TestInfraImportBan:
+    """Infrastructure packages must not be imported in domain/ or ports/."""
+
+    def test_structlog_in_domain_is_violation(self, tmp_path: Path) -> None:
+        """structlog is infrastructure — domain must receive loggers via DI."""
+        f = tmp_path / "src" / "domain" / "service" / "bad.py"
+        f.parent.mkdir(parents=True)
+        f.write_text("import structlog\n")
+        errors = check_file(f)
+        assert len(errors) == 1
+        assert "structlog" in errors[0]
+        assert "INFRA_IMPORT" in errors[0]
+
+    def test_structlog_from_import_in_domain_is_violation(self, tmp_path: Path) -> None:
+        """'from structlog import ...' should also be caught."""
+        f = tmp_path / "src" / "domain" / "model" / "bad.py"
+        f.parent.mkdir(parents=True)
+        f.write_text("from structlog import get_logger\n")
+        errors = check_file(f)
+        assert len(errors) == 1
+        assert "structlog" in errors[0]
+
+    def test_redis_in_domain_is_violation(self, tmp_path: Path) -> None:
+        """redis is infrastructure — domain must not import it."""
+        f = tmp_path / "src" / "domain" / "model" / "bad.py"
+        f.parent.mkdir(parents=True)
+        f.write_text("import redis\n")
+        errors = check_file(f)
+        assert len(errors) == 1
+        assert "redis" in errors[0]
+
+    def test_fastapi_in_ports_is_violation(self, tmp_path: Path) -> None:
+        """fastapi is infrastructure — ports must not import it."""
+        f = tmp_path / "src" / "ports" / "output" / "bad.py"
+        f.parent.mkdir(parents=True)
+        f.write_text("from fastapi import FastAPI\n")
+        errors = check_file(f)
+        assert len(errors) == 1
+        assert "fastapi" in errors[0]
+
+    def test_httpx_in_domain_is_violation(self, tmp_path: Path) -> None:
+        """httpx is infrastructure — domain must not import it."""
+        f = tmp_path / "src" / "domain" / "service" / "bad.py"
+        f.parent.mkdir(parents=True)
+        f.write_text("import httpx\n")
+        errors = check_file(f)
+        assert len(errors) == 1
+        assert "httpx" in errors[0]
+
+    def test_structlog_in_adapters_is_allowed(self, tmp_path: Path) -> None:
+        """Adapters are allowed to import infrastructure packages."""
+        f = tmp_path / "src" / "adapters" / "http" / "ok.py"
+        f.parent.mkdir(parents=True)
+        f.write_text("import structlog\n")
+        errors = check_file(f)
+        assert errors == []
+
+    def test_structlog_in_entrypoint_is_allowed(self, tmp_path: Path) -> None:
+        """Entrypoint wires everything — infrastructure imports are expected."""
+        f = tmp_path / "src" / "entrypoint" / "ok.py"
+        f.parent.mkdir(parents=True)
+        f.write_text("import structlog\n")
+        errors = check_file(f)
+        assert errors == []
+
+    def test_pydantic_in_domain_still_allowed(self, tmp_path: Path) -> None:
+        """pydantic is not infrastructure — it's a domain modelling tool."""
+        f = tmp_path / "src" / "domain" / "model" / "ok.py"
+        f.parent.mkdir(parents=True)
+        f.write_text("from pydantic import BaseModel\n")
+        errors = check_file(f)
+        assert errors == []
+
+    def test_multiple_infra_imports_reports_all(self, tmp_path: Path) -> None:
+        """Each banned import should produce a separate violation."""
+        f = tmp_path / "src" / "domain" / "service" / "bad.py"
+        f.parent.mkdir(parents=True)
+        f.write_text("import structlog\nimport redis\n")
+        errors = check_file(f)
+        assert len(errors) == 2
+
+    def test_includes_fix_suggestion(self, tmp_path: Path) -> None:
+        """Infra import violations should include a fix suggestion."""
+        f = tmp_path / "src" / "domain" / "service" / "bad.py"
+        f.parent.mkdir(parents=True)
+        f.write_text("import structlog\n")
+        errors = check_file(f)
+        assert "FIX:" in errors[0]
 
 
 class TestRealCodebase:

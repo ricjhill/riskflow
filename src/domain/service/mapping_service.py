@@ -2,9 +2,9 @@
 
 import hashlib
 import time
+from typing import Any
 
 import polars as pl
-import structlog
 from pydantic import ValidationError
 
 from src.domain.model.correction import Correction
@@ -28,6 +28,28 @@ from src.ports.output.repo import CachePort
 DEFAULT_CONFIDENCE_THRESHOLD = 0.6
 
 
+class _NullLogger:
+    """No-op logger used when no logger is injected.
+
+    Allows the domain service to log without depending on any
+    infrastructure logging library. The entrypoint injects the real
+    structlog logger; tests and callers that don't care about logging
+    can omit it entirely.
+    """
+
+    def info(self, *args: Any, **kwargs: Any) -> None:
+        pass
+
+    def warning(self, *args: Any, **kwargs: Any) -> None:
+        pass
+
+    def error(self, *args: Any, **kwargs: Any) -> None:
+        pass
+
+    def debug(self, *args: Any, **kwargs: Any) -> None:
+        pass
+
+
 class MappingService:
     """Central domain service. Depends only on ports, never on adapters.
 
@@ -49,6 +71,7 @@ class MappingService:
         confidence_threshold: float = DEFAULT_CONFIDENCE_THRESHOLD,
         schema: TargetSchema | None = None,
         correction_cache: CorrectionCachePort | None = None,
+        logger: Any = None,
     ) -> None:
         self._ingestor = ingestor
         self._mapper = mapper
@@ -57,7 +80,7 @@ class MappingService:
         self._schema = schema or DEFAULT_TARGET_SCHEMA
         self._record_model = build_record_model(self._schema)
         self._correction_cache = correction_cache
-        self._logger = structlog.get_logger()
+        self._logger = logger or _NullLogger()
 
     def get_sheet_names(self, file_path: str) -> list[str]:
         """Return sheet names for Excel files, empty list for CSV."""
