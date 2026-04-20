@@ -46,9 +46,14 @@ Every log line is JSON with `worker_pid`, `request_id` (when in a request), `lev
 | `schema_store_save_failed` | `schema_name`, `error` | RedisSchemaStore save failed |
 | `schema_store_delete_failed` | `schema_name`, `error` | RedisSchemaStore delete failed |
 | `schema_store_list_failed` | `error` | RedisSchemaStore list failed |
-| `runtime_schema_list_failed` | `error` | Failed to list runtime schemas at startup |
-| `runtime_schema_load_failed` | `schema_name`, `error` | Failed to load a specific runtime schema at startup |
 | `temp_files_cleaned` | `count` | Startup cleanup removed N orphaned temp files |
+
+The Redis adapter failure events above are logged at `error` level — filter with `select(.level == "error")`. The two startup-time runtime-schema events below are logged at `warning` level instead, because the app can still start and serve built-in schemas. Filter for them with `select(.level == "warning")`:
+
+| Event | Fields | What it means |
+|-------|--------|--------------|
+| `runtime_schema_list_failed` | `error` | Failed to list runtime schemas at startup (warning) |
+| `runtime_schema_load_failed` | `schema_name`, `error` | Failed to load a specific runtime schema at startup (warning) |
 
 ### DEBUG only (LOG_LEVEL=DEBUG)
 

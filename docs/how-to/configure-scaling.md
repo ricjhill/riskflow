@@ -84,4 +84,4 @@ No code changes, no rebuild — just restart.
 
 - `asyncio.Semaphore` and `asyncio.Lock` are per-process. With `--workers 4`, each worker has its own limits.
 - `JOB_STORE=memory` with `--workers 4` means each worker has its own job dict — jobs created in one worker are invisible to the others.
-- Redis connection pool is 10 per worker (default). With 4 workers, that's 40 connections to Redis.
+- Redis connection pool is unbounded by default (`redis.asyncio.Redis.from_url()` is called without `max_connections`). Each worker can open as many connections as concurrent coroutines need. Set `max_connections` explicitly in `_create_redis_client()` if you need to cap it.
