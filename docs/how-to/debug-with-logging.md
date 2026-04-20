@@ -32,6 +32,7 @@ Every log line is JSON with `worker_pid`, `request_id` (when in a request), `lev
 | `task_started` | `job_id`, `filename` | Background task began |
 | `task_completed` | `job_id`, `duration_ms`, `status` | Background task finished |
 | `app_configured` | `cache_type`, `correction_cache_type`, `schema_count`, `job_store_type` | Startup config |
+| `temp_files_cleaned` | `count` | Startup cleanup removed N orphaned temp files |
 | `job_store_save_failed` | `job_id`, `error` | RedisJobStore save failed |
 | `job_store_get_failed` | `job_id`, `error` | RedisJobStore get failed |
 | `job_store_list_failed` | `error` | RedisJobStore list failed |
@@ -46,9 +47,8 @@ Every log line is JSON with `worker_pid`, `request_id` (when in a request), `lev
 | `schema_store_save_failed` | `schema_name`, `error` | RedisSchemaStore save failed |
 | `schema_store_delete_failed` | `schema_name`, `error` | RedisSchemaStore delete failed |
 | `schema_store_list_failed` | `error` | RedisSchemaStore list failed |
-| `temp_files_cleaned` | `count` | Startup cleanup removed N orphaned temp files |
 
-The Redis adapter failure events above are logged at `error` level — filter with `select(.level == "error")`. The two startup-time runtime-schema events below are logged at `warning` level instead, because the app can still start and serve built-in schemas. Filter for them with `select(.level == "warning")`:
+All `*_failed` rows above are logged at `error` level — filter with `select(.level == "error")`. The other rows (`file_received`, `mapping_complete`, `cache_lookup`, `slm_call`, `task_started`, `task_completed`, `app_configured`, `temp_files_cleaned`) are logged at `info`. The two startup-time runtime-schema events below are logged at `warning` level instead, because the app can still start and serve built-in schemas. Filter for them with `select(.level == "warning")`:
 
 | Event | Fields | What it means |
 |-------|--------|--------------|
