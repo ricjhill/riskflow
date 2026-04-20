@@ -96,7 +96,7 @@ graph LR
         CorrCache[Correction Cache<br>Redis Hash]
         SessionStore[Session Store<br>Redis + TTL]
         SchemaStore[Schema Store<br>Redis]
-        JobStore[Job Store<br>In-Memory]
+        JobStore[Job Store<br>Redis / In-Memory]
     end
 
     subgraph Ports
@@ -169,7 +169,9 @@ graph LR
 | `/sessions/{id}/mappings` | PUT | Edit mappings before finalising |
 | `/sessions/{id}/finalise` | POST | Validate rows with user's mapping |
 | `/sessions/{id}` | DELETE | Cleanup session + temp file |
-| `/health` | GET | Health check |
+| `/health` | GET | Combined health check (includes Redis status) |
+| `/ready` | GET | Kubernetes readiness probe (503 if Redis unreachable) |
+| `/live` | GET | Kubernetes liveness probe (200 if process alive) |
 
 ```
 src/

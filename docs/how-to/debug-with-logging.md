@@ -32,9 +32,23 @@ Every log line is JSON with `worker_pid`, `request_id` (when in a request), `lev
 | `task_started` | `job_id`, `filename` | Background task began |
 | `task_completed` | `job_id`, `duration_ms`, `status` | Background task finished |
 | `app_configured` | `cache_type`, `correction_cache_type`, `schema_count`, `job_store_type` | Startup config |
-| `job_store_save_failed` | `job_id`, `error` | Redis save failed |
-| `job_store_get_failed` | `job_id`, `error` | Redis get failed |
-| `job_store_list_failed` | `error` | Redis list failed |
+| `job_store_save_failed` | `job_id`, `error` | RedisJobStore save failed |
+| `job_store_get_failed` | `job_id`, `error` | RedisJobStore get failed |
+| `job_store_list_failed` | `error` | RedisJobStore list failed |
+| `cache_get_failed` | `cache_key`, `error` | RedisCache get failed (mapping cache) |
+| `cache_set_failed` | `cache_key`, `error` | RedisCache set failed |
+| `correction_cache_get_failed` | `cedent_id`, `error` | RedisCorrectionCache get failed |
+| `correction_cache_set_failed` | `cedent_id`, `error` | RedisCorrectionCache set failed |
+| `session_store_save_failed` | `session_id`, `error` | RedisMappingSessionStore save failed |
+| `session_store_get_failed` | `session_id`, `error` | RedisMappingSessionStore get failed |
+| `session_store_delete_failed` | `session_id`, `error` | RedisMappingSessionStore delete failed |
+| `schema_store_get_failed` | `schema_name`, `error` | RedisSchemaStore get failed |
+| `schema_store_save_failed` | `schema_name`, `error` | RedisSchemaStore save failed |
+| `schema_store_delete_failed` | `schema_name`, `error` | RedisSchemaStore delete failed |
+| `schema_store_list_failed` | `error` | RedisSchemaStore list failed |
+| `runtime_schema_list_failed` | `error` | Failed to list runtime schemas at startup |
+| `runtime_schema_load_failed` | `schema_name`, `error` | Failed to load a specific runtime schema at startup |
+| `temp_files_cleaned` | `count` | Startup cleanup removed N orphaned temp files |
 
 ### DEBUG only (LOG_LEVEL=DEBUG)
 

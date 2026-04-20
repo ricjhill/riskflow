@@ -8,12 +8,47 @@ The API is semantically versioned. The current version is in [`openapi.json`](..
 
 ### GET /health
 
-Health check.
+Combined health check including Redis connectivity.
 
 **Response:** `200 OK`
 
 ```json
-{"status": "ok"}
+{"status": "ok", "redis": "connected"}
+```
+
+The `redis` field is one of:
+- `"connected"` — Redis ping succeeded
+- `"not_configured"` — `REDIS_URL` is not set; app uses in-memory fallbacks
+- `"unreachable"` — Redis is configured but ping failed; `status` becomes `"degraded"`
+
+---
+
+### GET /ready
+
+Kubernetes-style readiness probe. Returns 503 if Redis is configured but unreachable — signals the load balancer to stop routing traffic to this instance.
+
+**Response:** `200 OK`
+
+```json
+{"status": "ready"}
+```
+
+**Response:** `503 Service Unavailable` (Redis configured but unreachable)
+
+```json
+{"status": "not_ready", "reason": "redis_unreachable"}
+```
+
+---
+
+### GET /live
+
+Kubernetes-style liveness probe. Always returns 200 if the process is alive — if it fails, the orchestrator should restart the container.
+
+**Response:** `200 OK`
+
+```json
+{"status": "alive"}
 ```
 
 ---

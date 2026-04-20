@@ -34,17 +34,21 @@ Fallback: `SLM_CONCURRENCY=0` removes the limit.
 
 `asyncio.Lock` serialises schema create and delete operations. Prevents two concurrent `POST /schemas` with the same name from both succeeding.
 
-### 5. Multi-worker Uvicorn (`--workers 2`)
+### 5. Multi-worker Uvicorn (`--workers 4`)
 
-Two Uvicorn workers handle concurrent HTTP requests. Each worker runs its own event loop, semaphore, and lock. Redis is the shared state layer.
+Four Uvicorn workers handle concurrent HTTP requests. Each worker runs its own event loop, semaphore, and lock. Redis is the shared state layer. Worker count was increased from 2 to 4 in v0.4.0 as part of the Phase 4 scaling work, bounded by the `deploy.resources.limits` (2GB memory, 4 CPUs) in `docker-compose.yml`.
+
+### 6. Async Redis (v0.4.0)
+
+All 5 Redis adapters (cache, correction cache, job store, session store, schema store) use `redis.asyncio.Redis` with `await` on every call. This prevents the event loop starvation that caused `/health` P95 to spike to 2.9s under concurrent `/jobs` load in v0.3.0 (see `tests/scale/test_event_loop_not_starved.py`).
 
 ## Per-process scope
 
-`asyncio.Semaphore` and `asyncio.Lock` are per-process. With `--workers 2`:
-- `SLM_CONCURRENCY=3` means 3 concurrent Groq calls per worker = 6 total
+`asyncio.Semaphore` and `asyncio.Lock` are per-process. With `--workers 4`:
+- `SLM_CONCURRENCY=3` means 3 concurrent Groq calls per worker = 12 total
 - The schema lock prevents races within a worker, not across workers (Redis is the authoritative source)
 
-This is acceptable for 5 users. For larger scale, the roadmap's Phase 4 describes Redis-backed distributed rate limiting and locking.
+This is acceptable for 50 users with cache hits absorbing most load. For larger scale, phase 5 would add Redis-backed distributed rate limiting and locking.
 
 ## What we chose NOT to build
 
@@ -52,15 +56,16 @@ This is acceptable for 5 users. For larger scale, the roadmap's Phase 4 describe
 |-------------|---------------------|
 | Celery task queue | Overkill for 5 users — adds broker, workers, monitoring infrastructure |
 | Redis Streams | Event sourcing not needed at this scale |
-| Distributed semaphore | Per-process semaphore is sufficient for 5 users with 2 workers |
+| Distributed semaphore | Per-process semaphore is sufficient for 50 users with 4 workers (12 effective concurrent Groq calls) |
 | Kubernetes | Single Docker Compose stack is appropriate for a small team tool |
 
 ## How it's tested
 
 | Layer | What's tested | How |
 |-------|--------------|-----|
-| Unit | Each component in isolation (mocked Redis) | ~844 pytest tests |
-| Integration | RedisJobStore under 20-thread concurrency (real Redis) | testcontainers |
+| Unit | Each component in isolation (mocked Redis via AsyncMock) | ~918 pytest tests |
+| Integration | RedisJobStore under 20-coroutine concurrency (real Redis) | testcontainers + `asyncio.gather` |
+| Scale | Event loop starvation regression; list_all latency budgets | `tests/scale/` — 5 tests, real Redis |
 | Load | 5 Locust users against in-process server | Locust CI assertions |
 | CI concurrency | 5 Locust users against Docker stack (multi-worker + Redis) | GitHub Actions job |
 
