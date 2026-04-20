@@ -41,6 +41,7 @@ tests/
   benchmark/         # Performance guardrails, pytest-benchmark suite, TTFB + memory tests
   contract/          # Consumer-driven contract tests for API response shapes
   load/              # Locust load tests (locustfile.py for manual, test_locust_ci.py for CI)
+  scale/             # Scale regression tests — event loop starvation, job latency budgets
   fixtures/          # Sample bordereaux CSV for tests
 schemas/
   standard_reinsurance.yaml  # Default 6-field reinsurance target schema

@@ -18,7 +18,7 @@ This gives you:
 - RedisJobStore (persistent, cross-worker)
 - Concurrent background processing via `asyncio.create_task`
 - Groq API limited to 3 concurrent calls
-- Multi-worker Uvicorn (2 workers)
+- Multi-worker Uvicorn (4 workers)
 
 ## Customise concurrency limits
 
@@ -30,7 +30,7 @@ SLM_CONCURRENCY=5
 SLM_CONCURRENCY=0
 ```
 
-With `--workers 2`, the effective limit is `SLM_CONCURRENCY × 2` (each worker has its own semaphore).
+With `--workers 4`, the effective limit is `SLM_CONCURRENCY × 4` (each worker has its own semaphore — default 12 concurrent Groq calls).
 
 ## Change the job store
 
@@ -82,6 +82,6 @@ No code changes, no rebuild — just restart.
 
 ## Known limitations
 
-- `asyncio.Semaphore` and `asyncio.Lock` are per-process. With `--workers 2`, each worker has its own limits.
-- `JOB_STORE=memory` with `--workers 2` means each worker has its own job dict — jobs created in one worker are invisible to the other.
-- Redis connection pool is 10 per worker (default). With 2 workers, that's 20 connections to Redis.
+- `asyncio.Semaphore` and `asyncio.Lock` are per-process. With `--workers 4`, each worker has its own limits.
+- `JOB_STORE=memory` with `--workers 4` means each worker has its own job dict — jobs created in one worker are invisible to the others.
+- Redis connection pool is unbounded by default (`redis.asyncio.Redis.from_url()` is called without `max_connections`). Each worker can open as many connections as concurrent coroutines need. Set `max_connections` explicitly in `_create_redis_client()` if you need to cap it.

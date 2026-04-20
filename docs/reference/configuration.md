@@ -18,14 +18,14 @@ All environment variables are read in `src/entrypoint/main.py` — the only plac
 
 ## Optional — Scaling
 
-These control the 5-user scaling features added in v0.3.0. All have production-ready defaults — only change them for rollback or debugging.
+These control the scaling features added in v0.3.0 (5-user baseline) and extended in v0.4.0 (Phase 4 — async Redis migration, 4 workers, tenacity retry on Groq 429). All have production-ready defaults — only change them for rollback or debugging.
 
 | Variable | Default | Rollback | Description |
 |----------|---------|----------|-------------|
 | `JOB_STORE` | `redis` | `memory` | Which job store to use. `redis`: persistent across restarts, shared across workers. `memory`: in-process dict, lost on restart, per-worker. |
 | `JOB_TTL` | `86400` | `3600` | Redis job expiry in seconds. Each save() resets the TTL. Default 24 hours. |
 | `ASYNC_BACKEND` | `tasks` | `background` | How async uploads are processed. `tasks`: `asyncio.create_task()` for concurrent execution. `background`: FastAPI `BackgroundTasks` for sequential execution. |
-| `SLM_CONCURRENCY` | `3` | `0` | Maximum concurrent Groq API calls via `asyncio.Semaphore`. `0` disables the limit. Per-process — with `--workers 2`, the effective limit is 2x this value. |
+| `SLM_CONCURRENCY` | `3` | `0` | Maximum concurrent Groq API calls via `asyncio.Semaphore`. `0` disables the limit. Per-process — with `--workers 4`, the effective limit is 4x this value (12 concurrent calls). |
 | `LOG_LEVEL` | `INFO` | `DEBUG` | Root logger level. `DEBUG` surfaces infrastructure timing events (semaphore waits, Redis I/O). Invalid values fall back to `INFO`. `NOTSET` is treated as invalid. |
 
 ## Rollback

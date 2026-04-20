@@ -136,17 +136,19 @@ RiskFlow automates the mapping step. Upload a bordereaux spreadsheet, and RiskFl
 
 **Business value:** New cedent schemas can be created by data teams without restarting the service or editing YAML files. Built-in schemas (from YAML) are protected from deletion.
 
-### 11. Multi-User Scaling (v0.3.0)
+### 11. Multi-User Scaling (v0.3.0, extended in v0.4.0)
 
-**What it does:** Supports 5 concurrent users with persistent job tracking, concurrent background processing, and rate-limited SLM calls. Every scaling feature is reversible via environment variables.
+**What it does:** Supports concurrent users with persistent job tracking, concurrent background processing, rate-limited SLM calls, and a non-blocking async Redis layer. Every scaling feature is reversible via environment variables.
 
-**Business value:** Multiple team members can upload bordereaux files simultaneously without waiting for each other. Jobs survive server restarts. The Groq API isn't overwhelmed by concurrent requests.
+**Business value:** Multiple team members can upload bordereaux files simultaneously without waiting for each other. Jobs survive server restarts. The Groq API isn't overwhelmed by concurrent requests, and the event loop never starves under heavy `/jobs` polling.
 
 **How it works:**
 - `RedisJobStore` persists jobs across workers and restarts
 - `asyncio.create_task()` runs uploads concurrently within each worker
 - `asyncio.Semaphore(3)` limits Groq API calls to prevent rate limiting
-- Multi-worker Uvicorn (`--workers 2`) handles concurrent HTTP requests
+- Multi-worker Uvicorn (`--workers 4`) handles concurrent HTTP requests (12 effective concurrent Groq calls across the cluster)
+- All 5 Redis adapters use `redis.asyncio.Redis` so I/O never blocks the event loop (v0.4.0)
+- `tenacity` retries Groq 429 rate-limit responses with exponential backoff (v0.4.0)
 - All configurable via `JOB_STORE`, `ASYNC_BACKEND`, `SLM_CONCURRENCY` env vars
 
 See [Scaling Architecture](scaling-architecture.md) for full details.
